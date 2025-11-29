@@ -134,24 +134,24 @@ async function handler(req: NextRequest) {
 			totalBlocks,
 			completedBlocks,
 			pendingBlocks,
-			totalCredits: Number(totalCredits._sum.amount || 0),
-			availableCredits: Number(availableCredits._sum.amount || 0),
+			totalCredits: Number(totalCredits._sum.amount || 0) / 1000,
+			availableCredits: Number(availableCredits._sum.amount || 0) / 1000,
 			totalKeysValidated: totalKeysValidatedBI.toString(),
 			totalTimeSpentSeconds,
-            activeBlock: activeBlock ? {
-                id: activeBlock.id,
-                startRange: formatCompactHexRange(activeBlock.startRange),
-                endRange: formatCompactHexRange(activeBlock.endRange),
-                bitcoinAddress: activeBlock.puzzleAddressSnapshot || cfg?.address || userToken.bitcoinAddress,
-                checkworkAddress: activeBlock.checkworkAddresses ? JSON.parse(activeBlock.checkworkAddresses)[0] : '',
-                assignedAt: activeBlock.createdAt,
-                expiresAt: new Date(activeBlock.createdAt.getTime() + 12 * 60 * 60 * 1000),
-            } : null,
+			activeBlock: activeBlock ? {
+				id: activeBlock.id,
+				startRange: formatCompactHexRange(activeBlock.startRange),
+				endRange: formatCompactHexRange(activeBlock.endRange),
+				bitcoinAddress: activeBlock.puzzleAddressSnapshot || cfg?.address || userToken.bitcoinAddress,
+				checkworkAddress: activeBlock.checkworkAddresses ? JSON.parse(activeBlock.checkworkAddresses)[0] : '',
+				assignedAt: activeBlock.createdAt,
+				expiresAt: new Date(activeBlock.createdAt.getTime() + 12 * 60 * 60 * 1000),
+			} : null,
 		};
 
 		return new Response(
 			JSON.stringify(stats),
-			{ status: 200, headers: { 'Content-Type': 'application/json' } }
+			{ status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } }
 		);
 
 	} catch (error) {

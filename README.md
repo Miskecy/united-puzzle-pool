@@ -82,6 +82,11 @@ When you find a valid private key, submit it to claim your reward.
 - `GET /api/user/stats` — Get user statistics (requires `pool-token`)
 - `GET /api/user/history` — Get user block history (requires `pool-token`)
 
+### Credits
+
+- `POST /api/credits/transfer/init` — Initialize a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ toAddress: string, amount: number }`. Returns a signed message template and `nonce` to be signed with the sender’s Bitcoin address.
+- `POST /api/credits/transfer/confirm` — Confirm a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ nonce: string, signature: string }`. Verifies the signature and deducts credits; responds with remaining credits.
+
 ### Setup & Admin
 
 - `POST /api/setup/login` — Login with header `x-setup-secret: <secret>`. Sets HttpOnly cookie `setup_session=1` for admin access.
@@ -93,6 +98,11 @@ When you find a valid private key, submit it to claim your reward.
 - `GET /api/config/backup` — Download SQLite DB file (admin)
 - `POST /api/config/backup` — Restore DB from uploaded file (admin)
 - `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
+
+### Notes on Credits
+
+- Credits are tracked internally in milliunits and exposed with up to 3 decimal places.
+- Transfers require signing the message returned by `/api/credits/transfer/init` using the Bitcoin address associated with the token.
 
 ### Notes
 

@@ -22,11 +22,17 @@ export default function BlocksTimeline({
 	pollUrl,
 	pollIntervalMs = 30000,
 	onHoverRange,
+	direction = 'forward',
+	speedMs = 60000,
+	gapPx = 16,
 }: {
 	items: BlockItem[]
 	pollUrl?: string
 	pollIntervalMs?: number
 	onHoverRange?: (startHex: string, endHex: string) => void
+	direction?: 'forward' | 'reverse'
+	speedMs?: number
+	gapPx?: number
 }) {
 	const [blocks, setBlocks] = useState<BlockItem[]>(items ?? [])
 	const router = useRouter()
@@ -58,7 +64,7 @@ export default function BlocksTimeline({
 	}, [])
 
 	const loopBlocks = useMemo(() => {
-		const base = (blocks ?? []).slice(0, 50)
+		const base = (blocks ?? []).slice(0, 10)
 		return [...base, ...base]
 	}, [blocks])
 
@@ -99,7 +105,11 @@ export default function BlocksTimeline({
 		<div className="full-bleed overflow-hidden">
 
 			<div className="relative timeline-container">
-				<div ref={trackRef} className="timeline-track">
+				<div
+					ref={trackRef}
+					className={`timeline-track ${direction === 'reverse' ? 'reverse' : 'forward'}`}
+					style={{ animationDuration: `${Math.max(1000, speedMs)}ms`, gap: `${Math.max(0, gapPx)}px` }}
+				>
 					{loopBlocks.map((b, i) => {
 						const addr = b.puzzleAddress || b.bitcoinAddress || 'Unknown address'
 						const lenLabel = formatLenPrecise(binLength(b.hexRangeStart, b.hexRangeEnd))
@@ -131,8 +141,11 @@ export default function BlocksTimeline({
 			<style jsx>{`
         .full-bleed { width: 100vw; position: relative; left: 50%; transform: translateX(-50%); }
         .timeline-container { height: 220px; }
-        .timeline-track { display: flex; gap: 16px; width: max-content; animation: marquee 60s linear infinite; padding: 16px; }
+        .timeline-track { display: flex; width: max-content; padding: 16px; }
+        .timeline-track.forward { animation-name: marquee; animation-timing-function: linear; animation-iteration-count: infinite; }
+        .timeline-track.reverse { animation-name: marqueeReverse; animation-timing-function: linear; animation-iteration-count: infinite; }
         @keyframes marquee { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+        @keyframes marqueeReverse { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
         .block3d { position: relative; width: 180px; height: 180px; cursor: pointer; margin-left: 12px; margin-top: 12px; }
         .block3d-content { 
@@ -152,7 +165,7 @@ export default function BlocksTimeline({
           left: -4px; 
           width: 100%; 
           height: 100%; 
-          background: #2d5a3f;
+          background: #4b4b4b;
           border-radius: 8px; 
           z-index: -1;
         }

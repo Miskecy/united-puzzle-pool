@@ -41,7 +41,7 @@ model BlockSolution {
     id                String          @id @default(cuid())
     blockAssignmentId String          @unique @map("block_assignment_id")
     privateKeys       String          @map("private_keys")
-    creditsAwarded    Decimal         @map("credits_awarded")
+    creditsAwarded    Int             @map("credits_awarded")
     puzzlePrivateKey  String?         @map("puzzle_private_key")
     solvedAt          DateTime        @default(now()) @map("solved_at")
     createdAt         DateTime        @default(now()) @map("created_at")
@@ -54,7 +54,7 @@ model CreditTransaction {
     id          String          @id @default(cuid())
     userTokenId String          @map("user_token_id")
     type        TransactionType
-    amount      Decimal
+    amount      Int
     description String?
     createdAt   DateTime        @default(now()) @map("created_at")
     userToken   UserToken       @relation(fields: [userTokenId], references: [id])

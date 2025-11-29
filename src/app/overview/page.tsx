@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hash, Expand, Gauge, CheckCircle2, Grid3X3, RotateCcw, Flame, BrickWallFire } from 'lucide-react';
+import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
@@ -460,15 +460,21 @@ export default function PoolOverviewPage() {
 				<div className="mt-6">
 					<div className="flex items-center justify-between py-2">
 						<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-xl">
-							<BrickWallFire className="w-5 h-5 text-orange-500" />
+							<div className=' bg-blue-100 p-3 rounded-full'>
+
+								<BrickWallFire className="w-5 h-5 text-blue-500" />
+							</div>
 							Last Completed Blocks
 						</h3>
-						<span className="text-sm text-gray-600">Polling every 30s</span>
+						<p className="text-sm text-gray-600">Polling every <span className='text-blue-400'>30s</span></p>
 					</div>
 					<BlocksTimeline
-						items={recent}
-						pollUrl="/api/pool/stats"
+						items={recent.slice(0, 10)}
+						pollUrl="/api/pool/stats?take=10&skip=0"
 						pollIntervalMs={30000}
+						direction="forward"
+						speedMs={60000}
+						gapPx={16}
 						onHoverRange={(startHex: string, endHex: string) => {
 							if (!startHex || !endHex) { setHoveredBlockCells([]); return }
 							const start = parseHexBI(startHex);
@@ -484,6 +490,31 @@ export default function PoolOverviewPage() {
 							setHoveredBlockCells(indices);
 						}}
 					/>
+
+					<div className="mt-0">
+						<BlocksTimeline
+							items={recent.slice(10, 20)}
+							pollUrl="/api/pool/stats?take=10&skip=10"
+							pollIntervalMs={30000}
+							direction="reverse"
+							speedMs={60000}
+							gapPx={16}
+							onHoverRange={(startHex: string, endHex: string) => {
+								if (!startHex || !endHex) { setHoveredBlockCells([]); return }
+								const start = parseHexBI(startHex);
+								const end = parseHexBI(endHex);
+								const indices: number[] = [];
+								for (let bi = 0; bi < bins.length; bi++) {
+									const bs = parseHexBI(bins[bi].startHex);
+									const be = parseHexBI(bins[bi].endHex);
+									if (start <= be && end >= bs) {
+										indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
+									}
+								}
+								setHoveredBlockCells(indices);
+							}}
+						/>
+					</div>
 				</div>
 
 			</div>

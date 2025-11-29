@@ -17,22 +17,29 @@ type Info = {
 }
 
 export default function PuzzleInfoCard({ variant = 'dashboard' }: { variant?: Variant }) {
-	const [info, setInfo] = useState<Info | null>(null)
-	const [copied, setCopied] = useState(false)
+    const [info, setInfo] = useState<Info | null>(null)
+    const [copied, setCopied] = useState(false)
 
-	// Lógica de Fetch (Mantida)
-	useEffect(() => {
-		let mounted = true
-			; (async () => {
-				try {
-					const r = await fetch('/api/puzzle/info')
-					if (!r.ok) { if (mounted) setInfo(null); return }
-					const j = await r.json()
-					if (mounted) setInfo(j)
-				} catch { }
-			})()
-		return () => { mounted = false }
-	}, [])
+    useEffect(() => {
+        let mounted = true
+        ;(async () => {
+            try {
+                const r = await fetch('/api/puzzle/info', { cache: 'no-store' })
+                if (!r.ok) { if (mounted) setInfo(null); return }
+                const j = await r.json()
+                if (mounted) setInfo(j)
+            } catch { }
+        })()
+        const id = setInterval(async () => {
+            try {
+                const r = await fetch('/api/puzzle/info', { cache: 'no-store' })
+                if (!r.ok) return
+                const j = await r.json()
+                if (mounted) setInfo(j)
+            } catch { }
+        }, 300000)
+        return () => { mounted = false; clearInterval(id) }
+    }, [])
 
 	const fmtUsd = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 	const fmtBtc = (n: number) => `${n.toFixed(8)} BTC`

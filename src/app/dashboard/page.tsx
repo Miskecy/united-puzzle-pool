@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -907,6 +908,13 @@ export default function UserDashboard() {
 								</div>
 							</div>
 							<div className="flex gap-3">
+								<Button
+									onClick={() => router.push('/dashboard/transfer')}
+									className="bg-green-600 hover:bg-green-700 text-white font-semibold inline-flex items-center gap-2"
+									disabled={loading}
+								>
+									<Coins className='h-4 w-4' /> Transfer Credits
+								</Button>
 								<Button
 									onClick={generateNewToken}
 									className="bg-blue-600 hover:bg-blue-700 text-white font-semibold inline-flex items-center gap-2"

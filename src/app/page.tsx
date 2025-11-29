@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Trophy, Users, Target, Zap, Bitcoin, BarChart3, BookOpen, UsersRound } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
+import PoolSpeedChart from '@/components/PoolSpeedChart';
 
 
 // As funções de fetch e a lógica de cálculo de validatedLabel foram mantidas aqui, mas
@@ -11,33 +12,83 @@ async function getPoolStats(base: string) {
 
 	let completedBlocks = 0;
 	let validatedLabel = '0.00T';
-	let totalMiners = '1,200+'; // Simulação
+	let totalMiners = '1,200+';
+	let speedPoints: Array<{ t: number; v: number }> = [];
+	let avgSpeedLabel = '—';
+	let remainingBKeys = 0;
 
 	if (statsRes && statsRes.ok) {
 		const stats = await statsRes.json();
 		completedBlocks = stats?.overview?.completedBlocks ?? 0;
 		totalMiners = stats?.overview?.activeMiners ?? totalMiners;
+
+		const recent = Array.isArray(stats?.recentBlocks) ? stats.recentBlocks : [];
+		const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+		const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
+			const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime();
+			return cm >= since;
+		});
+		let totalLenBI = 0n;
+		let totalSeconds = 0;
+		const points: Array<{ t: number; v: number }> = [];
+		for (const rb of items) {
+			if (!rb.hexRangeStartRaw || !rb.hexRangeEndRaw || !rb.completedAt || !rb.createdAt) continue;
+			const s = BigInt(rb.hexRangeStartRaw);
+			const e = BigInt(rb.hexRangeEndRaw);
+			const lenBI = e >= s ? (e - s) : 0n;
+			const startMs = new Date(rb.createdAt).getTime();
+			const endMs = new Date(rb.completedAt).getTime();
+			const secs = Math.max(1, Math.floor((endMs - startMs) / 1000));
+			totalLenBI += lenBI;
+			totalSeconds += secs;
+			const bkeys = Number(lenBI / 1_000_000_000n);
+			const speed = bkeys / secs; // BKeys/s as float
+			if (Number.isFinite(speed)) points.push({ t: endMs, v: speed });
+		}
+		speedPoints = points.sort((a, b) => a.t - b.t);
+		if (totalSeconds > 0) {
+			const thresholds: Array<{ unit: string; divisor: bigint }> = [
+				{ unit: 'PKeys/s', divisor: 1_000_000_000_000_000n },
+				{ unit: 'TKeys/s', divisor: 1_000_000_000_000n },
+				{ unit: 'BKeys/s', divisor: 1_000_000_000n },
+				{ unit: 'MKeys/s', divisor: 1_000_000n },
+				{ unit: 'KKeys/s', divisor: 1_000n },
+			];
+			const kpsTimes100 = (totalLenBI * 100n) / BigInt(totalSeconds);
+			let unit = 'Keys/s';
+			let divisor = 1n;
+			const kps = kpsTimes100 / 100n;
+			for (const t of thresholds) { if (kps >= t.divisor) { unit = t.unit; divisor = t.divisor; break; } }
+			const valTimes100 = kpsTimes100 / divisor;
+			const intPart = valTimes100 / 100n;
+			const frac = valTimes100 % 100n;
+			avgSpeedLabel = `${intPart.toString()}.${frac.toString().padStart(2, '0')} ${unit}`;
+		}
 	}
 
 	if (overviewRes && overviewRes.ok) {
 		const data = await overviewRes.json();
 		const bins = Array.isArray(data.bins) ? data.bins : [];
 		let validated = 0;
+		let total = 0;
 		for (const b of bins) {
 			validated += Number(b.completed || 0);
+			total += Number(b.total || 0);
 		}
 		const T = 1_000_000_000_000;
 		const t = validated / T;
 		validatedLabel = `${t.toFixed(2)}T`;
+		const remaining = Math.max(0, total - validated);
+		remainingBKeys = remaining / 1_000_000_000; // convert keys to BKeys
 	}
-	return { completedBlocks, validatedLabel, totalMiners };
+	return { completedBlocks, validatedLabel, totalMiners, speedPoints, avgSpeedLabel, remainingBKeys };
 }
 
 export default async function HomePage() {
 	const base = process.env.NEXT_PUBLIC_BASE_URL
 		|| (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
-	const { completedBlocks, validatedLabel, totalMiners } = await getPoolStats(base);
+	const { completedBlocks, validatedLabel, totalMiners, speedPoints, avgSpeedLabel, remainingBKeys } = await getPoolStats(base);
 
 	return (
 		// PADRÃO 1: Fundo com degradê leve para dar profundidade
@@ -78,14 +129,16 @@ export default async function HomePage() {
 				</div>
 			</section>
 
+
+
 			{/* Puzzle Info & Quick Stats (Melhor Alinhamento) */}
-			<section className="py-12 bg-white border-y border-gray-200">
+			<section className="py-12 bg-white border-y border-gray-200 space-y-8">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
 					{/* Bloco 1: Quick Stats */}
 					<div className="lg:col-span-1 space-y-4">
 						<h3 className="text-xl font-bold text-gray-900 mb-2 border-b border-gray-200 pb-2">Pool Metrics</h3>
-						<div className="grid grid-cols-3 gap-4">
+						<div className="grid  gap-4">
 							{/* Stat 1: Validação Total */}
 							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">
 								<BarChart3 className="w-5 h-5 text-green-600 mx-auto mb-1" />
@@ -113,7 +166,12 @@ export default async function HomePage() {
 						<PuzzleInfoCard variant="home" />
 					</div>
 				</div>
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					<PoolSpeedChart points={speedPoints} avgLabel={avgSpeedLabel} remainingBKeys={remainingBKeys} />
+				</div>
 			</section>
+
+
 
 			{/* Features Section (Por que se juntar?) */}
 			<section className="py-20 bg-gray-50">

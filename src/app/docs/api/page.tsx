@@ -336,7 +336,7 @@ export default function DocsLandingPage() {
 
 								<h5 className="text-gray-900 font-semibold mb-2 text-sm">2. Usage Example</h5>
 								<p className="text-sm text-gray-700 mb-2">Use <code className="px-1.5 py-0.5 bg-white rounded text-xs font-mono">--keyspace</code> and load target addresses from a file with <code className="px-1.5 py-0.5 bg-white rounded text-xs font-mono">-i</code>:</p>
-								<CodeSnippet code={`# Create address.txt with the block's target address\ncuBitCrack --keyspace [START_RANGE]:[END_RANGE] -i address.txt -o found.txt -c`} />
+								<CodeSnippet code={`# Create address.txt with the block's target address\n./cuBitCrack --keyspace [START_RANGE]:[END_RANGE] -i address.txt -o found.txt -c`} />
 							</li>
 
 							{/* KeyHunt (ATUALIZADO) */}

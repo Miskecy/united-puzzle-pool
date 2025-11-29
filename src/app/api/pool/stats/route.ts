@@ -13,6 +13,11 @@ async function handler(req: NextRequest) {
 		}
 
 		// Get pool statistics
+		const url = req.nextUrl
+		const takeParam = Number(url.searchParams.get('take') || 0)
+		const skipParam = Number(url.searchParams.get('skip') || 0)
+		const take = (isFinite(takeParam) && takeParam > 0 && takeParam <= 100) ? takeParam : 20
+		const skip = (isFinite(skipParam) && skipParam >= 0) ? skipParam : 0
 		const [
 			totalTokens,
 			totalBlocks,
@@ -22,6 +27,8 @@ async function handler(req: NextRequest) {
 			totalCreditsAwarded,
 			recentBlocks,
 			topContributors,
+			userTokens7d,
+			sharedTokens7d,
 		] = await Promise.all([
 			// Total tokens
 			prisma.userToken.count(),
@@ -52,24 +59,21 @@ async function handler(req: NextRequest) {
 				},
 			}),
 
-			// Recent completed blocks (last 20)
+			// Recent completed blocks within 7 days, ordered by completion time
 			prisma.blockAssignment.findMany({
-				where: { status: 'COMPLETED' },
-				include: {
-					userToken: {
-						select: {
-							bitcoinAddress: true,
-						}
-					},
+				where: {
+					status: 'COMPLETED',
 					blockSolution: {
-						select: {
-							creditsAwarded: true,
-							createdAt: true,
-						},
-					},
+						is: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }
+					}
 				},
-				orderBy: { createdAt: 'desc' },
-				take: 20,
+				include: {
+					userToken: { select: { bitcoinAddress: true } },
+					blockSolution: { select: { creditsAwarded: true, createdAt: true } },
+				},
+				orderBy: { blockSolution: { createdAt: 'desc' } },
+				skip,
+				take,
 			}),
 
 			// Top contributors by credits earned
@@ -86,6 +90,32 @@ async function handler(req: NextRequest) {
 				},
 				take: 10
 			}),
+
+
+			// Active miners in last 7 days: distinct user tokens with any activity
+			prisma.blockAssignment.findMany({
+				where: {
+					OR: [
+						{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+						{ createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+					],
+				},
+				select: { userTokenId: true },
+				distinct: ['userTokenId'],
+			}),
+
+			// Active shared pool tokens in last 7 days
+			prisma.blockAssignment.findMany({
+				where: {
+					NOT: { sharedPoolTokenId: null },
+					OR: [
+						{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+						{ createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+					],
+				},
+				select: { sharedPoolTokenId: true },
+				distinct: ['sharedPoolTokenId'],
+			}),
 		]);
 
 		// Get token details for top contributors
@@ -98,10 +128,18 @@ async function handler(req: NextRequest) {
 
 				return {
 					bitcoinAddress: token?.bitcoinAddress || 'Unknown',
-					totalCredits: Number(contributor._sum.amount || 0),
+					totalCredits: Number(contributor._sum.amount || 0) / 1000,
 				};
 			})
 		);
+
+		const minerSet = new Set<string>();
+		for (const u of userTokens7d) {
+			if (u.userTokenId) minerSet.add(`u:${u.userTokenId}`);
+		}
+		for (const s of sharedTokens7d) {
+			if (s.sharedPoolTokenId) minerSet.add(`s:${s.sharedPoolTokenId}`);
+		}
 
 		const stats = {
 			overview: {
@@ -111,7 +149,8 @@ async function handler(req: NextRequest) {
 				pendingBlocks,
 				expiredBlocks,
 				completionRate: totalBlocks > 0 ? Math.round((completedBlocks / totalBlocks) * 100) : 0,
-				totalCreditsAwarded: Number(totalCreditsAwarded._sum.amount || 0),
+				totalCreditsAwarded: Number(totalCreditsAwarded._sum.amount || 0) / 1000,
+				activeMiners: minerSet.size,
 			},
 			recentBlocks: recentBlocks.map((block) => ({
 				id: block.id,
@@ -124,7 +163,7 @@ async function handler(req: NextRequest) {
 				hexRangeEndRaw: block.endRange,
 				createdAt: block.createdAt,
 				completedAt: block.blockSolution?.createdAt || null,
-				creditsAwarded: block.blockSolution?.creditsAwarded || 0,
+				creditsAwarded: (Number(block.blockSolution?.creditsAwarded || 0) / 1000),
 			})),
 			topContributors: topContributorsWithDetails,
 		};

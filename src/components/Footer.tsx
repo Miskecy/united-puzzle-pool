@@ -1,13 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { Github, Bitcoin, Heart } from 'lucide-react'
+import { Github, Bitcoin, Heart, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 
 export default function Footer() {
 	const donation = (process.env.NEXT_PUBLIC_DONATION_ADDRESS || '1DonateCoLNUhianPQH2rFe799LxrNZ3kp') as string
-	const githubUrl = (process.env.NEXT_PUBLIC_GITHUB_URL || 'https://github.com/UnitedPuzzlePool') as string
+	const githubUrl = (process.env.NEXT_PUBLIC_GITHUB_URL || 'https://github.com/Miskecy/united-puzzle-pool') as string
 	const [copied, setCopied] = useState(false)
 
 	async function copyDonation() {
@@ -28,11 +28,20 @@ export default function Footer() {
 							<span>Open Source — United Puzzle Pool</span>
 						</div>
 						<p className="text-sm text-gray-600">Contributions welcome. Star the project and build together.</p>
-						<Link href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
-							<span>View on GitHub</span>
-							<Github className="h-4 w-4" />
+					<Link href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
+						<span>View on GitHub</span>
+						<Github className="h-4 w-4" />
+					</Link>
+
+					<div className="pt-3 border-t border-gray-200">
+						<div className="text-gray-900 font-semibold">Inspired by</div>
+						<p className="text-sm text-gray-600">Projects that inspired the creation of this pool.</p>
+						<Link href="https://bitcoinpuzzles.io/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
+							<span>BitcoinPuzzles</span>
+							<ExternalLink className="h-4 w-4" />
 						</Link>
 					</div>
+				</div>
 
 					<div className="space-y-2">
 						<div className="flex items-center gap-2 text-gray-900 font-semibold">

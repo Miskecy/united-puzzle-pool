@@ -217,15 +217,15 @@ async function handler(req: NextRequest) {
 					data: { status: 'COMPLETED' },
 				}),
 				// Salva a solução
-				prisma.blockSolution.upsert({
-					where: { blockAssignmentId: blockAssignment.id },
-					update: { privateKeys: JSON.stringify(body.privateKeys), creditsAwarded: credits },
-					create: {
-						blockAssignmentId: blockAssignment.id,
-						privateKeys: JSON.stringify(body.privateKeys),
-						creditsAwarded: credits,
-					},
-				}),
+                prisma.blockSolution.upsert({
+                    where: { blockAssignmentId: blockAssignment.id },
+                    update: { privateKeys: JSON.stringify(body.privateKeys), creditsAwarded: creditsMillis },
+                    create: {
+                        blockAssignmentId: blockAssignment.id,
+                        privateKeys: JSON.stringify(body.privateKeys),
+                        creditsAwarded: creditsMillis,
+                    },
+                }),
                 ...(puzzleDetected ? [
                     prisma.$executeRawUnsafe(
                         `UPDATE block_solutions SET puzzle_private_key = ? WHERE block_assignment_id = ?`,
@@ -247,14 +247,14 @@ async function handler(req: NextRequest) {
                     })
                 ] : []),
 				// Cria a transação de crédito
-				prisma.creditTransaction.create({
-					data: {
-						userTokenId: userToken.id,
-						type: 'EARNED',
-						amount: credits,
-						description: `Block ${blockAssignment.id} completed`,
-					},
-				}),
+                prisma.creditTransaction.create({
+                    data: {
+                        userTokenId: userToken.id,
+                        type: 'EARNED',
+                        amount: creditsMillis,
+                        description: `Block ${blockAssignment.id} completed`,
+                    },
+                }),
 			])
 		);
 
@@ -268,10 +268,10 @@ async function handler(req: NextRequest) {
 
 		// 10. Resposta de Sucesso
 		const addressMap = derivedAddresses.map((addr, idx) => ({ address: addr, privateKey: body.privateKeys[idx] }));
-		return new Response(
-			JSON.stringify({ success: true, blockId: blockAssignment.id, creditsAwarded: credits, addressMap, flags: { puzzleDetected } }),
-			{ status: 200, headers: { 'Content-Type': 'application/json' } }
-		);
+        return new Response(
+            JSON.stringify({ success: true, blockId: blockAssignment.id, creditsAwarded: creditsMillis / 1000, addressMap, flags: { puzzleDetected } }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
 
 	} catch (error) {
 		// Tratamento de erro geral (inclui o timeout do DB P1008)

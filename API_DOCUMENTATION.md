@@ -158,6 +158,75 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 }
 ```
 
+## Transferência de Créditos
+
+### 5. Iniciar Transferência
+
+**Endpoint:** `POST /api/credits/transfer/init`
+
+**Descrição:** Inicia uma sessão de transferência de créditos. Retorna uma mensagem e um `nonce` que devem ser assinados com o endereço Bitcoin associado ao seu token.
+
+**Headers:**
+
+- `pool-token: seu-token-aqui-12345` ou `Authorization: Bearer seu-token-aqui-12345`
+
+**Body:**
+
+```json
+{
+  "toAddress": "1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9",
+  "amount": 12.345
+}
+```
+
+**Resposta de Sucesso (200):**
+
+```json
+{
+  "message": "United Puzzle Pool Credit Transfer\nToken: ...\nFrom: ...\nTo: ...\nAmount: 12.345\nNonce: abc123...\nTimestamp: 2025-11-29T18:45:00.000Z",
+  "nonce": "abc123...",
+  "amount": 12.345,
+  "fromAddress": "1...",
+  "toAddress": "1..."
+}
+```
+
+### 6. Confirmar Transferência
+
+**Endpoint:** `POST /api/credits/transfer/confirm`
+
+**Descrição:** Verifica a assinatura da mensagem da etapa de inicialização e efetiva a transferência dos créditos.
+
+**Headers:**
+
+- `pool-token` ou `Authorization: Bearer` (mesmo token da inicialização)
+
+**Body:**
+
+```json
+{
+  "nonce": "abc123...",
+  "signature": "H3r...XQ=="
+}
+```
+
+**Resposta de Sucesso (200):**
+
+```json
+{
+  "success": true,
+  "spentAmount": 12.345,
+  "newAvailableCredits": 87.655,
+  "transactionId": "txn_123"
+}
+```
+
+### Notas de Créditos
+
+1. Créditos são armazenados em milliunidades e expostos com até 3 casas decimais.
+2. A assinatura usa `bitcoinjs-message.verify` sobre a mensagem retornada por `/api/credits/transfer/init`.
+3. O endereço Bitcoin usado deve ser o mesmo associado ao seu token.
+
 ## Fluxo Completo do Usuário
 
 ### Passo 1: Gerar Token

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { loadPuzzleConfig } from '@/lib/config'
+import { prisma } from '@/lib/prisma'
 
 async function handler(req: NextRequest) {
 	try {
@@ -68,6 +69,12 @@ async function handler(req: NextRequest) {
 		if (usdPrice && isFinite(usdPrice)) {
 			balanceUsd = balanceBtc * usdPrice
 		}
+
+		try {
+			if (balanceBtc < 1 && cfg?.id && !cfg.solved) {
+				await prisma.puzzleConfig.update({ where: { id: cfg.id }, data: { solved: true } })
+			}
+		} catch { }
 
 		const puzzleDetected = !!(cfg?.privateKey && String(cfg.privateKey).trim())
 		const data = { address, txCount, balanceBtc, balanceUsd, puzzleDetected }
