@@ -15,8 +15,8 @@ SETUP_SECRET="change-me"
 
 ### Setup Access
 
-- The `/setup` page requires `SETUP_SECRET`. On successful login, a short-lived HttpOnly cookie is set for admin access.
-- Admin actions on `/setup/config` and related API routes are guarded by this cookie and do not expose the secret in the URL.
+-   The `/setup` page requires `SETUP_SECRET`. On successful login, a short-lived HttpOnly cookie is set for admin access.
+-   Admin actions on `/setup/config` and related API routes are guarded by this cookie and do not expose the secret in the URL.
 
 ## Getting Started
 
@@ -75,39 +75,49 @@ When you find a valid private key, submit it to claim your reward.
 
 ### Pool
 
-- `POST /api/token/generate` — Generate a new mining token
-- `GET /api/block` — Get block assignment (requires `pool-token`)
-- `POST /api/block/submit` — Submit 10–30 private keys; marks block complete and awards credits. If a submitted key derives the puzzle address, the active puzzle is auto-marked solved.
-- `GET /api/pool/stats` — Get pool statistics
-- `GET /api/user/stats` — Get user statistics (requires `pool-token`)
-- `GET /api/user/history` — Get user block history (requires `pool-token`)
+-   `POST /api/token/generate` — Generate a new mining token
+-   `GET /api/block` — Get block assignment (requires `pool-token`)
+-   `POST /api/block/submit` — Submit 10–30 private keys; marks block complete and awards credits. If a submitted key derives the puzzle address, the active puzzle is auto-marked solved.
+-   `GET /api/pool/stats` — Get pool statistics
+-   `GET /api/user/stats` — Get user statistics (requires `pool-token`)
+-   `GET /api/user/history` — Get user block history (requires `pool-token`)
 
 ### Credits
 
-- `POST /api/credits/transfer/init` — Initialize a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ toAddress: string, amount: number }`. Returns a signed message template and `nonce` to be signed with the sender’s Bitcoin address.
-- `POST /api/credits/transfer/confirm` — Confirm a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ nonce: string, signature: string }`. Verifies the signature and deducts credits; responds with remaining credits.
+-   `POST /api/credits/transfer/init` — Initialize a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ toAddress: string, amount: number }`. Returns a signed message template and `nonce` to be signed with the sender’s Bitcoin address.
+-   `POST /api/credits/transfer/confirm` — Confirm a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ nonce: string, signature: string }`. Verifies the signature and deducts credits; responds with remaining credits.
+
+### Shared Pool API
+
+-   `GET /api/shared` — Query validation status for a hex range. Headers: `x-shared-secret` or `shared-pool-token`. Query: `?start=<hex64>&end=<hex64>`. Returns status `VALIDATED`, `ACTIVE`, `PARTIAL`, or `NOT_FOUND` with aggregated `checkwork_addresses` and `privatekeys` when applicable.
+-   `POST /api/shared` — Submit validated private keys and checkwork addresses for a hex range. Headers: `x-shared-secret` or `shared-pool-token`. Body includes `startRange`, `endRange`, `checkworks_addresses`, `privatekeys`, and optional `puzzleaddress`.
+-   `POST /api/shared/token/generate` — Generate or rotate a shared pool token for a configured puzzle. Body: `{ puzzleaddress: string }`. Returns `{ token }`.
 
 ### Setup & Admin
 
-- `POST /api/setup/login` — Login with header `x-setup-secret: <secret>`. Sets HttpOnly cookie `setup_session=1` for admin access.
-- `GET /api/config` — List puzzles (requires admin cookie or `x-setup-secret`)
-- `POST /api/config` — Create puzzle: `{ name?, address, startHex, endHex, solved? }` (admin)
-- `PATCH /api/config/:id` — Update puzzle fields, including `solved` (admin)
-- `DELETE /api/config/:id` — Delete puzzle; active deletion requires `?force=true` or header `x-force-delete: true` (admin)
-- `PATCH /api/config/active` — Set active puzzle: `{ id }` (admin)
-- `GET /api/config/backup` — Download SQLite DB file (admin)
-- `POST /api/config/backup` — Restore DB from uploaded file (admin)
-- `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
+-   `POST /api/setup/login` — Login with header `x-setup-secret: <secret>`. Sets HttpOnly cookie `setup_session=1` for admin access.
+-   `GET /api/config` — List puzzles (requires admin cookie or `x-setup-secret`)
+-   `POST /api/config` — Create puzzle: `{ name?, address, startHex, endHex, solved? }` (admin)
+-   `PATCH /api/config/:id` — Update puzzle fields, including `solved` (admin)
+-   `DELETE /api/config/:id` — Delete puzzle; active deletion requires `?force=true` or header `x-force-delete: true` (admin)
+-   `PATCH /api/config/active` — Set active puzzle: `{ id }` (admin)
+-   `GET /api/config/backup` — Download SQLite DB file (admin)
+-   `POST /api/config/backup` — Restore DB from uploaded file (admin)
+-   `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
 
 ### Notes on Credits
 
-- Credits are tracked internally in milliunits and exposed with up to 3 decimal places.
-- Transfers require signing the message returned by `/api/credits/transfer/init` using the Bitcoin address associated with the token.
+-   Credits are tracked internally in milliunits and exposed with up to 3 decimal places.
+-   Transfers require signing the message returned by `/api/credits/transfer/init` using the Bitcoin address associated with the token.
+
+### Notes on Shared API
+
+-   Shared API can be enabled/disabled via `app_config.shared_pool_api_enabled` and supports either a secret header or a registered token.
 
 ### Notes
 
-- Key Range (Bits) is displayed in UI as `2^min…2^max`, derived from hex ranges.
-- Setup/config page is organized into sections: Database Backup & Restore, Active Puzzle, Add New Puzzle, and Puzzles.
+-   Key Range (Bits) is displayed in UI as `2^min…2^max`, derived from hex ranges.
+-   Setup/config page is organized into sections: Database Backup & Restore, Active Puzzle, Add New Puzzle, and Puzzles.
 
 ## Learn More
 

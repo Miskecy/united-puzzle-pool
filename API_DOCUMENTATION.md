@@ -168,14 +168,14 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 
 **Headers:**
 
-- `pool-token: seu-token-aqui-12345` ou `Authorization: Bearer seu-token-aqui-12345`
+-   `pool-token: seu-token-aqui-12345` ou `Authorization: Bearer seu-token-aqui-12345`
 
 **Body:**
 
 ```json
 {
-  "toAddress": "1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9",
-  "amount": 12.345
+    "toAddress": "1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9",
+    "amount": 12.345
 }
 ```
 
@@ -183,11 +183,11 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 
 ```json
 {
-  "message": "United Puzzle Pool Credit Transfer\nToken: ...\nFrom: ...\nTo: ...\nAmount: 12.345\nNonce: abc123...\nTimestamp: 2025-11-29T18:45:00.000Z",
-  "nonce": "abc123...",
-  "amount": 12.345,
-  "fromAddress": "1...",
-  "toAddress": "1..."
+    "message": "United Puzzle Pool Credit Transfer\nToken: ...\nFrom: ...\nTo: ...\nAmount: 12.345\nNonce: abc123...\nTimestamp: 2025-11-29T18:45:00.000Z",
+    "nonce": "abc123...",
+    "amount": 12.345,
+    "fromAddress": "1...",
+    "toAddress": "1..."
 }
 ```
 
@@ -199,14 +199,14 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 
 **Headers:**
 
-- `pool-token` ou `Authorization: Bearer` (mesmo token da inicialização)
+-   `pool-token` ou `Authorization: Bearer` (mesmo token da inicialização)
 
 **Body:**
 
 ```json
 {
-  "nonce": "abc123...",
-  "signature": "H3r...XQ=="
+    "nonce": "abc123...",
+    "signature": "H3r...XQ=="
 }
 ```
 
@@ -214,10 +214,10 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 
 ```json
 {
-  "success": true,
-  "spentAmount": 12.345,
-  "newAvailableCredits": 87.655,
-  "transactionId": "txn_123"
+    "success": true,
+    "spentAmount": 12.345,
+    "newAvailableCredits": 87.655,
+    "transactionId": "txn_123"
 }
 ```
 
@@ -226,6 +226,68 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 1. Créditos são armazenados em milliunidades e expostos com até 3 casas decimais.
 2. A assinatura usa `bitcoinjs-message.verify` sobre a mensagem retornada por `/api/credits/transfer/init`.
 3. O endereço Bitcoin usado deve ser o mesmo associado ao seu token.
+
+## API de Pool Compartilhado
+
+### 7. Consultar Status de Validação
+
+**Endpoint:** `GET /api/shared`
+
+**Headers:**
+
+-   `x-shared-secret: <segredo>` ou `shared-pool-token: <token>`
+
+**Query:**
+
+-   `start`: hex de 64 caracteres (`0x...`)
+-   `end`: hex de 64 caracteres (`0x...`)
+
+**Resposta:**
+
+```json
+{
+    "status": "VALIDATED|ACTIVE|PARTIAL|NOT_FOUND",
+    "checkwork_addresses": ["..."],
+    "privatekeys": ["..."],
+    "blockId": "..."
+}
+```
+
+### 8. Submeter Validação Compartilhada
+
+**Endpoint:** `POST /api/shared`
+
+**Headers:**
+
+-   `x-shared-secret` ou `shared-pool-token`
+
+**Body:**
+
+```json
+{
+    "startRange": "0x...",
+    "endRange": "0x...",
+    "checkworks_addresses": ["..."],
+    "privatekeys": ["..."],
+    "puzzleaddress": "1..."
+}
+```
+
+### 9. Gerar Token para Pool Compartilhado
+
+**Endpoint:** `POST /api/shared/token/generate`
+
+**Body:**
+
+```json
+{ "puzzleaddress": "1..." }
+```
+
+**Resposta:**
+
+```json
+{ "token": "..." }
+```
 
 ## Fluxo Completo do Usuário
 

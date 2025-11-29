@@ -59,12 +59,17 @@ export default function BlocksTimeline({
 	}, [pollUrl, pollIntervalMs])
 
 	useEffect(() => {
+		setBlocks(items ?? [])
+	}, [items])
+
+	useEffect(() => {
 		const id = setInterval(() => setNowMs(Date.now()), 30000)
 		return () => clearInterval(id)
 	}, [])
 
 	const loopBlocks = useMemo(() => {
 		const base = (blocks ?? []).slice(0, 10)
+		if (base.length === 0) return []
 		return [...base, ...base]
 	}, [blocks])
 
@@ -108,7 +113,7 @@ export default function BlocksTimeline({
 				<div
 					ref={trackRef}
 					className={`timeline-track ${direction === 'reverse' ? 'reverse' : 'forward'}`}
-					style={{ animationDuration: `${Math.max(1000, speedMs)}ms`, gap: `${Math.max(0, gapPx)}px` }}
+					style={{ animationDuration: `${Math.max(1000, speedMs)}ms`, animationPlayState: (loopBlocks.length > 0 ? 'running' : 'paused'), gap: `${Math.max(0, gapPx)}px` }}
 				>
 					{loopBlocks.map((b, i) => {
 						const addr = b.puzzleAddress || b.bitcoinAddress || 'Unknown address'
