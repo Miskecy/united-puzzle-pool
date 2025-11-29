@@ -1,0 +1,110 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "sqlite"
+    url      = env("DATABASE_URL")
+}
+
+model UserToken {
+    id                 String              @id @default(cuid())
+    token              String              @unique
+    bitcoinAddress     String              @map("bitcoin_address")
+    createdAt          DateTime            @default(now()) @map("created_at")
+    updatedAt          DateTime            @updatedAt @map("updated_at")
+    blockAssignments   BlockAssignment[]
+    creditTransactions CreditTransaction[]
+
+    @@map("user_tokens")
+}
+
+model BlockAssignment {
+    id                    String           @id @default(cuid())
+    userTokenId           String           @map("user_token_id")
+    startRange            String           @map("start_range")
+    endRange              String           @map("end_range")
+    checkworkAddresses    String           @map("checkwork_addresses")
+    status                BlockStatus      @default(ACTIVE)
+    expiresAt             DateTime         @map("expires_at")
+    puzzleAddressSnapshot String?          @map("puzzle_address_snapshot")
+    puzzleNameSnapshot    String?          @map("puzzle_name_snapshot")
+    sharedPoolTokenId     String?          @map("shared_pool_token_id")
+    createdAt             DateTime         @default(now()) @map("created_at")
+    updatedAt             DateTime         @updatedAt @map("updated_at")
+    userToken             UserToken        @relation(fields: [userTokenId], references: [id])
+    sharedPoolToken       SharedPoolToken? @relation(fields: [sharedPoolTokenId], references: [id])
+    blockSolution         BlockSolution?
+}
+
+model BlockSolution {
+    id                String          @id @default(cuid())
+    blockAssignmentId String          @unique @map("block_assignment_id")
+    privateKeys       String          @map("private_keys")
+    creditsAwarded    Decimal         @map("credits_awarded")
+    puzzlePrivateKey  String?         @map("puzzle_private_key")
+    solvedAt          DateTime        @default(now()) @map("solved_at")
+    createdAt         DateTime        @default(now()) @map("created_at")
+    blockAssignment   BlockAssignment @relation(fields: [blockAssignmentId], references: [id])
+
+    @@map("block_solutions")
+}
+
+model CreditTransaction {
+    id          String          @id @default(cuid())
+    userTokenId String          @map("user_token_id")
+    type        TransactionType
+    amount      Decimal
+    description String?
+    createdAt   DateTime        @default(now()) @map("created_at")
+    userToken   UserToken       @relation(fields: [userTokenId], references: [id])
+
+    @@map("credit_transactions")
+}
+
+enum BlockStatus {
+    ACTIVE
+    COMPLETED
+    EXPIRED
+}
+
+enum TransactionType {
+    EARNED
+    SPENT
+}
+
+model PuzzleConfig {
+    id               String   @id @default(cuid())
+    name             String?
+    puzzleAddress    String   @map("puzzle_address")
+    puzzleStartRange String   @map("puzzle_start_range")
+    puzzleEndRange   String   @map("puzzle_end_range")
+    puzzlePrivateKey String?  @map("puzzle_private_key")
+    solved           Boolean  @default(false)
+    active           Boolean  @default(false)
+    createdAt        DateTime @default(now()) @map("created_at")
+    updatedAt        DateTime @updatedAt @map("updated_at")
+
+    @@map("puzzles_config")
+}
+
+model SharedPoolToken {
+    id               String            @id @default(cuid())
+    token            String            @unique
+    poolName         String            @map("pool_name")
+    puzzleAddress    String?           @map("puzzle_address")
+    createdAt        DateTime          @default(now()) @map("created_at")
+    updatedAt        DateTime          @updatedAt @map("updated_at")
+    blockAssignments BlockAssignment[]
+
+    @@map("shared_pool_tokens")
+}
+
+model AppConfig {
+    id                   String   @id @default("singleton")
+    sharedPoolApiEnabled Boolean  @default(false) @map("shared_pool_api_enabled")
+    createdAt            DateTime @default(now()) @map("created_at")
+    updatedAt            DateTime @updatedAt @map("updated_at")
+
+    @@map("app_config")
+}
