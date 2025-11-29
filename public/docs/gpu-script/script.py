@@ -158,9 +158,9 @@ def _scheduled_pending_post_retry():
         LAST_POST_ATTEMPT = now
         ok = _retry_pending_keys_now()
         if ok:
-            logger("Success", "Envio pendente realizado com sucesso.")
+            logger("Success", "Pending keys posted successfully.")
         else:
-            logger("Warning", "API indisponível. Manteremos as chaves e tentaremos novamente em 30s.")
+            logger("Warning", "API unavailable. Keeping keys and retrying in 30s.")
 
 def flush_pending_keys_blocking():
     global PENDING_KEYS
@@ -191,10 +191,17 @@ def handle_next_block_immediately():
     save_addresses_to_in_file(addresses, ADDITIONAL_ADDRESSES)
     run_external_program(start_hex, end_hex)
     return True
+# ==============================================================================================
+#                                    UTILITY & COMMUNICATION FUNCTIONS
+# ==============================================================================================
 
 def logger(level, message):
+    """
+    Print a message with timestamp and colored log level.
+    """
     current_time = datetime.now()
     formatted_time = current_time.strftime("[%Y-%m-%d.%H:%M:%S]")
+    
     color_map = {
         "Info": Fore.LIGHTBLUE_EX,
         "Warning": Fore.LIGHTYELLOW_EX,
@@ -203,25 +210,39 @@ def logger(level, message):
         "KEYFOUND": Fore.LIGHTMAGENTA_EX,
         "Timer": Fore.LIGHTYELLOW_EX
     }
+    
     color = color_map.get(level, Fore.WHITE)
     print(f"{formatted_time} {color}[{level}]{Style.RESET_ALL} {message}")
 
+# ----------------------------------------------------------------------------------------------
+
 def send_telegram_notification(message):
+    """
+    Send a notification message to Telegram.
+    """
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logger("Warning", "Configurações do Telegram ausentes. Notificação não enviada.")
+        logger("Warning", "Telegram settings missing. Notification not sent.")
         return
+
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     if WORKER_NAME:
         message = f"👷 Worker: `{WORKER_NAME}`\n\n{message}"
-    payload = {"chat_id": str(TELEGRAM_CHAT_ID), "text": message, "parse_mode": "Markdown"}
+    payload = {
+        "chat_id": str(TELEGRAM_CHAT_ID), 
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+
     try:
         response = requests.post(telegram_url, data=payload, timeout=10)
         if response.status_code == 200:
             logger("Success", "Telegram notification sent!")
         else:
-            logger("Error", f"Erro ao enviar Telegram: Status {response.status_code}. Resposta: {response.text}")
+            logger("Error", f"Error sending Telegram: Status {response.status_code}. Response: {response.text}")
     except requests.RequestException:
-        logger("Error", "Request error while sending Telegram notification.")
+        logger("Error", "Request error while trying to send Telegram notification.")
+
+# ----------------------------------------------------------------------------------------------
 
 LAST_TELEGRAM_TS = {}
 
@@ -234,11 +255,16 @@ def send_telegram_notification_rl(message, category, min_interval):
     send_telegram_notification(message)
 
 def fetch_block_data():
+    """
+    Fetch the work block from API and notify via Telegram on failure.
+    """
     headers = {"pool-token": POOL_TOKEN, "ngrok-skip-browser-warning": "true", "User-Agent": "unitead-gpu-script/1.0"}
+    
     try:
         logger("Info", f"Fetching data from {API_URL}")
         params = {"length": BLOCK_LENGTH} if BLOCK_LENGTH else None
         response = requests.get(API_URL, headers=headers, params=params, timeout=15)
+        
         if response.status_code == 200:
             return response.json()
         elif response.status_code == 409:
@@ -253,33 +279,58 @@ def fetch_block_data():
                 send_telegram_notification("🏁 **ALL BLOCKS ARE SOLVED**\n\nShutting down worker.")
                 logger("Success", "All blocks solved. Shutting down.")
                 return None
-            error_message = f"⚠️ **NO RANGE AVAILABLE**\n\nStatus: `409`\nDetail: `{msg or 'No available random range'}`"
+            error_message = (
+                f"⚠️ **NO RANGE AVAILABLE**\n\n"
+                f"Status: `409`\n"
+                f"Detail: `{msg or 'No available random range'}`"
+            )
             send_telegram_notification_rl(error_message, "no_range", 300)
             logger("Error", f"Error fetching block: 409 - {response.text}")
             return None
         else:
-            error_message = f"🚨 **ALERT: API DOWN OR ERROR!**\n\nFailed to fetch work block.\nStatus: `{response.status_code}`. Response: {response.text[:100]}..."
+            error_message = (
+                f"🚨 **ALERT: API DOWN OR ERROR!**\n\n"
+                f"Failed to fetch work block.\n"
+                f"Status: `{response.status_code}`. Response: {response.text[:100]}..."
+            )
             send_telegram_notification_rl(error_message, "api_fetch_error", 300)
             logger("Error", f"Error fetching block: {response.status_code} - {response.text}")
             return None
+            
     except requests.RequestException as e:
-        error_message = f"🚨 **ALERT: API CONNECTION ERROR!**\n\nThe script could not connect to the API.\nError Detail: `{type(e).__name__}` - {e}"
+        error_message = (
+            f"🚨 **ALERT: API CONNECTION ERROR!**\n\n"
+            f"The script could not connect to the API.\n"
+            f"Error Detail: `{type(e).__name__}` - {e}"
+        )
         send_telegram_notification_rl(error_message, "api_fetch_error", 300)
         logger("Error", f"Request error {type(e).__name__}: {e}")
         return None
 
+# ----------------------------------------------------------------------------------------------
+
 def post_private_keys(private_keys):
-    headers = {"pool-token": POOL_TOKEN, "Content-Type": "application/json", "ngrok-skip-browser-warning": "true", "User-Agent": "unitead-gpu-script/1.0"}
+    headers = {
+        "pool-token": POOL_TOKEN,
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+        "User-Agent": "unitead-gpu-script/1.0"
+    }
     if len(private_keys) != 10:
         logger("Warning", f"Batch ignored: exactly 10 keys required, got {len(private_keys)}")
         return False
     data = {"privateKeys": private_keys}
     logger("Info", "Posting batch of 10 private keys to API.")
+    
     try:
         response = requests.post(API_URL+"/submit", headers=headers, json=data, timeout=10)
         if response.status_code == 200:
             logger("Success", "Private keys posted successfully.")
-            success_message = f"✅ **BATCH SENT**\n\nKeys: `{len(private_keys)}`\nStatus: ✅ API OK"
+            success_message = (
+                f"✅ **BATCH SENT**\n\n"
+                f"Keys: `{len(private_keys)}`\n"
+                f"Status: ✅ API OK"
+            )
             send_telegram_notification(success_message)
             return True
         else:
@@ -288,21 +339,33 @@ def post_private_keys(private_keys):
                 snippet = (response.text or "")[:120].replace("\n", " ")
             except Exception:
                 snippet = ""
-            logger("Error", f"Batch post failed: Status {response.status_code}. Retrying in 30s.")
+            logger("Error", f"Failed to send batch: Status {response.status_code}. Retrying in 30s.")
             if snippet:
                 logger("Info", f"Detail: {snippet}...")
-            error_message = f"⚠️ **FAILED TO SEND BATCH**\n\nStatus: `{response.status_code}`\nWill retry in `30s`. Data remains saved."
+            error_message = (
+                f"⚠️ **FAILED TO SEND BATCH**\n\n"
+                f"Status: `{response.status_code}`\n"
+                f"Will retry in `30s`. Data remains saved."
+            )
             send_telegram_notification_rl(error_message, "post_error", 300)
             return False
     except requests.RequestException as e:
-        logger("Error", f"Connection error while posting batch: {type(e).__name__}. Retrying in 30s.")
-        error_message = f"🌐 **CONNECTION ERROR ON POST**\n\nDetail: `{type(e).__name__}` - {e}\nWill retry in `30s`. Data remains saved."
+        logger("Error", f"Connection error while sending batch: {type(e).__name__}. Retrying in 30s.")
+        error_message = (
+            f"🌐 **CONNECTION ERROR ON SEND**\n\n"
+            f"Detail: `{type(e).__name__}` - {e}\n"
+            f"Will retry in `30s`. Data remains saved."
+        )
         send_telegram_notification_rl(error_message, "post_network_error", 300)
         return False
 
 # ==============================================================================================
 #                                    MAIN WORK FUNCTIONS
 # ==============================================================================================
+# ... (Funções save_addresses_to_in_file, run_external_program e process_out_file não alteradas)
+# ...
+
+# ----------------------------------------------------------------------------------------------
 
 def save_addresses_to_in_file(addresses, additional_addresses):
     all_addresses = list(addresses)
@@ -310,12 +373,13 @@ def save_addresses_to_in_file(addresses, additional_addresses):
     for a in extras:
         if a not in all_addresses:
             all_addresses.append(a)
+
     try:
         with open(IN_FILE, "w") as file:
             file.write("\n".join(all_addresses) + "\n")
         logger("Info", f"Addresses saved to '{IN_FILE}'. Total: {len(all_addresses)}")
     except Exception as e:
-        logger("Error", f"Failed saving addresses to '{IN_FILE}': {e}")
+        logger("Error", f"Failed to save addresses to '{IN_FILE}': {e}")
         sys.exit(1)
 
 def clean_io_files():
@@ -334,6 +398,8 @@ def clean_out_file():
     except Exception:
         pass
 
+# ----------------------------------------------------------------------------------------------
+
 def _parse_length_to_count(s):
     try:
         if not s:
@@ -344,19 +410,27 @@ def _parse_length_to_count(s):
             return None
         val = int(m.group(1))
         unit = m.group(2)
-        mult = {"K": 10**3, "M": 10**6, "B": 10**9, "T": 10**12}.get(unit, 1)
+        mult = {
+            "K": 10**3,
+            "M": 10**6,
+            "B": 10**9,
+            "T": 10**12,
+        }.get(unit, 1)
         return int(val * mult)
     except Exception:
         return None
 
 def run_external_program(start_hex, end_hex):
+    """Run external program with given keyspace and stream live feedback."""
     keyspace = f"{start_hex}:{end_hex}"
+    
     requested_len = _parse_length_to_count(BLOCK_LENGTH)
     try:
         actual_len = int(end_hex, 16) - int(start_hex, 16)
     except Exception:
         actual_len = None
     compare_len = requested_len if requested_len is not None else actual_len
+
     chosen = "vanity"
     if AUTO_SWITCH:
         if GPU_COUNT > 1:
@@ -368,31 +442,59 @@ def run_external_program(start_hex, end_hex):
                 chosen = "vanity"
     if chosen == "bitcrack" and not BITCRACK_PATH:
         chosen = "vanity"
+
     if chosen == "vanity":
-        base = [APP_PATH, "-t", "0", "-gpu", "-i", IN_FILE, "-o", OUT_FILE]
+        base = [
+            APP_PATH,
+            "-t", "0",
+            "-gpu",
+            "-i", IN_FILE,
+            "-o", OUT_FILE,
+        ]
         if GPU_COUNT <= 1:
             base += ["-gpuId", GPU_INDEX]
         if isinstance(APP_ARGS, str) and APP_ARGS.strip():
             base += shlex.split(APP_ARGS)
         command = base + ["--keyspace", keyspace]
     else:
-        base = [BITCRACK_PATH, "-i", IN_FILE, "-o", OUT_FILE, "-d", GPU_INDEX]
+        base = [
+            BITCRACK_PATH,
+            "-i", IN_FILE,
+            "-o", OUT_FILE,
+            "-d", GPU_INDEX,
+        ]
         if isinstance(BITCRACK_ARGS, str) and BITCRACK_ARGS.strip():
             base += shlex.split(BITCRACK_ARGS)
         command = base + ["--keyspace", keyspace]
     clean_out_file()
+    
     logger("Info", f"Running with keyspace: {Fore.GREEN}{keyspace}{Style.RESET_ALL}")
+
     try:
-        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1) as process:
+        # Use Popen to run the process and access real-time I/O streams
+        with subprocess.Popen(
+            command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True, 
+            bufsize=1 
+        ) as process:
+            
+            # Read and display subprocess output line by line
             for line in process.stdout:
+                # Real-time feedback
                 print(f"{Fore.CYAN}  > {line.strip()}{Style.RESET_ALL}", flush=True)
+
+            # Espera o processo terminar e verifica o código de retorno
             return_code = process.wait()
+
             if return_code == 0:
                 logger("Success", "External program finished successfully")
                 return True
             else:
                 logger("Error", f"External program failed with return code: {return_code}")
                 return False
+
     except FileNotFoundError:
         logger("Error", "External program not found. Check path and permissions.")
         return False
@@ -400,14 +502,23 @@ def run_external_program(start_hex, end_hex):
         logger("Error", f"Exception while executing: {e}")
         return False
 
+# ----------------------------------------------------------------------------------------------
+
 def process_out_file():
+    """
+    Process out.txt, check additional address hit, notify via Telegram,
+    and enqueue other keys for API posting.
+    """
     global PENDING_KEYS
     if not os.path.exists(OUT_FILE):
         logger("Warning", f"File '{OUT_FILE}' not found for processing.")
         return False
+
     keys_to_post = []
     found_pairs = []
+    
     try:
+        # Read out.txt and extract keys
         with open(OUT_FILE, "r") as file:
             current_address = None
             extras_set = set([a for a in (ADDITIONAL_ADDRESSES or []) if isinstance(a, str)])
@@ -435,11 +546,16 @@ def process_out_file():
                                     keys_to_post.append(priv)
                         elif re.fullmatch(r"(?:0x)?[0-9a-fA-F]{64}", raw):
                             keys_to_post.append(raw)
+
     except Exception as e:
-        logger("Error", f"Failed to process file '{OUT_FILE}': {e}")
+        logger("Error", f"Error processing file '{OUT_FILE}': {e}")
         return False
+
+    # 1. Check and Save Additional Address hit (and Notify)
     if found_pairs:
         logger("KEYFOUND", f"{len(found_pairs)} key(s) for additional addresses found. Stopping...")
+        
+        # Save found private key to file
         try:
             with open(KEYFOUND_FILE, "w") as file:
                 file.write("\n".join([f"{addr}:{key}" for (addr, key) in found_pairs]) + "\n")
@@ -450,20 +566,33 @@ def process_out_file():
             PENDING_KEYS.extend(keys_to_post)
             _save_pending_keys()
         addrs_list = "\n".join([f"`{addr}`" for (addr, _) in found_pairs])
-        message = f"🔑 **PRIVATE KEY FOUND**\n\nAdditional addresses:\n{addrs_list}\n\nRegular keys accumulated: `{len(keys_to_post)}`\nFile: `{KEYFOUND_FILE}`"
+        message = (
+            f"🔑 **PRIVATE KEY FOUND**\n\n"
+            f"Additional addresses:\n{addrs_list}\n\n"
+            f"Regular keys accumulated: `{len(keys_to_post)}`\n"
+            f"File: `{KEYFOUND_FILE}`"
+        )
         send_telegram_notification(message)
         return True
+    
     if keys_to_post:
         PENDING_KEYS.extend(keys_to_post)
         logger("Info", f"Accumulated {len(PENDING_KEYS)} keys for posting.")
         _save_pending_keys()
+
+    # 3. Clear out.txt for the next cycle
     try:
         with open(OUT_FILE, "w"):
             pass
         logger("Info", f"File '{OUT_FILE}' cleared for next cycle.")
     except Exception as e:
-        logger("Error", f"Erro ao limpar arquivo '{OUT_FILE}': {e}")
-    return False
+        logger("Error", f"Failed to clear file '{OUT_FILE}': {e}")
+
+    return False # Indicates the additional address key was NOT found
+
+# ==============================================================================================
+#                                    MAIN LOOP
+# ==============================================================================================
 
 if __name__ == "__main__":
     clean_io_files()
@@ -475,38 +604,60 @@ if __name__ == "__main__":
         if ONE_SHOT and PROCESSED_ONE_BLOCK:
             logger("Info", "One-shot mode enabled. Exiting after first block.")
             break
+        # 1. Fetch block data
         block_data = fetch_block_data()
+        
         if ALL_BLOCKS_SOLVED:
             break
         if not block_data:
             logger("Error", "Could not fetch block data. Retrying in 30 seconds.")
             time.sleep(30)
             continue
+
         addresses = block_data.get("checkwork_addresses", [])
         range_data = block_data.get("range", {})
         start_hex = range_data.get("start", "").replace("0x", "")
         end_hex = range_data.get("end", "").replace("0x", "")
-        current_keyspace = f"{start_hex}:{end_hex}"
+        current_keyspace = f"{start_hex}:{end_hex}" # (NEW)
+
         if not addresses:
-            logger("Warning", "No addresses in block. Retrying in 30 seconds.")
+            logger("Warning", "No addresses found in block. Retrying in 30 seconds.")
             time.sleep(30)
             continue
+
         if not (start_hex and end_hex):
             logger("Error", "Key range (start/end) missing. Retrying in 30 seconds.")
             time.sleep(30)
             continue
+        
+        # 2. New: New block notification logic
         if current_keyspace != previous_keyspace:
             previous_keyspace = current_keyspace
-            new_block_message = f"⛏️ **NEW BLOCK**\n\nRange: `{current_keyspace}`\nAddresses: `{len(addresses)}`\nGPU: `{GPU_INDEX}`"
+            
+            new_block_message = (
+                f"⛏️ **NEW BLOCK**\n\n"
+                f"Range: `{current_keyspace}`\n"
+                f"Addresses: `{len(addresses)}`\n"
+                f"GPU: `{GPU_INDEX}`"
+            )
             send_telegram_notification(new_block_message)
             logger("Info", f"New block notification sent: {current_keyspace}")
+
+        # 3. Save addresses to in.txt
         save_addresses_to_in_file(addresses, ADDITIONAL_ADDRESSES)
+        
+        # 4. Run external program (no chunking)
         run_external_program(start_hex, end_hex)
+
+        # 5. Process output file (out.txt)
         solution_found = process_out_file()
+
         PROCESSED_ONE_BLOCK = True
+        # 6. Stop logic
         if solution_found:
             logger("Success", "ADDITIONAL ADDRESS KEY FOUND. Exiting script.")
             break
+
         flush_pending_keys_blocking()
         if ONE_SHOT:
             logger("Info", "One-shot mode enabled. Exiting after first block.")

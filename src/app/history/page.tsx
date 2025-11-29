@@ -235,7 +235,7 @@ export default function HistoryPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [blocksPage, setBlocksPage] = useState(1);
 	const [transactionsPage, setTransactionsPage] = useState(1);
-	const [activeTab, setActiveTab] = useState("blocks");
+	const [, setActiveTab] = useState("blocks");
 	const pageSize = 50;
 
 	useEffect(() => {
