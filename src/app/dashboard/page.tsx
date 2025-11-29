@@ -11,6 +11,7 @@ import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 interface UserStats {
 	token: string;
@@ -49,11 +50,13 @@ export default function UserDashboard() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [assigningBlock, setAssigningBlock] = useState(false);
+	const [deletingBlock, setDeletingBlock] = useState(false);
+	const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 	const [showFullToken, setShowFullToken] = useState(false);
 	const [bitcoinAddress, setBitcoinAddress] = useState('');
 	const [bitcoinAddressError, setBitcoinAddressError] = useState('');
 	const [manualTokenInput, setManualTokenInput] = useState('');
-	const [timeRemaining, setTimeRemaining] = useState<string>('');
+	const [, setTimeRemaining] = useState<string>('');
 	const [submitting, setSubmitting] = useState(false);
 	const [checkworkAddresses, setCheckworkAddresses] = useState<string[]>([]);
 	const [avgSpeedBKeys, setAvgSpeedBKeys] = useState<string>('0.00');
@@ -1056,11 +1059,10 @@ export default function UserDashboard() {
 											type="button"
 											variant='outline'
 											className="inline-flex items-center gap-2 bg-white text-red-600 border-red-400 hover:bg-red-50 hover:text-red-700"
-											onClick={async () => {
-												// Lógica de exclusão
-											}}
+											onClick={() => setConfirmDeleteOpen(true)}
+											disabled={deletingBlock}
 										>
-											<LogOut className='w-4 h-4' /> Delete Active Block
+											<LogOut className='w-4 h-4' /> {deletingBlock ? 'Deleting...' : 'Delete Active Block'}
 										</Button>
 									) : null}
 								</div>
@@ -1187,7 +1189,7 @@ export default function UserDashboard() {
 								<CardDescription className='text-gray-600'>Paste and submit your found private keys.</CardDescription>
 							</CardHeader>
 							<CardContent className='pt-6'>
-								<form onSubmit={handleSubmitBlock} className="space-y-4">
+								<form onSubmit={handleSubmitBlock} className="space-y-4 h-full">
 									<div className="space-y-3 h-full flex flex-col">
 										<div className="flex items-center justify-between">
 											<div className="flex items-center gap-2">
@@ -1204,7 +1206,7 @@ export default function UserDashboard() {
 										<textarea
 											value={keysText}
 											onChange={(e) => setKeysText(e.target.value)}
-											className="w-full flex-1 min-h-[250px] px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-600"
+											className="w-full flex-1 h-full min-h-[250px] px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-600"
 											placeholder="Paste one key per line, or separated by spaces/commas."
 											disabled={!userStats.activeBlock}
 										/>
@@ -1296,6 +1298,53 @@ export default function UserDashboard() {
 					</div>
 				</div>
 			</div >
+
+			{userStats.activeBlock ? (
+				<Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>Delete Active Block</DialogTitle>
+							<DialogDescription>
+								This will expire your current assignment and free you to request a new block. Proceed?
+							</DialogDescription>
+						</DialogHeader>
+						<DialogFooter>
+							<Button variant="outline" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
+							<Button
+								variant="destructive"
+								disabled={deletingBlock}
+								onClick={async () => {
+									try {
+										setDeletingBlock(true);
+										setError(null);
+										const token = localStorage.getItem('pool-token');
+										if (!token) {
+											throw new Error('No token found');
+										}
+										const r = await fetch('/api/block', { method: 'DELETE', headers: { 'pool-token': token } });
+										if (!r.ok) {
+											let msg = 'Failed to delete active block';
+											try { const d = await r.json(); if (d?.error) msg = d.error; } catch { }
+											throw new Error(msg);
+										}
+										setKeysText('');
+										setCheckworkAddresses([]);
+										await fetchUserStats();
+										setConfirmDeleteOpen(false);
+									} catch (err) {
+										setError(err instanceof Error ? err.message : 'Failed to delete active block');
+										setConfirmDeleteOpen(false);
+									} finally {
+										setDeletingBlock(false);
+									}
+								}}
+							>
+								Delete
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
+			) : null}
 
 		</div>
 	)
