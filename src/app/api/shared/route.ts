@@ -15,28 +15,17 @@ function parsePrivateKeysRaw(raw?: string | null): string[] {
 	return s.split(/[\s,]+/).filter(Boolean)
 }
 
-async function ensureSharedUser(poolname: string, puzzleAddress?: string | null) {
-	const token = `shared:${poolname}`
-	let user = await prisma.userToken.findFirst({ where: { token } })
-	if (!user) {
-		user = await prisma.userToken.create({ data: { token, bitcoinAddress: puzzleAddress || `shared:${poolname}` } })
-	}
-	return user
-}
-
 async function handleGet(req: NextRequest) {
 	const secret = getSharedSecret()
 	const suppliedSecret = req.headers.get('x-shared-secret') || ''
 	const sharedToken = req.headers.get('shared-pool-token') || ''
 	let authorized = false
-	let sharedTokenId: string | null = null
 	if (secret && suppliedSecret === secret) {
 		authorized = true
 	} else if (sharedToken) {
 		try {
 			const rows = await prisma.$queryRaw<{ id: string }[]>`SELECT id FROM shared_pool_tokens WHERE token = ${sharedToken} LIMIT 1`
 			authorized = !!(rows && rows[0])
-			sharedTokenId = rows && rows[0] ? rows[0].id : null
 		} catch { authorized = false }
 	}
 	if (!authorized) return unauthorized()

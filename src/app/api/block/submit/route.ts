@@ -204,7 +204,6 @@ async function handler(req: NextRequest) {
 		const keysValidated = endBig - startBig;
 		const T = 1_000_000_000_000n;
 		const creditsMillis = keysValidated > 0n ? Number((keysValidated * 1000n) / T) : 0;
-		const credits = creditsMillis / 1000;
 
 		console.log('Submitting block', { blockId: blockAssignment.id, token });
 
@@ -217,44 +216,44 @@ async function handler(req: NextRequest) {
 					data: { status: 'COMPLETED' },
 				}),
 				// Salva a solução
-                prisma.blockSolution.upsert({
-                    where: { blockAssignmentId: blockAssignment.id },
-                    update: { privateKeys: JSON.stringify(body.privateKeys), creditsAwarded: creditsMillis },
-                    create: {
-                        blockAssignmentId: blockAssignment.id,
-                        privateKeys: JSON.stringify(body.privateKeys),
-                        creditsAwarded: creditsMillis,
-                    },
-                }),
-                ...(puzzleDetected ? [
-                    prisma.$executeRawUnsafe(
-                        `UPDATE block_solutions SET puzzle_private_key = ? WHERE block_assignment_id = ?`,
-                        (() => {
-                            const idx = derivedAddresses.findIndex(a => a === (cfg?.address || userToken.bitcoinAddress));
-                            return idx >= 0 ? body.privateKeys[idx] : null;
-                        })(),
-                        blockAssignment.id
-                    ),
-                    prisma.puzzleConfig.updateMany({
-                        where: { active: true },
-                        data: {
-                            solved: true,
-                            puzzlePrivateKey: (() => {
-                                const idx = derivedAddresses.findIndex(a => a === (cfg?.address || userToken.bitcoinAddress));
-                                return idx >= 0 ? body.privateKeys[idx] : null;
-                            })()
-                        }
-                    })
-                ] : []),
+				prisma.blockSolution.upsert({
+					where: { blockAssignmentId: blockAssignment.id },
+					update: { privateKeys: JSON.stringify(body.privateKeys), creditsAwarded: creditsMillis },
+					create: {
+						blockAssignmentId: blockAssignment.id,
+						privateKeys: JSON.stringify(body.privateKeys),
+						creditsAwarded: creditsMillis,
+					},
+				}),
+				...(puzzleDetected ? [
+					prisma.$executeRawUnsafe(
+						`UPDATE block_solutions SET puzzle_private_key = ? WHERE block_assignment_id = ?`,
+						(() => {
+							const idx = derivedAddresses.findIndex(a => a === (cfg?.address || userToken.bitcoinAddress));
+							return idx >= 0 ? body.privateKeys[idx] : null;
+						})(),
+						blockAssignment.id
+					),
+					prisma.puzzleConfig.updateMany({
+						where: { active: true },
+						data: {
+							solved: true,
+							puzzlePrivateKey: (() => {
+								const idx = derivedAddresses.findIndex(a => a === (cfg?.address || userToken.bitcoinAddress));
+								return idx >= 0 ? body.privateKeys[idx] : null;
+							})()
+						}
+					})
+				] : []),
 				// Cria a transação de crédito
-                prisma.creditTransaction.create({
-                    data: {
-                        userTokenId: userToken.id,
-                        type: 'EARNED',
-                        amount: creditsMillis,
-                        description: `Block ${blockAssignment.id} completed`,
-                    },
-                }),
+				prisma.creditTransaction.create({
+					data: {
+						userTokenId: userToken.id,
+						type: 'EARNED',
+						amount: creditsMillis,
+						description: `Block ${blockAssignment.id} completed`,
+					},
+				}),
 			])
 		);
 
@@ -268,10 +267,10 @@ async function handler(req: NextRequest) {
 
 		// 10. Resposta de Sucesso
 		const addressMap = derivedAddresses.map((addr, idx) => ({ address: addr, privateKey: body.privateKeys[idx] }));
-        return new Response(
-            JSON.stringify({ success: true, blockId: blockAssignment.id, creditsAwarded: creditsMillis / 1000, addressMap, flags: { puzzleDetected } }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
+		return new Response(
+			JSON.stringify({ success: true, blockId: blockAssignment.id, creditsAwarded: creditsMillis / 1000, addressMap, flags: { puzzleDetected } }),
+			{ status: 200, headers: { 'Content-Type': 'application/json' } }
+		);
 
 	} catch (error) {
 		// Tratamento de erro geral (inclui o timeout do DB P1008)

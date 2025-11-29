@@ -60,7 +60,7 @@ export default function TransferCreditsWizard() {
 					if (!r.ok) throw new Error('Failed to load stats')
 					const j = await r.json()
 					if (mounted) setStats({ token: j.token, bitcoinAddress: j.bitcoinAddress, availableCredits: Number(j.availableCredits || 0) })
-				} catch (e) {
+				} catch {
 					setError('Unable to fetch user stats. Ensure you have a valid token.')
 				}
 			})()
