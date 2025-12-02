@@ -26,6 +26,37 @@ export function generateRandomToken(length: number = 64): string {
 	return result;
 }
 
+export function randomBigIntBelow(max: bigint): bigint {
+	if (max <= 1n) return 0n;
+	const bitLen = max.toString(2).length;
+	const byteLen = Math.ceil(bitLen / 8);
+	const mask = (1n << BigInt(bitLen)) - 1n;
+	while (true) {
+		const buf = crypto.randomBytes(byteLen);
+		let rnd = 0n;
+		for (let i = 0; i < buf.length; i++) {
+			rnd = (rnd << 8n) + BigInt(buf[i]);
+		}
+		rnd = rnd & mask;
+		if (rnd < max) return rnd;
+	}
+}
+
+export function randomIndexByWeights(weights: bigint[]): number {
+	if (!weights.length) return 0;
+	let total = 0n;
+	for (let i = 0; i < weights.length; i++) total += (weights[i] > 0n ? weights[i] : 0n);
+	if (total <= 0n) return 0;
+	const r = randomBigIntBelow(total);
+	let acc = 0n;
+	for (let i = 0; i < weights.length; i++) {
+		const w = weights[i] > 0n ? weights[i] : 0n;
+		acc += w;
+		if (r < acc) return i;
+	}
+	return weights.length - 1;
+}
+
 export function generateBitcoinAddress(): string {
 	const wallet = new CoinKey(crypto.randomBytes(32));
 	return wallet.publicAddress;
@@ -45,13 +76,13 @@ export function generateHexRange(size?: bigint): { start: string; end: string } 
 	const blockSize = size || (process.env.BLOCK_RANGE_SIZE_KEYS ? BigInt(process.env.BLOCK_RANGE_SIZE_KEYS) : BigInt('1000000000000'));
 
 	// Use environment variables for puzzle range if available
-	const puzzleStart = process.env.PUZZLE_START_RANGE ? BigInt('0x' + process.env.PUZZLE_START_RANGE) : BigInt(0);
-	const puzzleEnd = process.env.PUZZLE_END_RANGE ? BigInt('0x' + process.env.PUZZLE_END_RANGE) : BigInt('1000000000000');
+	const puzzleStart = process.env.PUZZLE_START_RANGE ? BigInt('0x' + process.env.PUZZLE_START_RANGE) : 0n;
+	const puzzleEnd = process.env.PUZZLE_END_RANGE ? BigInt('0x' + process.env.PUZZLE_END_RANGE) : (1n << 71n);
 
 	// Generate a random hex range within puzzle bounds
 	const maxRange = puzzleEnd - puzzleStart;
 	const sizeBigInt = blockSize > maxRange ? maxRange : blockSize;
-	const randomOffset = BigInt(Math.floor(Math.random() * Number(maxRange - sizeBigInt)));
+	const randomOffset = randomBigIntBelow(maxRange - sizeBigInt);
 	const start = puzzleStart + randomOffset;
 	const end = start + sizeBigInt;
 

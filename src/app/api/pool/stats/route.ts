@@ -26,6 +26,7 @@ async function handler(req: NextRequest) {
 			expiredBlocks,
 			totalCreditsAwarded,
 			recentBlocks,
+			activeBlocks,
 			topContributors,
 			userTokens7d,
 			sharedTokens7d,
@@ -59,21 +60,29 @@ async function handler(req: NextRequest) {
 				},
 			}),
 
-			// Recent completed blocks within 7 days, ordered by completion time
+			// Recent completed blocks (no 7-day filter to show fresh validations reliably)
 			prisma.blockAssignment.findMany({
-				where: {
-					status: 'COMPLETED',
-					blockSolution: {
-						is: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }
-					}
-				},
+				where: { status: 'COMPLETED' },
 				include: {
 					userToken: { select: { bitcoinAddress: true } },
 					blockSolution: { select: { creditsAwarded: true, createdAt: true } },
 				},
-				orderBy: { blockSolution: { createdAt: 'desc' } },
+				orderBy: [
+					{ updatedAt: 'desc' },
+					{ createdAt: 'desc' },
+				],
 				skip,
 				take,
+			}),
+
+			// Active blocks (currently being worked on)
+			prisma.blockAssignment.findMany({
+				where: { status: 'ACTIVE' },
+				include: {
+					userToken: { select: { bitcoinAddress: true } },
+				},
+				orderBy: { createdAt: 'desc' },
+				take: take,
 			}),
 
 			// Top contributors by credits earned
@@ -164,6 +173,20 @@ async function handler(req: NextRequest) {
 				createdAt: block.createdAt,
 				completedAt: block.blockSolution?.createdAt || null,
 				creditsAwarded: (Number(block.blockSolution?.creditsAwarded || 0) / 1000),
+			})),
+			activeBlocks: activeBlocks.map((block) => ({
+				id: block.id,
+				bitcoinAddress: block.puzzleAddressSnapshot || block.userToken.bitcoinAddress,
+				puzzleAddress: block.puzzleAddressSnapshot || block.userToken.bitcoinAddress,
+				puzzleName: block.puzzleNameSnapshot || null,
+				hexRangeStart: formatCompactHexRange(block.startRange),
+				hexRangeEnd: formatCompactHexRange(block.endRange),
+				hexRangeStartRaw: block.startRange,
+				hexRangeEndRaw: block.endRange,
+				createdAt: block.createdAt,
+				expiresAt: block.expiresAt,
+				completedAt: null,
+				creditsAwarded: 0,
 			})),
 			topContributors: topContributorsWithDetails,
 		};

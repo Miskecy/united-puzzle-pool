@@ -179,6 +179,8 @@ export default function BlocksTimeline({
           box-shadow: 0 4px 8px rgba(0,0,0,.12); 
         }
 
+        
+
         .block3d-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
         .block3d-puzzle { font-size: 13px; color: #111827; font-weight: 700; }
         .block3d-title { 
@@ -211,6 +213,7 @@ export default function BlocksTimeline({
           border-radius: 6px; 
           font-weight: 600; 
         }
+        
       `}</style>
 		</div>
 	)

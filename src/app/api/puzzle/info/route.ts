@@ -18,6 +18,7 @@ async function handler(req: NextRequest) {
 		let txCount = 0
 		let balanceBtc = 0
 		let balanceUsd = 0
+		let balanceKnown = false
 
 		try {
 			const r = await fetch(`https://blockstream.info/api/address/${address}`, { cache: 'no-store' })
@@ -28,6 +29,7 @@ async function handler(req: NextRequest) {
 				const sats = Math.max(0, funded - spent)
 				balanceBtc = sats / 1e8
 				txCount = Number(j.chain_stats?.tx_count ?? 0)
+				balanceKnown = true
 			}
 		} catch { }
 
@@ -66,12 +68,12 @@ async function handler(req: NextRequest) {
 				}
 			} catch { }
 		}
-		if (usdPrice && isFinite(usdPrice)) {
+		if (usdPrice && isFinite(usdPrice) && balanceKnown) {
 			balanceUsd = balanceBtc * usdPrice
 		}
 
 		try {
-			if (balanceBtc < 1 && cfg?.id && !cfg.solved) {
+			if (balanceKnown && balanceBtc < 1 && cfg?.id && !cfg.solved) {
 				await prisma.puzzleConfig.update({ where: { id: cfg.id }, data: { solved: true } })
 			}
 		} catch { }

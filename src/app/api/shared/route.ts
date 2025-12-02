@@ -36,11 +36,20 @@ async function handleGet(req: NextRequest) {
 	if (!startHexParam || !endHexParam) {
 		return new Response(JSON.stringify({ error: 'Missing start/end' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
 	}
-	const startBI = parseHexBI(startHexParam)
-	const endBI = parseHexBI(endHexParam)
-	if (startBI === null || endBI === null || endBI <= startBI) {
-		return new Response(JSON.stringify({ error: 'Invalid range' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
-	}
+  const startBI = parseHexBI(startHexParam)
+  const endBI = parseHexBI(endHexParam)
+  if (startBI === null || endBI === null || endBI <= startBI) {
+    return new Response(JSON.stringify({ error: 'Invalid range' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+  }
+  const cfg = await loadPuzzleConfig()
+  if (!cfg) {
+    return new Response(JSON.stringify({ error: 'Puzzle configuration missing' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+  }
+  const pStart = parseHexBI(cfg.startHex) ?? 0n
+  const pEnd = parseHexBI(cfg.endHex) ?? (1n << 71n)
+  if (!(startBI >= pStart && endBI <= pEnd)) {
+    return new Response(JSON.stringify({ error: 'Range outside active puzzle' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+  }
 	const startHex = toHex64(startBI)
 	const endHex = toHex64(endBI)
 
@@ -140,11 +149,20 @@ async function handlePost(req: NextRequest) {
 		puzzleaddress?: string
 	}
 
-	const startBI = parseHexBI(data.startRange || '')
-	const endBI = parseHexBI(data.endRange || '')
-	if (startBI === null || endBI === null || endBI <= startBI) {
-		return new Response(JSON.stringify({ error: 'Invalid range' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
-	}
+  const startBI = parseHexBI(data.startRange || '')
+  const endBI = parseHexBI(data.endRange || '')
+  if (startBI === null || endBI === null || endBI <= startBI) {
+    return new Response(JSON.stringify({ error: 'Invalid range' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+  }
+  const cfgPre = await loadPuzzleConfig()
+  if (!cfgPre) {
+    return new Response(JSON.stringify({ error: 'Puzzle configuration missing' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+  }
+  const pStartPre = parseHexBI(cfgPre.startHex) ?? 0n
+  const pEndPre = parseHexBI(cfgPre.endHex) ?? (1n << 71n)
+  if (!(startBI >= pStartPre && endBI <= pEndPre)) {
+    return new Response(JSON.stringify({ error: 'Range outside active puzzle' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
+  }
 	const startHex = toHex64(startBI)
 	const endHex = toHex64(endBI)
 	const addrs = Array.isArray(data.checkworks_addresses) ? data.checkworks_addresses.filter(a => !!a) : []
@@ -154,7 +172,7 @@ async function handlePost(req: NextRequest) {
 	const privArr = [...privLower, ...privUpper].filter(Boolean)
 	const puzzleAddress = (data.puzzleaddress || '').trim() || null
 
-	const cfg = await loadPuzzleConfig()
+  const cfg = await loadPuzzleConfig()
 	const nameSnap = `Shared Pool`
 	const addrSnap = puzzleAddress || cfg?.address || null
 

@@ -1,94 +1,121 @@
+"use client"
 import Link from 'next/link';
 import { Trophy, Users, Target, Zap, Bitcoin, BarChart3, BookOpen, UsersRound } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import PoolSpeedChart from '@/components/PoolSpeedChart';
+import PoolActivityTimeline from '@/components/PoolActivityTimeline';
+import { useEffect, useState } from 'react'
 
 
 // As funções de fetch e a lógica de cálculo de validatedLabel foram mantidas aqui, mas
 // devem ser gerenciadas em um arquivo utilitário ou serviço na produção.
-async function getPoolStats(base: string) {
-	const statsRes = await fetch(`${base}/api/pool/stats`, { cache: 'no-store' }).catch(() => null);
-	const overviewRes = await fetch(`${base}/api/pool/overview`, { cache: 'no-store' }).catch(() => null);
-
-	let completedBlocks = 0;
-	let validatedLabel = '0.00T';
-	let totalMiners = '1,200+';
-	let speedPoints: Array<{ t: number; v: number }> = [];
-	let avgSpeedLabel = '—';
-	let remainingBKeys = 0;
-
-	if (statsRes && statsRes.ok) {
-		const stats = await statsRes.json();
-		completedBlocks = stats?.overview?.completedBlocks ?? 0;
-		totalMiners = stats?.overview?.activeMiners ?? totalMiners;
-
-		const recent = Array.isArray(stats?.recentBlocks) ? stats.recentBlocks : [];
-		const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
-		const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
-			const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime();
-			return cm >= since;
-		});
-		let totalLenBI = 0n;
-		let totalSeconds = 0;
-		const points: Array<{ t: number; v: number }> = [];
-		for (const rb of items) {
-			if (!rb.hexRangeStartRaw || !rb.hexRangeEndRaw || !rb.completedAt || !rb.createdAt) continue;
-			const s = BigInt(rb.hexRangeStartRaw);
-			const e = BigInt(rb.hexRangeEndRaw);
-			const lenBI = e >= s ? (e - s) : 0n;
-			const startMs = new Date(rb.createdAt).getTime();
-			const endMs = new Date(rb.completedAt).getTime();
-			const secs = Math.max(1, Math.floor((endMs - startMs) / 1000));
-			totalLenBI += lenBI;
-			totalSeconds += secs;
-			const bkeys = Number(lenBI / 1_000_000_000n);
-			const speed = bkeys / secs; // BKeys/s as float
-			if (Number.isFinite(speed)) points.push({ t: endMs, v: speed });
-		}
-		speedPoints = points.sort((a, b) => a.t - b.t);
-		if (totalSeconds > 0) {
-			const thresholds: Array<{ unit: string; divisor: bigint }> = [
-				{ unit: 'PKeys/s', divisor: 1_000_000_000_000_000n },
-				{ unit: 'TKeys/s', divisor: 1_000_000_000_000n },
-				{ unit: 'BKeys/s', divisor: 1_000_000_000n },
-				{ unit: 'MKeys/s', divisor: 1_000_000n },
-				{ unit: 'KKeys/s', divisor: 1_000n },
-			];
-			const kpsTimes100 = (totalLenBI * 100n) / BigInt(totalSeconds);
-			let unit = 'Keys/s';
-			let divisor = 1n;
-			const kps = kpsTimes100 / 100n;
-			for (const t of thresholds) { if (kps >= t.divisor) { unit = t.unit; divisor = t.divisor; break; } }
-			const valTimes100 = kpsTimes100 / divisor;
-			const intPart = valTimes100 / 100n;
-			const frac = valTimes100 % 100n;
-			avgSpeedLabel = `${intPart.toString()}.${frac.toString().padStart(2, '0')} ${unit}`;
-		}
-	}
-
-	if (overviewRes && overviewRes.ok) {
-		const data = await overviewRes.json();
-		const bins = Array.isArray(data.bins) ? data.bins : [];
-		let validated = 0;
-		let total = 0;
-		for (const b of bins) {
-			validated += Number(b.completed || 0);
-			total += Number(b.total || 0);
-		}
-		const T = 1_000_000_000_000;
-		const t = validated / T;
-		validatedLabel = `${t.toFixed(2)}T`;
-		const remaining = Math.max(0, total - validated);
-		remainingBKeys = remaining / 1_000_000_000; // convert keys to BKeys
-	}
-	return { completedBlocks, validatedLabel, totalMiners, speedPoints, avgSpeedLabel, remainingBKeys };
+type Point = { t: number; v: number }
+type TimelineBlock = {
+	id: string;
+	hexRangeStart: string;
+	hexRangeEnd: string;
+	hexRangeStartRaw?: string;
+	hexRangeEndRaw?: string;
+	createdAt?: string | null;
+	completedAt?: string | null;
+	creditsAwarded: number;
+	puzzleAddress?: string | null;
+	bitcoinAddress?: string | null;
+	puzzleName?: string | null;
+	expiresAt?: string | null;
 }
 
-export default async function HomePage() {
-	const base = process.env.NEXT_PUBLIC_BASE_URL
-		|| (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+export default function HomePage() {
+	const [completedBlocks, setCompletedBlocks] = useState(0)
+	const [validatedLabel, setValidatedLabel] = useState('0.00T')
+	const [totalMiners, setTotalMiners] = useState('—')
+	const [speedPoints, setSpeedPoints] = useState<Point[]>([])
+	const [avgSpeedLabel, setAvgSpeedLabel] = useState('—')
+	const [remainingBKeys, setRemainingBKeys] = useState(0)
+	const [recentBlocks, setRecentBlocks] = useState<TimelineBlock[]>([])
+	const [activeBlocks, setActiveBlocks] = useState<TimelineBlock[]>([])
 
-	const { completedBlocks, validatedLabel, totalMiners, speedPoints, avgSpeedLabel, remainingBKeys } = await getPoolStats(base);
+	useEffect(() => {
+		const fetchAll = async () => {
+			try {
+				const [statsRes, overviewRes] = await Promise.all([
+					fetch('/api/pool/stats?take=20', { cache: 'no-store' }),
+					fetch('/api/pool/overview', { cache: 'no-store' }),
+				])
+				if (statsRes.ok) {
+					const stats = await statsRes.json()
+					setCompletedBlocks(stats?.overview?.completedBlocks ?? 0)
+					setTotalMiners(stats?.overview?.activeMiners ?? '—')
+					const recent = Array.isArray(stats?.recentBlocks) ? stats.recentBlocks : []
+					const active = Array.isArray(stats?.activeBlocks) ? stats.activeBlocks : []
+					setRecentBlocks(recent)
+					setActiveBlocks(active)
+					const since = Date.now() - 7 * 24 * 60 * 60 * 1000
+					const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
+						const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
+						return cm >= since
+					})
+					let totalLenBI = 0n
+					let totalSeconds = 0
+					const points: Array<{ t: number; v: number }> = []
+					for (const rb of items) {
+						if (!rb.hexRangeStartRaw || !rb.hexRangeEndRaw || !rb.completedAt || !rb.createdAt) continue
+						const s = BigInt(rb.hexRangeStartRaw)
+						const e = BigInt(rb.hexRangeEndRaw)
+						const lenBI = e >= s ? (e - s) : 0n
+						const startMs = new Date(rb.createdAt).getTime()
+						const endMs = new Date(rb.completedAt).getTime()
+						const secs = Math.max(1, Math.floor((endMs - startMs) / 1000))
+						totalLenBI += lenBI
+						totalSeconds += secs
+						const bkeys = Number(lenBI / 1_000_000_000n)
+						const speed = bkeys / secs
+						if (Number.isFinite(speed)) points.push({ t: endMs, v: speed })
+					}
+					points.sort((a, b) => a.t - b.t)
+					setSpeedPoints(points)
+					if (totalSeconds > 0) {
+						const thresholds: Array<{ unit: string; divisor: bigint }> = [
+							{ unit: 'PKeys/s', divisor: 1_000_000_000_000_000n },
+							{ unit: 'TKeys/s', divisor: 1_000_000_000_000n },
+							{ unit: 'BKeys/s', divisor: 1_000_000_000n },
+							{ unit: 'MKeys/s', divisor: 1_000_000n },
+							{ unit: 'KKeys/s', divisor: 1_000n },
+						]
+						const kpsTimes100 = (totalLenBI * 100n) / BigInt(totalSeconds)
+						let unit = 'Keys/s'
+						let divisor = 1n
+						const kps = kpsTimes100 / 100n
+						for (const t of thresholds) { if (kps >= t.divisor) { unit = t.unit; divisor = t.divisor; break } }
+						const valTimes100 = kpsTimes100 / divisor
+						const intPart = valTimes100 / 100n
+						const frac = valTimes100 % 100n
+						setAvgSpeedLabel(`${intPart.toString()}.${frac.toString().padStart(2, '0')} ${unit}`)
+					} else {
+						setAvgSpeedLabel('—')
+					}
+				}
+				if (overviewRes.ok) {
+					const data = await overviewRes.json()
+					const bins = Array.isArray(data.bins) ? data.bins : []
+					let validated = 0
+					let total = 0
+					for (const b of bins) {
+						validated += Number(b.completed || 0)
+						total += Number(b.total || 0)
+					}
+					const T = 1_000_000_000_000
+					const t = validated / T
+					setValidatedLabel(`${t.toFixed(2)}T`)
+					const remaining = Math.max(0, total - validated)
+					setRemainingBKeys(remaining / 1_000_000_000)
+				}
+			} catch { }
+		}
+		fetchAll()
+		const id = setInterval(fetchAll, 30000)
+		return () => clearInterval(id)
+	}, [])
 
 	return (
 		// PADRÃO 1: Fundo com degradê leve para dar profundidade
@@ -168,6 +195,15 @@ export default async function HomePage() {
 				</div>
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 					<PoolSpeedChart points={speedPoints} avgLabel={avgSpeedLabel} remainingBKeys={remainingBKeys} />
+				</div>
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+					{/* Split Panel: Active vs Validated */}
+					<div className='pb-8'>
+						<PoolActivityTimeline
+							active={activeBlocks}
+							validated={recentBlocks}
+						/>
+					</div>
 				</div>
 			</section>
 

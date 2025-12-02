@@ -35,6 +35,8 @@ model BlockAssignment {
     userToken             UserToken        @relation(fields: [userTokenId], references: [id])
     sharedPoolToken       SharedPoolToken? @relation(fields: [sharedPoolTokenId], references: [id])
     blockSolution         BlockSolution?
+
+    @@unique([startRange, endRange])
 }
 
 model BlockSolution {

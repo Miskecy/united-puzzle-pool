@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActiveBlockByToken, setActiveBlock, setBlockExpiration, clearActiveBlock, deleteBlockExpiration, acquireAssignmentLock, releaseAssignmentLock } from '@/lib/redis';
-import { calculateExpirationTime, generateCheckworkAddresses } from '@/lib/utils';
+import { calculateExpirationTime, generateCheckworkAddresses, randomBigIntBelow, randomIndexByWeights } from '@/lib/utils';
 import { rateLimitMiddleware } from '@/lib/rate-limit';
 import { loadPuzzleConfig, parseHexBI } from '@/lib/config';
 
@@ -62,31 +62,46 @@ async function handler(req: NextRequest) {
 			return new Response(JSON.stringify({ ok: true, message: 'Active block deleted' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 		}
 
-		// Check if user already has an active block
+		// Check if user already has an active block; expire it if needed
 		const activeBlockId = await getActiveBlockByToken(token);
 		if (activeBlockId) {
 			const existingBlock = await prisma.blockAssignment.findUnique({
 				where: { id: activeBlockId },
 				include: {
 					blockSolution: true,
+					userToken: true,
 				},
 			});
 
-			if (existingBlock && existingBlock.status === 'ACTIVE') {
-				return new Response(
-					JSON.stringify({
-						id: existingBlock.id,
-						status: 0,
-						range: {
-							start: existingBlock.startRange.replace('0x', '').replace(/^0+/, '') || '0',
-							end: existingBlock.endRange.replace('0x', '').replace(/^0+/, '') || '0'
-						},
-						checkwork_addresses: JSON.parse(existingBlock.checkworkAddresses),
-						expiresAt: existingBlock.expiresAt,
-						message: `Retrieved existing unchecked block`
-					}),
-					{ status: 200, headers: { 'Content-Type': 'application/json' } }
-				);
+			if (existingBlock) {
+				const now = new Date();
+				const isExpired = existingBlock.expiresAt && existingBlock.expiresAt < now;
+				if (existingBlock.status === 'ACTIVE' && !isExpired) {
+					return new Response(
+						JSON.stringify({
+							id: existingBlock.id,
+							status: 0,
+							range: {
+								start: existingBlock.startRange.replace('0x', '').replace(/^0+/, '') || '0',
+								end: existingBlock.endRange.replace('0x', '').replace(/^0+/, '') || '0'
+							},
+							checkwork_addresses: JSON.parse(existingBlock.checkworkAddresses),
+							expiresAt: existingBlock.expiresAt,
+							message: `Retrieved existing unchecked block`
+						}),
+						{ status: 200, headers: { 'Content-Type': 'application/json' } }
+					);
+				}
+				// If the block is expired or not ACTIVE anymore, clear Redis and mark as EXPIRED when applicable
+				try {
+					await clearActiveBlock(token);
+				} catch { }
+				if (existingBlock.status === 'ACTIVE' && isExpired) {
+					try {
+						await prisma.blockAssignment.update({ where: { id: existingBlock.id }, data: { status: 'EXPIRED' } });
+					} catch { }
+				}
+				try { await deleteBlockExpiration(existingBlock.id); } catch { }
 			}
 		}
 
@@ -154,10 +169,17 @@ async function handler(req: NextRequest) {
 				const min = envMin < 1n ? 1n : envMin;
 				const max = envMax < min ? min : envMax;
 				const span = max - min + 1n;
-				const rnd = BigInt(Math.floor(Math.random() * Number(span)));
+				const rnd = randomBigIntBelow(span);
 				sizeKeys = min + rnd;
 			}
 			const sizeClamped = sizeKeys > maxRange ? maxRange : sizeKeys;
+			// Sweep: mark any ACTIVE blocks past expiresAt as EXPIRED to free ranges
+			try {
+				await prisma.blockAssignment.updateMany({
+					where: { status: 'ACTIVE', expiresAt: { lt: new Date() } },
+					data: { status: 'EXPIRED' }
+				});
+			} catch { }
 			// Reserve intervals: exclude both COMPLETED (validated) and ACTIVE (currently being worked)
 			const reserved = await prisma.blockAssignment.findMany({
 				where: { OR: [{ status: 'COMPLETED' }, { status: 'ACTIVE' }] },
@@ -166,6 +188,11 @@ async function handler(req: NextRequest) {
 			});
 			const completedIntervals = reserved
 				.map((r) => ({ start: BigInt(r.startRange), end: BigInt(r.endRange) }))
+				.map(iv => {
+					const s = iv.start > puzzleStart ? iv.start : puzzleStart;
+					const e = iv.end < puzzleEnd ? iv.end : puzzleEnd;
+					return { start: s, end: e };
+				})
 				.filter(iv => iv.start < iv.end)
 				.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
 
@@ -185,10 +212,13 @@ async function handler(req: NextRequest) {
 			const freeSegments: { start: bigint; end: bigint }[] = [];
 			let cursor = puzzleStart;
 			for (const iv of merged) {
-				if (cursor < iv.start) {
-					freeSegments.push({ start: cursor, end: iv.start });
+				const segStart = iv.start < puzzleStart ? puzzleStart : iv.start;
+				const segEnd = iv.end > puzzleEnd ? puzzleEnd : iv.end;
+				if (cursor < segStart) {
+					freeSegments.push({ start: cursor, end: segStart });
 				}
-				if (cursor < iv.end) cursor = iv.end;
+				if (cursor < segEnd) cursor = segEnd;
+				if (cursor >= puzzleEnd) break;
 			}
 			if (cursor < puzzleEnd) freeSegments.push({ start: cursor, end: puzzleEnd });
 
@@ -248,11 +278,22 @@ async function handler(req: NextRequest) {
 
 			// If no expired block selected, choose a fresh segment
 			if (chosenStart === null) {
-				const candidates = freeSegments.filter(seg => (seg.end - seg.start) >= sizeClamped);
+				const candidates = freeSegments
+					.map(seg => {
+						const s = seg.start < puzzleStart ? puzzleStart : seg.start;
+						const e = seg.end > puzzleEnd ? puzzleEnd : seg.end;
+						return { start: s, end: e };
+					})
+					.filter(seg => (seg.end - seg.start) >= sizeClamped);
 				if (candidates.length) {
-					const seg = candidates[Math.floor(Math.random() * candidates.length)];
+					const weights = candidates.map(seg => {
+						const span = seg.end - seg.start - sizeClamped + 1n;
+						return span > 0n ? span : 0n;
+					});
+					const idx = randomIndexByWeights(weights);
+					const seg = candidates[idx];
 					const span = seg.end - seg.start - sizeClamped + 1n;
-					const offset = BigInt(Math.floor(Math.random() * Number(span)));
+					const offset = randomBigIntBelow(span);
 					chosenStart = seg.start + offset;
 					assignedSize = sizeClamped;
 				} else {
@@ -267,9 +308,52 @@ async function handler(req: NextRequest) {
 				}
 			}
 
-			const start = '0x' + chosenStart!.toString(16).padStart(64, '0');
-			const end = '0x' + (chosenStart! + assignedSize).toString(16).padStart(64, '0');
-			const hexRange = { start, end };
+			// Ensure unique start/end pair: adjust within containing free segment if duplicate is found
+			let containing: { start: bigint; end: bigint } | null = null;
+			for (const seg of freeSegments) {
+				if (chosenStart! >= seg.start && (chosenStart! + assignedSize) <= seg.end) { containing = seg; break; }
+			}
+			let proposedStart = chosenStart!;
+			// clamp proposedStart inside puzzle bounds
+			const maxStart = puzzleEnd - (assignedSize > 0n ? assignedSize : 1n);
+			if (proposedStart < puzzleStart) proposedStart = puzzleStart;
+			if (proposedStart > maxStart) proposedStart = maxStart;
+			let hexRange: { start: string; end: string } | null = null;
+			for (let attempt = 0; attempt < 50; attempt++) {
+				const startHex = '0x' + proposedStart.toString(16).padStart(64, '0');
+				const endHex = '0x' + (proposedStart + assignedSize).toString(16).padStart(64, '0');
+				const exists = await prisma.blockAssignment.findFirst({ where: { startRange: startHex, endRange: endHex }, select: { id: true } });
+				if (!exists) { hexRange = { start: startHex, end: endHex }; break; }
+				if (containing) {
+					const maxOffset = (containing.end - containing.start) - assignedSize;
+					if (maxOffset <= 0n) {
+						const span = (containing.end - containing.start) - assignedSize + 1n;
+						const offset = randomBigIntBelow(span > 0n ? span : 1n);
+						proposedStart = containing.start + offset;
+					} else {
+						const offset = BigInt(attempt + 1);
+						if (offset > maxOffset) {
+							const span = maxOffset + 1n;
+							proposedStart = containing.start + randomBigIntBelow(span);
+						} else {
+							proposedStart = proposedStart + 1n;
+						}
+					}
+				} else {
+					const seg = freeSegments[Math.floor(Math.random() * freeSegments.length)];
+					const span = seg.end - seg.start - assignedSize + 1n;
+					const offset = randomBigIntBelow(span > 0n ? span : 1n);
+					proposedStart = seg.start + offset;
+				}
+				// clamp proposedStart inside puzzle bounds on each attempt
+				if (proposedStart < puzzleStart) proposedStart = puzzleStart;
+				if (proposedStart > maxStart) proposedStart = maxStart;
+			}
+			if (!hexRange) {
+				const startHex = '0x' + proposedStart.toString(16).padStart(64, '0');
+				const endHex = '0x' + (proposedStart + assignedSize).toString(16).padStart(64, '0');
+				hexRange = { start: startHex, end: endHex };
+			}
 
 			// Generate checkwork addresses using the new function
 			console.log('Generating checkwork addresses...');
@@ -297,19 +381,56 @@ async function handler(req: NextRequest) {
 
 			const expiresAt = calculateExpirationTime(12);
 
-			// Create block assignment
-			const blockAssignment = await prisma.blockAssignment.create({
-				data: {
-					userTokenId: userToken.id,
-					startRange: hexRange.start,
-					endRange: hexRange.end,
-					checkworkAddresses: JSON.stringify(checkworkAddresses),
-					puzzleAddressSnapshot: cfg.address,
-					puzzleNameSnapshot: cfg.name || null,
-					expiresAt,
-					status: 'ACTIVE',
-				},
-			});
+			// Create block assignment with retry on uniqueness
+			let blockAssignment: { id: string; startRange: string; endRange: string; checkworkAddresses: string; expiresAt: Date } | undefined;
+			for (let attempt = 0; attempt < 5; attempt++) {
+				try {
+					blockAssignment = await prisma.blockAssignment.create({
+						data: {
+							userTokenId: userToken.id,
+							startRange: hexRange.start,
+							endRange: hexRange.end,
+							checkworkAddresses: JSON.stringify(checkworkAddresses),
+							puzzleAddressSnapshot: cfg.address,
+							puzzleNameSnapshot: cfg.name || null,
+							expiresAt,
+							status: 'ACTIVE',
+						},
+					});
+					break;
+				} catch {
+					let seg = containing;
+					if (!seg) {
+						const valid = freeSegments
+							.map(s => ({ start: s.start < puzzleStart ? puzzleStart : s.start, end: s.end > puzzleEnd ? puzzleEnd : s.end }))
+							.filter(s => (s.end - s.start) >= assignedSize);
+						if (valid.length) {
+							const weights = valid.map(s => {
+								const sp = s.end - s.start - assignedSize + 1n;
+								return sp > 0n ? sp : 0n;
+							});
+							const i = randomIndexByWeights(weights);
+							seg = valid[i];
+						} else {
+							seg = freeSegments[Math.floor(Math.random() * freeSegments.length)];
+						}
+					}
+					let newStart = seg.start + randomBigIntBelow((seg.end - seg.start - assignedSize + 1n) > 0n ? (seg.end - seg.start - assignedSize + 1n) : 1n);
+					const maxStart2 = puzzleEnd - (assignedSize > 0n ? assignedSize : 1n);
+					if (newStart < puzzleStart) newStart = puzzleStart;
+					if (newStart > maxStart2) newStart = maxStart2;
+					hexRange = {
+						start: '0x' + newStart.toString(16).padStart(64, '0'),
+						end: '0x' + (newStart + assignedSize).toString(16).padStart(64, '0')
+					};
+				}
+			}
+			if (!blockAssignment) {
+				return new Response(
+					JSON.stringify({ error: 'Failed to create unique block assignment' }),
+					{ status: 500, headers: { 'Content-Type': 'application/json' } }
+				);
+			}
 
 			await setBlockExpiration(blockAssignment.id, expiresAt);
 			await setActiveBlock(token, blockAssignment.id);

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>BigInt Secure Random Generator</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            /* Custom styles for better readability and mobile view */
+            body {
+                font-family: 'Inter', sans-serif;
+                background-color: #f7f7f7;
+            }
+            .container {
+                max-width: 900px;
+            }
+            input[type='text'] {
+                font-family: monospace;
+            }
+        </style>
+    </head>
+    <body class="p-4 sm:p-8 min-h-screen flex items-center justify-center">
+        <div
+            class="container bg-white p-6 sm:p-10 rounded-xl shadow-2xl w-full"
+        >
+            <h1 class="text-3xl font-bold text-gray-800 mb-6">
+                Secure BigInt Range Picker
+            </h1>
+            <p class="text-gray-600 mb-8">
+                Generates a cryptographically secure, uniformly random `BigInt`
+                within a specified hexadecimal range (up to 256+ bits) using
+                `crypto.getRandomValues()`.
+            </p>
+
+            <div class="space-y-4">
+                <!-- Start Range Input -->
+                <div>
+                    <label
+                        for="startHex"
+                        class="block text-sm font-medium text-gray-700"
+                        >Start Range (Hex):</label
+                    >
+                    <input
+                        type="text"
+                        id="startHex"
+                        value="400000000000000000"
+                        class="mt-1 block w-full border border-gray-300 rounded-lg p-3 shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-gray-50 text-base"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">
+                        Example: 400000000000000000 (18 hex digits / 72 bits)
+                    </p>
+                </div>
+
+                <!-- End Range Input -->
+                <div>
+                    <label
+                        for="endHex"
+                        class="block text-sm font-medium text-gray-700"
+                        >End Range (Hex):</label
+                    >
+                    <input
+                        type="text"
+                        id="endHex"
+                        value="7fffffffffffffffff"
+                        class="mt-1 block w-full border border-gray-300 rounded-lg p-3 shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-gray-50 text-base"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">
+                        Example: 7fffffffffffffffff (18 hex digits / 75 bits)
+                    </p>
+                </div>
+            </div>
+
+            <!-- Generate Button -->
+            <button
+                id="generateBtn"
+                class="mt-8 w-full py-3 px-4 border border-transparent rounded-lg shadow-lg text-white text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out transform hover:scale-[1.01]"
+            >
+                Generate Random BigInt
+            </button>
+
+            <!-- Result Display -->
+            <div class="mt-8 p-4 border border-blue-200 bg-blue-50 rounded-lg">
+                <h3 class="text-lg font-semibold text-blue-800 mb-2">
+                    Generated Result:
+                </h3>
+                <p
+                    class="break-words font-mono text-blue-900 text-sm"
+                    id="resultDisplay"
+                >
+                    Click "Generate Random BigInt" to see the result.
+                </p>
+            </div>
+
+            <!-- Error/Log Display -->
+            <div
+                class="mt-6 p-4 border border-red-200 bg-red-50 rounded-lg hidden"
+                id="errorDisplayContainer"
+            >
+                <h3 class="text-sm font-semibold text-red-800 mb-1">Error:</h3>
+                <p
+                    class="break-words font-mono text-red-900 text-xs"
+                    id="errorDisplay"
+                ></p>
+            </div>
+        </div>
+
+        <script>
+            // --- Core Helper Functions ---
+
+            /**
+             * Converts a Uint8Array of bytes into a single BigInt.
+             * @param {Uint8Array} bytes - The array of random bytes.
+             * @returns {BigInt} The resulting BigInt.
+             */
+            function bytesToBigInt(bytes) {
+                let hex = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    // Prepend '00' to ensure we capture the hex for 0-15 (0x0 to 0xF)
+                    hex += bytes[i].toString(16).padStart(2, '0');
+                }
+                // Add '0x' prefix for BigInt constructor
+                return BigInt(`0x${hex}`);
+            }
+
+            /**
+             * Generates a cryptographically secure, uniformly random BigInt within a given inclusive range [min, max].
+             * Uses crypto.getRandomValues and rejection sampling to avoid modulo bias.
+             *
+             * @param {BigInt} min - The minimum value (inclusive).
+             * @param {BigInt} max - The maximum value (inclusive).
+             * @returns {BigInt} A secure random BigInt.
+             * @throws {Error} If BigInts are invalid or range is too large.
+             */
+            function generateRandomBigInt(min, max) {
+                if (min > max) {
+                    throw new Error('Min must be less than or equal to Max.');
+                }
+
+                // 1. Calculate the inclusive range size (max - min + 1)
+                const inclusiveRange = max - min + 1n;
+
+                // 2. Determine the number of bits needed to represent the range
+                // The result of toString(2) gives the minimum bit length.
+                const rangeBitLength = inclusiveRange.toString(2).length;
+
+                // 3. Determine the number of bytes needed (round up to nearest byte)
+                const numBytes = Math.ceil(rangeBitLength / 8);
+
+                // Calculate the smallest power of 2 greater than or equal to the range
+                // This is the largest BigInt we can generate with `numBytes` without overflow
+                const mask = 1n << BigInt(rangeBitLength);
+                // The upper bound for rejection sampling, which is 2^rangeBitLength
+                const upperRejectBound = mask;
+
+                let randomBigInt;
+                let attempts = 0;
+                const maxAttempts = 1000; // Safety break, highly unlikely to be hit
+
+                // 4. Rejection Sampling Loop
+                while (true) {
+                    if (attempts++ > maxAttempts) {
+                        throw new Error(
+                            'Rejection sampling failed to converge. Range might be extremely sparse or bit length calculation is incorrect.'
+                        );
+                    }
+
+                    // Get cryptographically random bytes
+                    const randomBytes = crypto.getRandomValues(
+                        new Uint8Array(numBytes)
+                    );
+                    randomBigInt = bytesToBigInt(randomBytes);
+
+                    // If the required bit length is not a clean byte boundary (e.g., 75 bits, 10 bytes)
+                    // we might generate numbers larger than 2^rangeBitLength. We must mask these down.
+                    // Masking ensures we only consider the most significant 'rangeBitLength' bits
+                    // This step is critical for a precise upper bound on the random value space.
+                    randomBigInt &= upperRejectBound - 1n;
+
+                    // Rejection test:
+                    // If the generated number is less than the inclusive range size, we accept it.
+                    // This ensures uniformity across the exact inclusiveRange size.
+                    if (randomBigInt < inclusiveRange) {
+                        break;
+                    }
+                }
+
+                // 5. Final Result: min + random offset
+                return min + randomBigInt;
+            }
+
+            // --- UI/Event Handling ---
+
+            document
+                .getElementById('generateBtn')
+                .addEventListener('click', () => {
+                    const startHexInput = document
+                        .getElementById('startHex')
+                        .value.trim();
+                    const endHexInput = document
+                        .getElementById('endHex')
+                        .value.trim();
+                    const resultDisplay =
+                        document.getElementById('resultDisplay');
+                    const errorContainer = document.getElementById(
+                        'errorDisplayContainer'
+                    );
+                    const errorDisplay =
+                        document.getElementById('errorDisplay');
+
+                    // Reset displays
+                    resultDisplay.textContent = 'Generating...';
+                    errorContainer.classList.add('hidden');
+
+                    try {
+                        // Ensure the hex strings are valid and BigInt is supported
+                        if (typeof BigInt === 'undefined') {
+                            throw new Error(
+                                'Your browser does not support BigInt.'
+                            );
+                        }
+                        if (
+                            typeof crypto === 'undefined' ||
+                            typeof crypto.getRandomValues === 'undefined'
+                        ) {
+                            throw new Error(
+                                'Cryptographic API (crypto.getRandomValues) not available.'
+                            );
+                        }
+
+                        // 1. Convert inputs to BigInt
+                        const min = BigInt(`0x${startHexInput}`);
+                        const max = BigInt(`0x${endHexInput}`);
+
+                        // 2. Generate the number
+                        const randomBigInt = generateRandomBigInt(min, max);
+
+                        // 3. Display the result
+                        resultDisplay.innerHTML = `
+                    <span class="font-bold">Decimal:</span> ${randomBigInt.toString()} <br>
+                    <span class="font-bold">Hex:</span> 0x${randomBigInt.toString(
+                        16
+                    )} <br>
+                    <span class="font-bold">Min Range:</span> 0x${min.toString(
+                        16
+                    )} <br>
+                    <span class="font-bold">Max Range:</span> 0x${max.toString(
+                        16
+                    )}
+                `;
+                    } catch (error) {
+                        resultDisplay.textContent = 'Error during generation.';
+                        errorDisplay.textContent = error.message;
+                        errorContainer.classList.remove('hidden');
+                    }
+                });
+        </script>
+    </body>
+</html>

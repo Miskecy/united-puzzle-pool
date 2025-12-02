@@ -69,6 +69,8 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 
 **Descrição:** Retorna um bloco ativo existente ou atribui um novo bloco para o usuário.
 
+Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range retornado estará sempre dentro do intervalo `[puzzleStart, puzzleEnd)` do puzzle marcado como ativo, não havendo sobreposição com blocos `ACTIVE` ou `COMPLETED` existentes.
+
 **Método:** GET
 
 **Headers:**
@@ -242,6 +244,8 @@ Esta API permite que usuários participem de um pool de mineração para resolve
 -   `start`: hex de 64 caracteres (`0x...`)
 -   `end`: hex de 64 caracteres (`0x...`)
 
+Observação: O range consultado deve estar contido no puzzle ativo. Caso contrário, o serviço retornará `409`.
+
 **Resposta:**
 
 ```json
@@ -252,6 +256,10 @@ Esta API permite que usuários participem de um pool de mineração para resolve
     "blockId": "..."
 }
 ```
+
+Erros comuns:
+
+-   `409`: Range fora do puzzle ativo
 
 ### 8. Submeter Validação Compartilhada
 
@@ -272,6 +280,8 @@ Esta API permite que usuários participem de um pool de mineração para resolve
     "puzzleaddress": "1..."
 }
 ```
+
+Observação: O range enviado deve estar contido no puzzle ativo. Caso contrário, o serviço retornará `409` e não registrará a validação.
 
 ### 9. Gerar Token para Pool Compartilhado
 
@@ -351,14 +361,15 @@ curl -X POST http://localhost:3000/api/block/submit \
 
 ## Informações do Puzzle
 
--   **Bitcoin Address do Puzzle**: `1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9`
--   **Range Inicial**: `0x6000000000000000000`
--   **Range Final**: `0x7ffffffffffffffff`
+-   **Bitcoin Address do Puzzle**: exemplo `1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9`
+-   **Range Inicial**: depende do puzzle ativo (hex)
+-   **Range Final**: depende do puzzle ativo (hex)
 
 ## Notas Importantes
 
-1. Cada bloco contém exatamente 10 endereços de verificação
-2. Você deve enviar entre 10 e 30 chaves privadas no POST
-3. Cada bloco tem validade de 12 horas
-4. Os créditos são ganhos quando chaves válidas são encontradas
-5. Use o dashboard web para visualizar seu progresso e gerenciar tokens
+1. Todas as APIs operam estritamente dentro do **puzzle ativo**. Ranges fora do puzzle ativo são rejeitados.
+2. Cada bloco contém exatamente 10 endereços de verificação.
+3. Você deve enviar entre 10 e 30 chaves privadas no POST.
+4. Cada bloco tem validade de 12 horas.
+5. Os créditos são ganhos quando chaves válidas são encontradas.
+6. Use o dashboard web para visualizar seu progresso e gerenciar tokens.

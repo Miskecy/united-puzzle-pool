@@ -235,7 +235,7 @@ export default function HistoryPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [blocksPage, setBlocksPage] = useState(1);
 	const [transactionsPage, setTransactionsPage] = useState(1);
-	const [, setActiveTab] = useState("blocks");
+	const [activeTab, setActiveTab] = useState<"blocks" | "transactions">("blocks");
 	const pageSize = 50;
 
 	useEffect(() => {
@@ -327,7 +327,7 @@ export default function HistoryPage() {
 				</Card>
 			)}
 
-			{!loading && !error && history && (
+			{!error && history && (
 				<>
 					{/* --- Cartões de Estatísticas --- */}
 					<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -376,7 +376,7 @@ export default function HistoryPage() {
 					</div>
 
 					{/* --- Guias de Blocos e Transações --- */}
-					<Tabs defaultValue="blocks" className="w-full" onValueChange={setActiveTab}>
+					<Tabs value={activeTab} className="w-full" onValueChange={(v) => setActiveTab(v as "blocks" | "transactions")}>
 						<TabsList className="grid w-full grid-cols-2 mb-4">
 							<TabsTrigger value="blocks" className="inline-flex items-center gap-2">
 								<HistoryIcon className="w-4 h-4" />
@@ -412,13 +412,13 @@ export default function HistoryPage() {
 										</div>
 										<div className="flex items-center gap-2">
 											<PaginationButton
-												disabled={blocksPage <= 1}
+												disabled={loading || blocksPage <= 1}
 												onClick={() => setBlocksPage(p => Math.max(1, p - 1))}
 											>
 												<ArrowLeft className="w-4 h-4 mr-1" /> Previous
 											</PaginationButton>
 											<PaginationButton
-												disabled={blocksPage >= blocksTotalPages}
+												disabled={loading || blocksPage >= blocksTotalPages}
 												onClick={() => setBlocksPage(p => p + 1)}
 											>
 												Next <ArrowRight className="w-4 h-4 ml-1" />
@@ -449,13 +449,13 @@ export default function HistoryPage() {
 										</div>
 										<div className="flex items-center gap-2">
 											<PaginationButton
-												disabled={transactionsPage <= 1}
+												disabled={loading || transactionsPage <= 1}
 												onClick={() => setTransactionsPage(p => Math.max(1, p - 1))}
 											>
 												<ArrowLeft className="w-4 h-4 mr-1" /> Previous
 											</PaginationButton>
 											<PaginationButton
-												disabled={transactionsPage >= transactionsTotalPages}
+												disabled={loading || transactionsPage >= transactionsTotalPages}
 												onClick={() => setTransactionsPage(p => p + 1)}
 											>
 												Next <ArrowRight className="w-4 h-4 ml-1" />

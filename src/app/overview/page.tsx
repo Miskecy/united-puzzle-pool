@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
+import PoolActivityTimeline from '@/components/PoolActivityTimeline';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
 
 
@@ -179,9 +180,11 @@ export default function PoolOverviewPage() {
 	const [loading, setLoading] = useState(true);
 	const [noPuzzle, setNoPuzzle] = useState(false);
 	const [recent, setRecent] = useState<RecentBlock[]>([]);
+	const [active, setActive] = useState<RecentBlock[]>([]);
 	const [colorMode, setColorMode] = useState<'percent' | 'absolute'>('percent');
 	const [hoveredCell, setHoveredCell] = useState<number | null>(null);
 	const [hoveredBlockCells, setHoveredBlockCells] = useState<number[]>([]);
+	const [nextPollInSec, setNextPollInSec] = useState<number>(30);
 
 	const maxAbsCompleted = Math.max(0, ...bins.map(b => Math.max(0, b.completed || 0)));
 
@@ -219,6 +222,7 @@ export default function PoolOverviewPage() {
 				if (statsRes.ok) {
 					const stats = await statsRes.json();
 					setRecent(stats.recentBlocks || []);
+					setActive(stats.activeBlocks || []);
 				}
 			} catch (e) {
 				setError(e instanceof Error ? e.message : 'Failed to load overview');
@@ -228,6 +232,49 @@ export default function PoolOverviewPage() {
 		};
 		load();
 	}, []);
+
+	useEffect(() => {
+		const pollMs = 30000;
+		const tick = () => {
+			const rem = Math.ceil((pollMs - (Date.now() % pollMs)) / 1000);
+			setNextPollInSec(Math.max(0, rem));
+		};
+		tick();
+		const id = setInterval(tick, 1000);
+		return () => clearInterval(id);
+	}, []);
+
+	useEffect(() => {
+		const poll = async () => {
+			try {
+				const r = await fetch('/api/pool/stats?take=20', { cache: 'no-store' })
+				if (r.ok) {
+					const j = await r.json()
+					setRecent(j.recentBlocks || [])
+					setActive(j.activeBlocks || [])
+				}
+			} catch { }
+		}
+		poll()
+		const id = setInterval(poll, 30000)
+		return () => clearInterval(id)
+	}, [])
+
+	useEffect(() => {
+		const pollOverview = async () => {
+			try {
+				const r = await fetch('/api/pool/overview', { cache: 'no-store' })
+				if (r.ok) {
+					const j = await r.json()
+					setBins(j.bins || [])
+					setMeta(j.meta || null)
+				}
+			} catch { }
+		}
+		pollOverview()
+		const id = setInterval(pollOverview, 30000)
+		return () => clearInterval(id)
+	}, [])
 
 	// Cálculo das métricas exibidas
 	const overallPow: string = meta?.maxExp ? `2^${meta.maxExp}` : pow2Label(bins.reduce((acc: bigint, b) => acc + binLength(b.startHex, b.endHex), 0n));
@@ -329,6 +376,28 @@ export default function PoolOverviewPage() {
 							<div className="text-sm text-gray-600 mt-1">Validated / Remaining (T-keys).</div>
 						</CardContent>
 					</Card>
+				</div>
+
+				{/* Split Panel: Active vs Validated */}
+				<div className='pb-8'>
+					<PoolActivityTimeline
+						active={active}
+						validated={recent}
+						onHoverRange={(startHex: string, endHex: string) => {
+							if (!startHex || !endHex) { setHoveredBlockCells([]); return }
+							const start = parseHexBI(startHex);
+							const end = parseHexBI(endHex);
+							const indices: number[] = [];
+							for (let bi = 0; bi < bins.length; bi++) {
+								const bs = parseHexBI(bins[bi].startHex);
+								const be = parseHexBI(bins[bi].endHex);
+								if (start <= be && end >= bs) {
+									indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
+								}
+							}
+							setHoveredBlockCells(indices);
+						}}
+					/>
 				</div>
 
 				{/* Heatmap Section */}
@@ -466,7 +535,7 @@ export default function PoolOverviewPage() {
 							</div>
 							Last Completed Blocks
 						</h3>
-						<p className="text-sm text-gray-600">Polling every <span className='text-blue-400'>30s</span></p>
+						<p className="text-sm text-gray-600">Polling: next in <span className='text-blue-600 font-semibold'>{nextPollInSec}s</span></p>
 					</div>
 					<BlocksTimeline
 						items={recent.slice(0, 10)}
@@ -518,6 +587,8 @@ export default function PoolOverviewPage() {
 				</div>
 
 			</div>
+
+
 			{/* CSS para o Grid, movido para um bloco <style jsx> ou arquivo CSS global */}
 			<style jsx>{`
                 .heatmap-grid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; }
@@ -527,7 +598,9 @@ export default function PoolOverviewPage() {
                 @media (max-width: 640px) { .heatmap-cell { aspect-ratio: 3 / 1; min-height: 16px; } }
                 @media (min-width: 641px) and (max-width: 1024px) { .heatmap-cell { aspect-ratio: 3 / 1; min-height: 17px; } }
                 .scale-container { display: flex; flex-wrap: wrap; gap: 6px; }
-            `}</style>
+
+
+			`}</style>
 		</div>
 	);
 }

@@ -5,11 +5,121 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Settings, Database, Download, Upload, Edit3, Trash2, CheckCircle2, Key, Hash, CheckCircle, XCircle, Copy, Shield, RotateCw } from 'lucide-react'
+import { formatCompactHexRange } from '@/lib/formatRange'
+import { Settings, Database, Download, Upload, Edit3, Trash2, CheckCircle2, Key, Hash, CheckCircle, XCircle, Copy, Shield, RotateCw, List, Clock } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+// Removed unused Table imports
 
+// --- Type Definitions ---
 type Item = { id: string; name?: string | null; address: string; startHex: string; endHex: string; active?: boolean; solved?: boolean; privateKey?: string | null }
+type Block = { id: string; startRange: string; endRange: string; createdAt: string; completedAt: string | null; positionPercent?: number }
+
+// --- Utility Functions (Remaining the same) ---
+function timeAgo(s: string | null) {
+	if (!s) return '-'
+	const t = new Date(s).getTime()
+	const now = Date.now()
+	const diff = Math.max(0, now - t)
+	const sec = Math.floor(diff / 1000)
+	if (sec < 60) return `${sec}s ago`
+	const min = Math.floor(sec / 60)
+	if (min < 60) return `${min}m ago`
+	const hr = Math.floor(min / 60)
+	if (hr < 24) return `${hr}h ago`
+	const day = Math.floor(hr / 24)
+	return `${day}d ago`
+}
+
+function strip0x(s: string) { return s.startsWith('0x') || s.startsWith('0X') ? s.slice(2) : s }
+function isHex(s: string) { return /^[0-9a-fA-F]+$/.test(strip0x(s)) }
+function hexToBigInt(h: string): bigint | null { try { const clean = strip0x(h); if (!isHex(clean)) return null; return BigInt('0x' + clean.toLowerCase()) } catch { return null } }
+function bitLen(h: string): number | null { const bi = hexToBigInt(h); return bi !== null ? bi.toString(2).length : null }
+function bitRangeLabel(start: string, end: string): string {
+	const s = bitLen(start)
+	const e = bitLen(end)
+	const sExp = typeof s === 'number' ? Math.max(0, s - 1) : null
+	const eExp = typeof e === 'number' ? e : null
+	if (sExp !== null && eExp !== null) return `Key Range (Bits): 2^${sExp}…2^${eExp}`
+	return 'Key Range (Bits): -'
+}
+
+
+// --- New Block Card Component (Enhanced) ---
+const BlockCard: React.FC<{ block: Block }> = ({ block }) => {
+	// Determine the color for the Position % badge
+	const positionColor = (percent?: number) => {
+		if (percent === undefined) return 'bg-gray-100 text-gray-700';
+		if (percent < 50) return 'bg-green-100 text-green-700';
+		if (percent < 90) return 'bg-yellow-100 text-yellow-700';
+		return 'bg-red-100 text-red-700';
+	};
+
+	return (
+		<Card className="bg-white border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+			<CardHeader className="pb-2">
+				<div className="flex items-start justify-between">
+					<CardTitle className="text-sm font-semibold text-gray-900 flex flex-col gap-1">
+						<span className="flex items-center gap-1">
+							<List className="h-4 w-4 text-blue-600" /> Block ID:
+						</span>
+						<code className="text-xs font-normal text-gray-600 break-all">{block.id}</code>
+					</CardTitle>
+					<Badge className={`font-medium whitespace-nowrap ${positionColor(block.positionPercent)}`}>
+						{block.positionPercent !== undefined ? `${block.positionPercent.toFixed(2)}%` : '-'}
+					</Badge>
+				</div>
+			</CardHeader>
+			<CardContent className="pt-3 space-y-2 text-xs">
+				{/* Full Start Range */}
+				<div className="space-y-0.5 p-2 bg-gray-50 border border-gray-200 rounded-md">
+					<span className="text-gray-600 font-medium block">Start Range:</span>
+					<code className="font-mono text-gray-800 break-all">{formatCompactHexRange(block.startRange)}</code>
+				</div>
+				{/* Full End Range */}
+				<div className="space-y-0.5 p-2 bg-gray-50 border border-gray-200 rounded-md">
+					<span className="text-gray-600 font-medium block">End Range:</span>
+					<code className="font-mono text-gray-800 break-all">{formatCompactHexRange(block.endRange)}</code>
+				</div>
+
+				<div className="flex justify-between items-center pt-1 border-t border-gray-100">
+					<span className="text-gray-600 flex items-center gap-1">
+						<Clock className="h-4 w-4 text-green-600" /> Completed:
+					</span>
+					<span className="font-medium text-gray-700 text-xs">
+						{block.completedAt ? timeAgo(block.completedAt) : '-'}
+					</span>
+				</div>
+			</CardContent>
+		</Card>
+	);
+};
+
+// --- Block Card Skeleton Component (New) ---
+const BlockCardSkeleton: React.FC = () => (
+	<Card className="bg-gray-100 border-gray-200 shadow-sm h-52 flex flex-col justify-between animate-pulse">
+		<CardHeader className="pb-2">
+			<div className="flex items-start justify-between">
+				<div className="space-y-1">
+					<div className="h-4 w-32 bg-gray-200 rounded"></div>
+					<div className="h-3 w-40 bg-gray-200 rounded"></div>
+				</div>
+				<div className="h-6 w-12 bg-gray-200 rounded-full"></div>
+			</div>
+		</CardHeader>
+		<CardContent className="pt-3 space-y-2 text-xs">
+			<div className="h-10 bg-gray-200 rounded-md"></div>
+			<div className="h-10 bg-gray-200 rounded-md"></div>
+			<div className="flex justify-between items-center pt-1">
+				<div className="h-4 w-20 bg-gray-200 rounded"></div>
+				<div className="h-4 w-16 bg-gray-200 rounded"></div>
+			</div>
+		</CardContent>
+	</Card>
+);
+
 
 export default function SetupConfigPage() {
+	// ... (Your state declarations remain the same)
 	const [items, setItems] = useState<Item[]>([])
 	const [name, setName] = useState('')
 	const [address, setAddress] = useState('')
@@ -31,18 +141,25 @@ export default function SetupConfigPage() {
 	const [copiedId, setCopiedId] = useState<string | null>(null)
 	const [sharedApiEnabled, setSharedApiEnabled] = useState<boolean>(false)
 	const [sharedMsg, setSharedMsg] = useState('')
+	const [blocks, setBlocks] = useState<Block[]>([])
+	const [blocksPage, setBlocksPage] = useState(1)
+	const [blocksTotal, setBlocksTotal] = useState(0)
+	const [blocksLoading, setBlocksLoading] = useState(false)
 
-	function strip0x(s: string) { return s.startsWith('0x') || s.startsWith('0X') ? s.slice(2) : s }
-	function isHex(s: string) { return /^[0-9a-fA-F]+$/.test(strip0x(s)) }
-	function hexToBigInt(h: string): bigint | null { try { const clean = strip0x(h); if (!isHex(clean)) return null; return BigInt('0x' + clean.toLowerCase()) } catch { return null } }
-	function bitLen(h: string): number | null { const bi = hexToBigInt(h); return bi !== null ? bi.toString(2).length : null }
-	function bitRangeLabel(start: string, end: string): string {
-		const s = bitLen(start)
-		const e = bitLen(end)
-		const sExp = typeof s === 'number' ? Math.max(0, s - 1) : null
-		const eExp = typeof e === 'number' ? e : null
-		if (sExp !== null && eExp !== null) return `Key Range (Bits): 2^${sExp}…2^${eExp}`
-		return 'Key Range (Bits): -'
+
+	// ... (Your fetchBlocks, addValid, addError, editValid functions remain the same)
+	async function fetchBlocks(page = 1) {
+		setBlocksLoading(true)
+		try {
+			const r = await fetch(`/api/pool/blocks?page=${page}&pageSize=50`)
+			if (r.ok) {
+				const j = await r.json()
+				setBlocks(Array.isArray(j.items) ? j.items : [])
+				setBlocksTotal(Number(j.total || 0))
+				setBlocksPage(Number(j.page || 1))
+			}
+		} catch { }
+		finally { setBlocksLoading(false) }
 	}
 
 	const addValid = (() => {
@@ -64,9 +181,10 @@ export default function SetupConfigPage() {
 		const e = hexToBigInt(editEndHex)
 		return !!(editAddress && s !== null && e !== null && s < e)
 	})()
-
 	// no-op
 
+
+	// ... (Your useEffects, addPuzzle, setActive, startEdit, cancelEdit, saveEdit, deleteItem, toggleSharedApi functions remain the same)
 	useEffect(() => {
 		(async () => {
 			try {
@@ -81,6 +199,8 @@ export default function SetupConfigPage() {
 			} catch { }
 		})()
 	}, [])
+
+	useEffect(() => { fetchBlocks(1) }, [])
 
 	async function addPuzzle(e: React.FormEvent) {
 		e.preventDefault()
@@ -188,6 +308,8 @@ export default function SetupConfigPage() {
 			setSharedMsg('Failed to update setting.');
 		}
 	}
+
+	const totalPages = Math.ceil(blocksTotal / 50)
 
 
 	return (
@@ -474,6 +596,71 @@ export default function SetupConfigPage() {
 						</div>
 					</CardContent>
 				</Card>
+
+				{/* --- ENHANCED Recent Blocks Card with Card View and Skeletons --- */}
+				<Card className="mt-6 bg-white border-gray-200 shadow-md hover:shadow-lg transition-shadow">
+					<CardHeader className='border-b pb-4'>
+						<CardTitle className="text-gray-900 flex items-center gap-2 text-lg"><List className="h-5 w-5 text-blue-600" />Recent Completed Blocks</CardTitle>
+						<CardDescription className="text-gray-600">Last 50 completed blocks per page for easy reading and navigation.</CardDescription>
+					</CardHeader>
+					<CardContent className='pt-6'>
+						<Tabs defaultValue="list">
+							<div className="flex items-center justify-between gap-2 mb-4">
+								<TabsList>
+									<TabsTrigger value="list">Block Overview</TabsTrigger>
+								</TabsList>
+								<Button
+									variant="outline"
+									disabled={blocksLoading}
+									onClick={() => fetchBlocks(blocksPage)}
+								>
+									{blocksLoading ? <RotateCw className="h-4 w-4 animate-spin mr-2" /> : <RotateCw className="h-4 w-4 mr-2" />}
+									Refresh
+								</Button>
+							</div>
+							<TabsContent value="list">
+								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+									{blocksLoading ? (
+										// Display 9 skeletons while loading
+										Array.from({ length: 9 }).map((_, i) => (
+											<BlockCardSkeleton key={`sk-block-${i}`} />
+										))
+									) : blocks.length === 0 ? (
+										<div className="col-span-full text-center py-6 text-gray-600 border border-gray-200 rounded-lg bg-gray-50">No completed blocks data available.</div>
+									) : (
+										// Card Grid View
+										blocks.map(b => <BlockCard key={b.id} block={b} />)
+									)}
+								</div>
+
+								{/* Pagination Controls */}
+								<div className="flex items-center justify-between mt-6">
+									<div className="text-sm text-gray-600">
+										Showing {blocks.length} blocks. Total: {blocksTotal}
+									</div>
+									<div className="flex items-center gap-2">
+										<Button
+											variant="outline"
+											disabled={blocksPage <= 1 || blocksLoading}
+											onClick={() => fetchBlocks(blocksPage - 1)}
+										>
+											Prev
+										</Button>
+										<div className="text-sm font-medium text-gray-700">Page {blocksPage} of {totalPages}</div>
+										<Button
+											variant="outline"
+											disabled={blocksPage >= totalPages || blocksLoading}
+											onClick={() => fetchBlocks(blocksPage + 1)}
+										>
+											Next
+										</Button>
+									</div>
+								</div>
+							</TabsContent>
+						</Tabs>
+					</CardContent>
+				</Card>
+				{/* --- END ENHANCED Recent Blocks Card --- */}
 			</div>
 		</div>
 	)
