@@ -5,7 +5,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } fro
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
 
-type Point = { t: number; v: number }
+type Point = { t: number; v: number; ts?: number }
 
 type Props = {
 	points: Point[]
@@ -18,7 +18,7 @@ const PRIMARY_COLOR_HSL_END = 'hsl(262.1 83.3% 57.8%)'
 const NF_EN_US_2DP = new Intl.NumberFormat('en-US', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Props) {
-	const chartData = points.map(p => ({ t: p.t, speed: Math.max(0, p.v) }))
+	const chartData = points.map(p => ({ t: p.t, ts: p.ts, speed: Math.max(0, p.v) }))
 	const latestPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null
 	const latestSpeed = latestPoint ? latestPoint.speed.toFixed(3) : '—'
 	const latestSpeedNum = latestPoint ? latestPoint.speed : 0
@@ -211,8 +211,8 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 									cursor={{ strokeDasharray: '4 4', stroke: PRIMARY_COLOR_HSL, strokeWidth: 2 }}
 									content={({ active, payload }) => {
 										if (!active || !payload || payload.length === 0) return null
-										const data = payload[0].payload
-										const date = new Date(data.t)
+										const data = payload[0].payload as { t: number; ts?: number; speed: number }
+										const date = new Date((data.ts ?? data.t))
 										const formatTimeAgo = (ms: number) => {
 											const rtf = rtfRef.current
 											const s = Math.floor(ms / 1000)

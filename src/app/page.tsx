@@ -85,13 +85,14 @@ export default function HomePage() {
 						}
 					}
 
-					const points: Array<{ t: number; v: number }> = bins.map((b, i) => {
+					const points: Array<{ t: number; ts?: number; v: number }> = bins.map((b, i) => {
 						const fallbackMidnight = startTs + i * dayMs
-						const t = b.latestMs ?? fallbackMidnight
-						if (b.secs <= 0) return { t, v: 0 }
+						const latest = b.latestMs ?? fallbackMidnight
+						const t = fallbackMidnight
+						if (b.secs <= 0) return { t, ts: latest, v: 0 }
 						const bkeys = Number(b.lenBI / 1_000_000_000n)
 						const speed = bkeys / b.secs
-						return { t, v: Number.isFinite(speed) ? speed : 0 }
+						return { t, ts: latest, v: Number.isFinite(speed) ? speed : 0 }
 					})
 					setSpeedPoints(points)
 					if (totalSeconds > 0) {
