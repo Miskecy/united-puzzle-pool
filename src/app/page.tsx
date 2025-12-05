@@ -57,6 +57,8 @@ export default function HomePage() {
 					const endDay = new Date(startDay.getTime() + 24 * hourMs)
 					const startTs = startDay.getTime()
 					const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
+					const nowMs = Date.now()
+					const currentHourIdx = Math.max(0, Math.min(23, Math.floor((nowMs - startTs) / hourMs)))
 
 					const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
 						const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
@@ -85,10 +87,10 @@ export default function HomePage() {
 						}
 					}
 
-					const points: Array<{ t: number; ts?: number; v: number }> = bins.map((b, i) => {
-						const fallbackMidnight = startTs + i * hourMs
-						const latest = b.latestMs ?? fallbackMidnight
-						const t = fallbackMidnight
+					const points: Array<{ t: number; ts?: number; v: number }> = bins.slice(0, currentHourIdx + 1).map((b, i) => {
+						const hourStart = startTs + i * hourMs
+						const latest = b.latestMs ?? hourStart
+						const t = hourStart
 						if (b.secs <= 0) return { t, ts: latest, v: 0 }
 						const bkeys = Number(b.lenBI / 1_000_000_000n)
 						const speed = bkeys / b.secs
