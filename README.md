@@ -11,6 +11,12 @@ Create a `.env` file in the root directory with:
 SETUP_SECRET="change-me"
 
 # Prisma (SQLite dev) is preconfigured; no external DB required for local dev
+
+# Application base URL (used in docs and clients)
+# If empty, defaults to http://localhost:3000
+APP_URL="http://localhost:3000"
+# Exposed to client-side pages for code snippets
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
 ### Setup Access
@@ -40,16 +46,16 @@ SETUP_SECRET="change-me"
     npm run dev
     ```
 
-5. **Open [http://localhost:3000](http://localhost:3000) in your browser**
+5. **Open `${APP_URL}` in your browser**
 
 ## How to Use
 
 ### 1. Generate a Token
 
-Visit the homepage and click "Generate Token" or use the API:
+Visit the homepage and click "Generate Token" or use the API (replace with your `${APP_URL}`):
 
 ```bash
-curl -X POST http://localhost:3000/api/token/generate
+curl -X POST ${APP_URL}/api/token/generate
 ```
 
 ### 2. Get a Block Assignment
@@ -57,7 +63,7 @@ curl -X POST http://localhost:3000/api/token/generate
 Use your token to get a block assignment:
 
 ```bash
-curl -H "pool-token: YOUR_TOKEN" http://localhost:3000/api/block
+curl -H "pool-token: YOUR_TOKEN" ${APP_URL}/api/block
 ```
 
 ### 3. Mine the Block

@@ -15,6 +15,7 @@ type BlockItem = {
 	createdAt?: string
 	completedAt: string
 	creditsAwarded: number
+	expiresAt?: string | null
 }
 
 export default function BlocksTimeline({
@@ -25,6 +26,7 @@ export default function BlocksTimeline({
 	direction = 'forward',
 	speedMs = 60000,
 	gapPx = 16,
+	animationsEnabled = true,
 }: {
 	items: BlockItem[]
 	pollUrl?: string
@@ -33,6 +35,7 @@ export default function BlocksTimeline({
 	direction?: 'forward' | 'reverse'
 	speedMs?: number
 	gapPx?: number
+	animationsEnabled?: boolean
 }) {
 	const [blocks, setBlocks] = useState<BlockItem[]>(items ?? [])
 	const router = useRouter()
@@ -113,11 +116,20 @@ export default function BlocksTimeline({
 				<div
 					ref={trackRef}
 					className={`timeline-track ${direction === 'reverse' ? 'reverse' : 'forward'}`}
-					style={{ animationDuration: `${Math.max(1000, speedMs)}ms`, animationPlayState: (loopBlocks.length > 0 ? 'running' : 'paused'), gap: `${Math.max(0, gapPx)}px` }}
+					style={{ animationDuration: `${Math.max(1000, speedMs)}ms`, animationPlayState: ((animationsEnabled && loopBlocks.length > 0) ? 'running' : 'paused'), gap: `${Math.max(0, gapPx)}px` }}
 				>
 					{loopBlocks.map((b, i) => {
 						const addr = b.puzzleAddress || b.bitcoinAddress || 'Unknown address'
 						const lenLabel = formatLenPrecise(binLength(b.hexRangeStart, b.hexRangeEnd))
+						const created = b.createdAt ? new Date(b.createdAt).getTime() : NaN
+						const completed = b.completedAt ? new Date(b.completedAt).getTime() : NaN
+						const limitEnd = b.expiresAt
+							? new Date(b.expiresAt).getTime()
+							: (isFinite(created) ? created + 12 * 60 * 60 * 1000 : NaN)
+						const totalLimit = (isFinite(created) && isFinite(limitEnd) && limitEnd > created) ? (limitEnd - created) : NaN
+						const remainingAtValidation = (isFinite(limitEnd) && isFinite(completed)) ? Math.max(0, limitEnd - completed) : NaN
+						const spent = (isFinite(totalLimit) && isFinite(remainingAtValidation)) ? Math.max(0, totalLimit - remainingAtValidation) : NaN
+						const durFillPct = (isFinite(totalLimit) && isFinite(spent) && totalLimit > 0 && spent > 0) ? Math.max(0, Math.min(100, Math.round((spent / totalLimit) * 100))) : 0
 						return (
 							<div
 								key={`${b.id}-${i}`}
@@ -127,6 +139,7 @@ export default function BlocksTimeline({
 								onClick={() => router.push(`/block/${b.id}`)}
 							>
 								<div className="block3d-content">
+									{durFillPct > 0 ? <div className="duration-fill" style={{ height: `${durFillPct}%` }} /> : null}
 									<div className="block3d-body">
 										<div className="block3d-puzzle">{b.puzzleName || 'Puzzle'}</div>
 										<div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
@@ -153,16 +166,17 @@ export default function BlocksTimeline({
         @keyframes marqueeReverse { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
         .block3d { position: relative; width: 180px; height: 180px; cursor: pointer; margin-left: 12px; margin-top: 12px; }
-        .block3d-content { 
-          position: relative; 
-          width: 100%; 
-          height: 100%; 
-          border-radius: 8px; 
-          background: #ffffff;
-          border: 1px solid #e5e7eb; 
-          box-shadow: 0 2px 4px rgba(0,0,0,.08);
-          transition: transform .2s ease, box-shadow .2s ease; 
-        }
+					.block3d-content { 
+						position: relative; 
+						width: 100%; 
+						height: 100%; 
+						border-radius: 8px; 
+						background: #ffffff;
+						border: 1px solid #e5e7eb; 
+						box-shadow: 0 2px 4px rgba(0,0,0,.08);
+						transition: transform .2s ease, box-shadow .2s ease; 
+					}
+					.duration-fill { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(156,163,175,.24); border-radius: 8px; pointer-events: none; transition: height .5s ease; }
         .block3d:before { 
           content: ''; 
           position: absolute; 

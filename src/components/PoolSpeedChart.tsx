@@ -43,16 +43,26 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 		speed: { label: 'Speed (BKeys/s)', color: PRIMARY_COLOR_HSL },
 	}
 
+	function adaptiveNumCls(s: string): string {
+		const len = s.length;
+		if (len <= 10) return 'text-4xl';
+		if (len <= 16) return 'text-3xl';
+		if (len <= 24) return 'text-2xl';
+		if (len <= 32) return 'text-xl';
+		return 'text-lg';
+	}
+
 	const dateFormatter = (value: number | string) => {
 		const num = typeof value === 'number' ? value : Number(value)
 		const d = new Date(num)
-		if (points.length > 50) {
-			return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-		}
-		const m = d.toLocaleDateString(undefined, { month: 'short' })
-		const day = d.getDate()
-		return `${m} ${day}`
+		return d.toLocaleDateString(undefined, { weekday: 'short' })
 	}
+
+	const dayMs = 24 * 60 * 60 * 1000
+	const endDay = new Date()
+	endDay.setHours(0, 0, 0, 0)
+	const startTs = endDay.getTime() - 6 * dayMs
+	const ticks = Array.from({ length: 7 }, (_, i) => startTs + i * dayMs)
 
 	if (chartData.length === 0) {
 		return (
@@ -80,7 +90,7 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 							</CardTitle>
 						</div>
 						<CardDescription className="text-sm text-gray-500 ml-11">
-							{avgLabel}
+							{avgLabel} average
 						</CardDescription>
 					</div>
 					<div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-200">
@@ -136,14 +146,15 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 								let idx = units.findIndex(u => u.value >= 1)
 								if (idx === -1) idx = units.length - 1
 								const u = units[idx]
-								const val = !isFinite(u.value) ? '—' : (Math.abs(u.value) < 0.01 ? '<0.01' : NF_EN_US_2DP.format(u.value))
+								const valStr = !isFinite(u.value) ? '—' : (Math.abs(u.value) < 0.01 ? '<0.01' : NF_EN_US_2DP.format(u.value))
+								const cls = adaptiveNumCls(valStr)
 								return (
 									<div>
-										<div className="flex items-baseline gap-2">
-											<span className="text-2xl sm:text-3xl lg:text-4xl font-black text-purple-700 tracking-tight">
-												{val}
+										<div className="flex items-start gap-2">
+											<span className={`font-black text-purple-700 tracking-tight break-all leading-tight ${cls} w-full block`}>
+												{valStr}
 											</span>
-											<span className="text-sm font-medium text-purple-700/80">{u.label}</span>
+											<span className="text-sm font-medium text-purple-700/80 shrink-0">{u.label}</span>
 										</div>
 										<p className="text-xs font-medium text-purple-700 mt-1.5">Time to Solve</p>
 									</div>
@@ -162,7 +173,7 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 
 				{/* Chart Section */}
 				<div className="bg-white rounded-xl border border-gray-200 p-4">
-					<ChartContainer config={chartConfig} className="min-h-[200px] w-full">
+					<ChartContainer config={chartConfig} className="min-h-[200px] w-full ring-0 outline-none">
 						<ResponsiveContainer width="100%" height={200}>
 							<AreaChart
 								accessibilityLayer
@@ -183,6 +194,8 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 									tickFormatter={dateFormatter}
 									className="text-xs fill-gray-500"
 									tick={{ fontSize: 11 }}
+									ticks={ticks}
+									interval={0}
 								/>
 								<YAxis
 									orientation="right"

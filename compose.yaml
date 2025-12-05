@@ -1,0 +1,22 @@
+version: "3.8"
+services:
+  app:
+    build: .
+    image: pool-desafio-71:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "file:/data/dev.db"
+      REDIS_URL: "redis://redis:6379"
+      SETUP_SECRET: "change-me"
+      APP_URL: "http://localhost:3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+    volumes:
+      - app-data:/data
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+volumes:
+  app-data:

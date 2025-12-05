@@ -4,6 +4,8 @@
 
 Esta API permite que usuários participem de um pool de mineração para resolver puzzles Bitcoin. O sistema atribui blocos de chaves privadas para cada usuário e verifica as soluções enviadas.
 
+Base URL: defina `APP_URL` no arquivo `.env` (padrão `http://localhost:3000`).
+
 ## Configuração Inicial
 
 ### 1. Gerar Token de Acesso
@@ -304,7 +306,7 @@ Observação: O range enviado deve estar contido no puzzle ativo. Caso contrári
 ### Passo 1: Gerar Token
 
 ```bash
-curl -X POST http://localhost:3000/api/token/generate
+curl -X POST ${APP_URL}/api/token/generate
 ```
 
 ### Passo 2: Armazenar Token
@@ -318,14 +320,14 @@ localStorage.setItem('pool-token', 'seu-token-aqui-12345');
 ### Passo 3: Obter Estatísticas
 
 ```bash
-curl -X GET http://localhost:3000/api/user/stats \
+curl -X GET ${APP_URL}/api/user/stats \
   -H "pool-token: seu-token-aqui-12345"
 ```
 
 ### Passo 4: Obter Bloco para Trabalhar
 
 ```bash
-curl -X GET http://localhost:3000/api/block \
+curl -X GET ${APP_URL}/api/block \
   -H "pool-token: seu-token-aqui-12345"
 ```
 
@@ -341,7 +343,7 @@ Use o software de mineração para processar o range de chaves privadas:
 Quando encontrar chaves privadas válidas:
 
 ```bash
-curl -X POST http://localhost:3000/api/block/submit \
+curl -X POST ${APP_URL}/api/block/submit \
   -H "pool-token: seu-token-aqui-12345" \
   -H "Content-Type: application/json" \
   -d '{

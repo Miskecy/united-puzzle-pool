@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire, Clock } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
-import PoolActivityTimeline from '@/components/PoolActivityTimeline';
+import PoolActivityTimelineStandalone from '@/components/PoolActivityTimelineStandalone';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
 
 
@@ -163,6 +164,14 @@ function computeTotalsT(bins: BinStat[]): string {
 	return `${formatTrillionsBI(validatedBI)} / ${formatTrillionsBI(remainingClamped)}`;
 }
 
+function adaptiveTextClass(s: string): string {
+	const len = s.length;
+	if (len <= 20) return 'text-xl';
+	if (len <= 28) return 'text-lg';
+	if (len <= 36) return 'text-base';
+	return 'text-sm';
+}
+
 function formatCompactHexRange(hex: string): string {
 	const s = hex.startsWith('0x') ? hex.slice(2) : hex;
 	if (s.length <= 24) return `0x${s}`;
@@ -185,6 +194,19 @@ export default function PoolOverviewPage() {
 	const [hoveredCell, setHoveredCell] = useState<number | null>(null);
 	const [hoveredBlockCells, setHoveredBlockCells] = useState<number[]>([]);
 	const [nextPollInSec, setNextPollInSec] = useState<number>(30);
+	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+
+	function formatLastUpdated(ts: number | null): string {
+		if (!ts) return '—';
+		const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+		if (diff < 60) return `${diff}s ago`;
+		const m = Math.floor(diff / 60);
+		if (m < 60) return `${m}m ago`;
+		const h = Math.floor(m / 60);
+		if (h < 24) return `${h}h ago`;
+		const d = Math.floor(h / 24);
+		return `${d}d ago`;
+	}
 
 	const maxAbsCompleted = Math.max(0, ...bins.map(b => Math.max(0, b.completed || 0)));
 
@@ -224,6 +246,7 @@ export default function PoolOverviewPage() {
 					setRecent(stats.recentBlocks || []);
 					setActive(stats.activeBlocks || []);
 				}
+				setLastUpdated(Date.now());
 			} catch (e) {
 				setError(e instanceof Error ? e.message : 'Failed to load overview');
 			} finally {
@@ -252,6 +275,7 @@ export default function PoolOverviewPage() {
 					const j = await r.json()
 					setRecent(j.recentBlocks || [])
 					setActive(j.activeBlocks || [])
+					setLastUpdated(Date.now())
 				}
 			} catch { }
 		}
@@ -268,6 +292,7 @@ export default function PoolOverviewPage() {
 					const j = await r.json()
 					setBins(j.bins || [])
 					setMeta(j.meta || null)
+					setLastUpdated(Date.now())
 				}
 			} catch { }
 		}
@@ -319,12 +344,21 @@ export default function PoolOverviewPage() {
 									<CardDescription className="text-gray-600">A visual summary of the puzzle’s progress and recent validations.</CardDescription>
 								</div>
 							</div>
-							<button
-								onClick={() => window.location.reload()}
-								className='text-sm text-gray-600 hover:text-blue-600 px-3 py-1 rounded-md transition-colors inline-flex items-center gap-1'
-							>
-								<RotateCcw className='w-4 h-4' /> Refresh
-							</button>
+							<div className="flex items-center gap-3">
+								<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200">
+									<Clock className="h-4 w-4 text-blue-600" />
+									<span className="text-xs font-semibold text-blue-700">Last Updated</span>
+									<Badge variant="outline" className="text-[10px] font-bold border-blue-300 text-blue-700 bg-white">
+										{formatLastUpdated(lastUpdated)}
+									</Badge>
+								</div>
+								<button
+									onClick={() => window.location.reload()}
+									className='text-sm text-gray-600 hover:text-blue-600 px-3 py-1 rounded-md transition-colors inline-flex items-center gap-1'
+								>
+									<RotateCcw className='w-4 h-4' /> Refresh
+								</button>
+							</div>
 						</div>
 					</CardHeader>
 					<CardContent className="pt-6">
@@ -372,7 +406,15 @@ export default function PoolOverviewPage() {
 							</h3>
 						</CardHeader>
 						<CardContent>
-							<div className="text-xl text-gray-900 font-mono"><span className="px-2 py-1 bg-gray-100 rounded">{computeTotalsT(bins)}</span></div>
+							{(() => {
+								const t = computeTotalsT(bins);
+								const cls = adaptiveTextClass(t);
+								return (
+									<div className={`text-gray-900 font-mono ${cls}`}>
+										<span className="px-2 py-1 bg-gray-100 rounded break-all block w-fit leading-tight">{t}</span>
+									</div>
+								);
+							})()}
 							<div className="text-sm text-gray-600 mt-1">Validated / Remaining (T-keys).</div>
 						</CardContent>
 					</Card>
@@ -380,9 +422,11 @@ export default function PoolOverviewPage() {
 
 				{/* Split Panel: Active vs Validated */}
 				<div className='pb-8'>
-					<PoolActivityTimeline
+					<PoolActivityTimelineStandalone
 						active={active}
 						validated={recent}
+						animationsEnabled={true}
+						isLoading={loading || (!active.length && !recent.length)}
 						onHoverRange={(startHex: string, endHex: string) => {
 							if (!startHex || !endHex) { setHoveredBlockCells([]); return }
 							const start = parseHexBI(startHex);
@@ -544,6 +588,7 @@ export default function PoolOverviewPage() {
 						direction="forward"
 						speedMs={60000}
 						gapPx={16}
+						animationsEnabled={true}
 						onHoverRange={(startHex: string, endHex: string) => {
 							if (!startHex || !endHex) { setHoveredBlockCells([]); return }
 							const start = parseHexBI(startHex);
@@ -568,6 +613,7 @@ export default function PoolOverviewPage() {
 							direction="reverse"
 							speedMs={60000}
 							gapPx={16}
+							animationsEnabled={true}
 							onHoverRange={(startHex: string, endHex: string) => {
 								if (!startHex || !endHex) { setHoveredBlockCells([]); return }
 								const start = parseHexBI(startHex);
@@ -598,9 +644,11 @@ export default function PoolOverviewPage() {
                 @media (max-width: 640px) { .heatmap-cell { aspect-ratio: 3 / 1; min-height: 16px; } }
                 @media (min-width: 641px) and (max-width: 1024px) { .heatmap-cell { aspect-ratio: 3 / 1; min-height: 17px; } }
                 .scale-container { display: flex; flex-wrap: wrap; gap: 6px; }
+                .scale-swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,0.08); transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
+                .scale-swatch:hover { transform: translateY(-1px) scale(1.7); box-shadow: 0 0 0 2px rgba(59,130,246,.25); z-index: 5; }
 
 
-			`}</style>
+            `}</style>
 		</div>
 	);
 }

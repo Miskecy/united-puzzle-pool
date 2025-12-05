@@ -11,6 +11,7 @@ export default function ClientSetup() {
 		if (!secret) { setMsg('Enter the secret'); return }
 		const r = await fetch('/api/setup/login', { method: 'POST', headers: { 'x-setup-secret': secret } })
 		if (r.ok) {
+			try { localStorage.setItem('setup_secret', secret) } catch { }
 			window.location.href = '/setup/config'
 		} else {
 			setMsg('Invalid secret')

@@ -16,11 +16,12 @@ export default function SharedDocsPage() {
 	const [sharedLoading, setSharedLoading] = useState(true)
 	// removed copiedCurl state in favor of unified Snippet copy logic
 
-	const curlGetDisplay = `curl -s \\
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') as string
+    const curlGetDisplay = `curl -s \\
   -H "shared-pool-token: YOUR_TOKEN" \\
-  "http://localhost:3000/api/shared?start=0x400000&end=0x410000"`
+  "${baseUrl}/api/shared?start=0x400000&end=0x410000"`
 
-	const curlPostDisplay = `curl -s -X POST \\
+    const curlPostDisplay = `curl -s -X POST \\
   -H "Content-Type: application/json" \\
   -H "shared-pool-token: YOUR_TOKEN" \\
   -d '{
@@ -30,7 +31,7 @@ export default function SharedDocsPage() {
   "privatekeys": ["aabbcc..."],
   "puzzleaddress": "1BitcoinPuzzleAddress"
 }' \\
-  http://localhost:3000/api/shared`
+  ${baseUrl}/api/shared`
 
 	const respValidated = `{
   "status": "VALIDATED",

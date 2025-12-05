@@ -68,6 +68,19 @@ export default function UserDashboard() {
 	const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [copiedToken, setCopiedToken] = useState(false);
+	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+
+	function formatLastUpdated(ts: number | null): string {
+		if (!ts) return '—';
+		const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+		if (diff < 60) return `${diff}s ago`;
+		const m = Math.floor(diff / 60);
+		if (m < 60) return `${m}m ago`;
+		const h = Math.floor(m / 60);
+		if (h < 24) return `${h}h ago`;
+		const d = Math.floor(h / 24);
+		return `${d}d ago`;
+	}
 	const parsedKeys = useMemo(() => keysText
 		.split(/\s|,|;|\n|\r/)
 		.map(s => s.trim())
@@ -252,6 +265,7 @@ export default function UserDashboard() {
 				userStatsRef.current = next;
 				localStorage.setItem(CACHE_KEY, nextStr);
 			}
+			setLastUpdated(Date.now());
 			setError(null);
 		} catch (err) {
 			if (typeof err === 'object' && err && 'name' in err && (err as { name: string }).name === 'AbortError') {
@@ -279,7 +293,9 @@ export default function UserDashboard() {
 				setLoading(false);
 			} catch { }
 		}
-	}, []);
+		// Always fetch fresh stats on mount regardless of cache
+		fetchUserStats();
+	}, [fetchUserStats]);
 
 	const assignNewBlock = async () => {
 		try {
@@ -295,7 +311,8 @@ export default function UserDashboard() {
 				headers: {
 					'pool-token': token,
 					'Content-Type': 'application/json',
-				}
+				},
+				cache: 'no-store',
 			});
 
 			if (!response.ok) {
@@ -890,8 +907,19 @@ export default function UserDashboard() {
 	}
 
 	return (
-		// PADRÃO 1: Fundo com degrad
 		<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+				<div className="flex items-center justify-end gap-3">
+					<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200">
+						<Clock className="h-4 w-4 text-blue-600" />
+						<span className="text-xs font-semibold text-blue-700">Last Updated</span>
+						<Badge variant="outline" className="text-[10px] font-bold border-blue-300 text-blue-700 bg-white">
+							{formatLastUpdated(lastUpdated)}
+						</Badge>
+					</div>
+					<Button variant="outline" onClick={() => fetchUserStats()} className="text-gray-700">Refresh</Button>
+				</div>
+			</div>
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
 				{/* User Info & Actions (Seção de Perfil/Token) */}

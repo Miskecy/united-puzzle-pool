@@ -75,11 +75,17 @@ function formatDifficultyPrecise(lenHexStart: string, lenHexEnd: string): string
 }
 
 export default async function BlockDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-	const { id } = await params
-	const h = await headers()
-	const host = h.get('host') || 'localhost:3000'
-	const proto = h.get('x-forwarded-proto') || 'http'
-	const res = await fetch(`${proto}://${host}/api/block/${id}`, { cache: 'no-store' })
+    const { id } = await params
+    const base = process.env.APP_URL || ''
+    let res: Response
+    if (base) {
+        res = await fetch(`${base}/api/block/${id}`, { cache: 'no-store' })
+    } else {
+        const h = await headers()
+        const host = h.get('host') || 'localhost:3000'
+        const proto = h.get('x-forwarded-proto') || 'http'
+        res = await fetch(`${proto}://${host}/api/block/${id}`, { cache: 'no-store' })
+    }
 	const ok = res.ok
 	const data = ok ? await res.json() : null
 

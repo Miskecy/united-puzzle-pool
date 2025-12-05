@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Trophy, Users, Target, Zap, Bitcoin, BarChart3, BookOpen, UsersRound } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import PoolSpeedChart from '@/components/PoolSpeedChart';
-import PoolActivityTimeline from '@/components/PoolActivityTimeline';
+import PoolActivityTimelineStandalone from '@/components/PoolActivityTimelineStandalone';
 import { useEffect, useState } from 'react'
 
 
@@ -50,14 +50,21 @@ export default function HomePage() {
 					const active = Array.isArray(stats?.activeBlocks) ? stats.activeBlocks : []
 					setRecentBlocks(recent)
 					setActiveBlocks(active)
-					const since = Date.now() - 7 * 24 * 60 * 60 * 1000
+					// Aggregate into 7 daily bins for the chart (Mon–Sun)
+					const dayMs = 24 * 60 * 60 * 1000
+					const endDay = new Date()
+					endDay.setHours(0, 0, 0, 0)
+					const startTs = endDay.getTime() - 6 * dayMs
+					const bins: Array<{ lenBI: bigint; secs: number }> = Array.from({ length: 7 }, () => ({ lenBI: 0n, secs: 0 }))
+
+					const since = startTs
 					const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
 						const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
 						return cm >= since
 					})
+
 					let totalLenBI = 0n
 					let totalSeconds = 0
-					const points: Array<{ t: number; v: number }> = []
 					for (const rb of items) {
 						if (!rb.hexRangeStartRaw || !rb.hexRangeEndRaw || !rb.completedAt || !rb.createdAt) continue
 						const s = BigInt(rb.hexRangeStartRaw)
@@ -68,11 +75,20 @@ export default function HomePage() {
 						const secs = Math.max(1, Math.floor((endMs - startMs) / 1000))
 						totalLenBI += lenBI
 						totalSeconds += secs
-						const bkeys = Number(lenBI / 1_000_000_000n)
-						const speed = bkeys / secs
-						if (Number.isFinite(speed)) points.push({ t: endMs, v: speed })
+						const idx = Math.floor((endMs - startTs) / dayMs)
+						if (idx >= 0 && idx < 7) {
+							bins[idx].lenBI += lenBI
+							bins[idx].secs += secs
+						}
 					}
-					points.sort((a, b) => a.t - b.t)
+
+					const points: Array<{ t: number; v: number }> = bins.map((b, i) => {
+						const t = startTs + i * dayMs
+						if (b.secs <= 0) return { t, v: 0 }
+						const bkeys = Number(b.lenBI / 1_000_000_000n)
+						const speed = bkeys / b.secs
+						return { t, v: Number.isFinite(speed) ? speed : 0 }
+					})
 					setSpeedPoints(points)
 					if (totalSeconds > 0) {
 						const thresholds: Array<{ unit: string; divisor: bigint }> = [
@@ -146,7 +162,7 @@ export default function HomePage() {
 								<Zap className='w-5 h-5' /> Get Started Now
 							</Link>
 							<Link
-								href="/docs"
+								href="/docs/api"
 								className="border-2 border-gray-300 text-gray-700 px-8 py-3.5 rounded-lg font-semibold text-lg hover:bg-white hover:border-gray-400 transition-all duration-200 shadow-md inline-flex items-center gap-2 justify-center"
 							>
 								<BookOpen className='w-5 h-5' /> View Documentation
@@ -199,9 +215,11 @@ export default function HomePage() {
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
 					{/* Split Panel: Active vs Validated */}
 					<div className='pb-8'>
-						<PoolActivityTimeline
+						<PoolActivityTimelineStandalone
 							active={activeBlocks}
 							validated={recentBlocks}
+							animationsEnabled={true}
+							isLoading={!activeBlocks.length && !recentBlocks.length}
 						/>
 					</div>
 				</div>

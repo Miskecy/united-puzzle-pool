@@ -22,21 +22,40 @@ export default function PoolActivityTimeline({
 	active,
 	validated,
 	onHoverRange,
+	animationsEnabled = true,
+	moveAnimationEnabled = true,
+	hoverAnimationEnabled = true,
+	progressAnimationEnabled = true,
 }: {
 	active: BlockItem[]
 	validated: BlockItem[]
 	onHoverRange?: (startHex: string, endHex: string) => void
+	animationsEnabled?: boolean
+	moveAnimationEnabled?: boolean
+	hoverAnimationEnabled?: boolean
+	progressAnimationEnabled?: boolean
 }) {
 	const router = useRouter()
 	const [nowTick, setNowTick] = useState<number>(() => Date.now())
-	const activeRowRef = useRef<HTMLDivElement | null>(null)
-	const validatedRowRef = useRef<HTMLDivElement | null>(null)
+	const containerRef = useRef<HTMLDivElement | null>(null)
 	const rectsRef = useRef<Map<string, DOMRect>>(new Map())
 	const prevStateRef = useRef<Map<string, 'active' | 'validated'>>(new Map())
 	const [dataVersion, setDataVersion] = useState(0)
 	const animateIdsRef = useRef<Set<string>>(new Set())
 	const hoverIdsRef = useRef<Set<string>>(new Set())
 	const prevActiveIdsRef = useRef<string[]>([])
+	const animCountRef = useRef<number>(0)
+	const [containerW, setContainerW] = useState<number>(0)
+	const initialRenderRef = useRef<boolean>(true)
+
+	const onAnimStart = () => {
+		if (!(animationsEnabled && moveAnimationEnabled)) return
+		animCountRef.current += 1
+	}
+	const onAnimEnd = () => {
+		if (!(animationsEnabled && moveAnimationEnabled)) return
+		animCountRef.current = Math.max(0, animCountRef.current - 1)
+	}
 
 	const parseHexBI = (hex: string) => BigInt(`0x${hex.replace(/^0x/, '')}`)
 	const binLength = (startHex: string, endHex: string) => {
@@ -91,12 +110,24 @@ export default function PoolActivityTimeline({
 	}, [activeItems])
 
 	type ItemWithState = BlockItem & { state: 'active' | 'validated' }
-	const unified: ItemWithState[] = useMemo(() => [
-		...activeItems.map(a => ({ ...a, state: 'active' as const })),
-		...validatedItems.map(v => ({ ...v, state: 'validated' as const })),
-	], [activeItems, validatedItems])
+	const leftPositions: Map<string, number> = useMemo(() => {
+		const w = Math.max(0, containerW)
+		const center = w / 2
+		const cardW = 180
+		const gap = 16
+		const m = new Map<string, number>()
+		activeItems.forEach((a, idx) => {
+			const left = center - gap - cardW - idx * (cardW + gap)
+			m.set(a.id, left)
+		})
+		validatedItems.forEach((v, idx) => {
+			const left = center + gap + idx * (cardW + gap)
+			m.set(v.id, left)
+		})
+		return m
+	}, [activeItems, validatedItems, containerW])
 
-	function TimelineCard({ item, version }: { item: ItemWithState, version: number }) {
+	function TimelineCard({ item, version, left }: { item: ItemWithState, version: number, left: number }) {
 		const ref = useRef<HTMLDivElement | null>(null)
 		const lastHoverFill = useRef<number>(0)
 		const lastVersionRef = useRef<number>(-1)
@@ -108,16 +139,10 @@ export default function PoolActivityTimeline({
 			const prev = rectsRef.current.get(item.id)
 			const next = el.getBoundingClientRect()
 			const prevState = prevStateRef.current.get(item.id)
-			const shouldAnimate = animateIdsRef.current.has(item.id) && !hoverIdsRef.current.has(item.id)
+			const shouldAnimate = (animationsEnabled && moveAnimationEnabled) && animateIdsRef.current.has(item.id) && !hoverIdsRef.current.has(item.id)
 			if (prev && prevState && prevState !== item.state && shouldAnimate) {
-				const dx = prev.left - next.left
-				const dy = prev.top - next.top
-				if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
-					el.animate([
-						{ transform: `translate(${dx}px, ${dy}px)` },
-						{ transform: 'translate(0,0)' }
-					], { duration: 700, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' })
-				}
+				onAnimStart()
+				setTimeout(onAnimEnd, 800)
 			}
 			rectsRef.current.set(item.id, next)
 			prevStateRef.current.set(item.id, item.state)
@@ -143,12 +168,13 @@ export default function PoolActivityTimeline({
 			<div
 				ref={ref}
 				className={cls}
+				style={{ position: 'absolute', top: 10, left, transition: (animationsEnabled ? 'left 800ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none') }}
 				onMouseEnter={() => { hoverIdsRef.current.add(item.id); lastHoverFill.current = fillPct; onHoverRange?.(item.hexRangeStart, item.hexRangeEnd) }}
 				onMouseLeave={() => { hoverIdsRef.current.delete(item.id); lastHoverFill.current = 0; onHoverRange?.('', '') }}
 				onClick={() => router.push(`/block/${item.id}`)}
 			>
-				<div className="block3d-content">
-					{item.state === 'active' ? <div className="time-fill" style={{ height: `${isHovered ? lastHoverFill.current : fillPct}%` }} /> : null}
+				<div className="block3d-content" style={{ transition: (animationsEnabled && hoverAnimationEnabled) ? 'transform .2s ease, box-shadow .2s ease' : 'none', transform: (animationsEnabled && hoverAnimationEnabled) ? undefined : 'none' }}>
+					{item.state === 'active' ? <div className="time-fill" style={{ height: `${isHovered ? lastHoverFill.current : fillPct}%`, transition: (animationsEnabled && progressAnimationEnabled) ? 'height .5s ease' : 'none' }} /> : null}
 					<div className="block3d-body">
 						<div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
 						<div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
@@ -164,31 +190,36 @@ export default function PoolActivityTimeline({
 		)
 	}
 
+	useEffect(() => {
+		const el = containerRef.current
+		const measure = () => setContainerW(el ? el.clientWidth : 0)
+		measure()
+		if (!el) return
+		const ro = new ResizeObserver(measure)
+		ro.observe(el)
+		return () => ro.disconnect()
+	}, [])
+
+	useEffect(() => {
+		initialRenderRef.current = false
+	}, [])
+
 	return (
 		<div className="full-bleed relative" onMouseLeave={() => onHoverRange?.('', '')}>
 			<div className="absolute left-1/2 top-0 bottom-0 border-l-2 border-dashed border-gray-300" />
-			<div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-4">
-				<div className=''>
-					<h4 className="text-sm font-semibold text-gray-700 mb-3 text-right">Active</h4>
-					<div ref={activeRowRef} className="flex flex-nowrap justify-end gap-3 overflow-hidden py-1" onMouseLeave={() => onHoverRange?.('', '')}>
-						{unified.filter(i => i.state === 'active').map(i => (
-							<TimelineCard key={i.id} item={i} version={dataVersion} />
-						))}
-					</div>
-				</div>
-				<div>
-					<h4 className="text-sm font-semibold text-gray-700 mb-3">Validated</h4>
-					<div ref={validatedRowRef} className="flex flex-nowrap justify-start gap-3 overflow-hidden py-1" onMouseLeave={() => onHoverRange?.('', '')}>
-						{unified.filter(i => i.state === 'validated').map(i => (
-							<TimelineCard key={i.id} item={i} version={dataVersion} />
-						))}
-					</div>
-				</div>
+			<div ref={containerRef} className="timeline-row">
+				{activeItems.map((a) => (
+					<TimelineCard key={a.id} item={{ ...a, state: 'active' }} version={dataVersion} left={leftPositions.get(a.id) ?? 0} />
+				))}
+				{validatedItems.map((v) => (
+					<TimelineCard key={v.id} item={{ ...v, state: 'validated' }} version={dataVersion} left={leftPositions.get(v.id) ?? 0} />
+				))}
 			</div>
 
 			<style jsx global>{`
         .full-bleed { width: 100vw; position: relative; left: 50%; transform: translateX(-50%); }
-        .block3d { position: relative; isolation: isolate; width: 180px; height: 180px; cursor: pointer; margin-left: 12px; margin-top: 12px; will-change: transform; }
+        .timeline-row { position: relative; height: 200px; overflow: hidden; }
+        .block3d { position: absolute; isolation: isolate; width: 180px; height: 180px; cursor: pointer; will-change: left, transform; }
         .block3d-content { 
           position: relative; z-index: 1; will-change: transform;
           width: 100%; 
