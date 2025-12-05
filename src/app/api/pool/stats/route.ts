@@ -13,14 +13,14 @@ async function handler(req: NextRequest) {
 		}
 
 		// Get pool statistics
-    const url = req.nextUrl
-    const takeParam = Number(url.searchParams.get('take') || 0)
-    const skipParam = Number(url.searchParams.get('skip') || 0)
-    const daysParam = Number(url.searchParams.get('days') || 0)
-    const take = (isFinite(takeParam) && takeParam > 0 && takeParam <= 100) ? takeParam : 20
-    const skip = (isFinite(skipParam) && skipParam >= 0) ? skipParam : 0
-    const days = (isFinite(daysParam) && daysParam > 0 && daysParam <= 30) ? daysParam : 0
-    const thresholdDate = days > 0 ? new Date(Date.now() - days * 24 * 60 * 60 * 1000) : null
+		const url = req.nextUrl
+		const takeParam = Number(url.searchParams.get('take') || 0)
+		const skipParam = Number(url.searchParams.get('skip') || 0)
+		const daysParam = Number(url.searchParams.get('days') || 0)
+		const take = (isFinite(takeParam) && takeParam > 0 && takeParam <= 100) ? takeParam : 20
+		const skip = (isFinite(skipParam) && skipParam >= 0) ? skipParam : 0
+		const days = (isFinite(daysParam) && daysParam > 0 && daysParam <= 30) ? daysParam : 0
+		const thresholdDate = days > 0 ? new Date(Date.now() - days * 24 * 60 * 60 * 1000) : null
 		const [
 			totalTokens,
 			totalBlocks,
@@ -42,7 +42,10 @@ async function handler(req: NextRequest) {
 
 			// Completed blocks
 			prisma.blockAssignment.count({
-				where: { status: 'COMPLETED' }
+				where: days > 0 ? {
+					status: 'COMPLETED',
+					blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
+				} : { status: 'COMPLETED' }
 			}),
 
 			// Pending blocks
@@ -64,22 +67,22 @@ async function handler(req: NextRequest) {
 			}),
 
 			// Recent completed blocks (no 7-day filter to show fresh validations reliably)
-            prisma.blockAssignment.findMany({
-                where: days > 0 ? {
-                    status: 'COMPLETED',
-                    blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
-                } : { status: 'COMPLETED' },
-                include: {
-                    userToken: { select: { bitcoinAddress: true } },
-                    blockSolution: { select: { creditsAwarded: true, createdAt: true } },
-                },
-                orderBy: [
-                    { updatedAt: 'desc' },
-                    { createdAt: 'desc' },
-                ],
-                skip: days > 0 ? 0 : skip,
-                take: days > 0 ? 5000 : take,
-            }),
+			prisma.blockAssignment.findMany({
+				where: days > 0 ? {
+					status: 'COMPLETED',
+					blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
+				} : { status: 'COMPLETED' },
+				include: {
+					userToken: { select: { bitcoinAddress: true } },
+					blockSolution: { select: { creditsAwarded: true, createdAt: true } },
+				},
+				orderBy: [
+					{ updatedAt: 'desc' },
+					{ createdAt: 'desc' },
+				],
+				skip: days > 0 ? 0 : skip,
+				take: days > 0 ? 5000 : take,
+			}),
 
 			// Active blocks (currently being worked on)
 			prisma.blockAssignment.findMany({
@@ -107,9 +110,14 @@ async function handler(req: NextRequest) {
 			}),
 
 
-			// Active miners in last 7 days: distinct user tokens with any activity
+			// Active miners in last N days (default 7)
 			prisma.blockAssignment.findMany({
-				where: {
+				where: days > 0 ? {
+					OR: [
+						{ updatedAt: { gte: thresholdDate! } },
+						{ createdAt: { gte: thresholdDate! } },
+					],
+				} : {
 					OR: [
 						{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
 						{ createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
@@ -119,9 +127,15 @@ async function handler(req: NextRequest) {
 				distinct: ['userTokenId'],
 			}),
 
-			// Active shared pool tokens in last 7 days
+			// Active shared pool tokens in last N days (default 7)
 			prisma.blockAssignment.findMany({
-				where: {
+				where: days > 0 ? {
+					NOT: { sharedPoolTokenId: null },
+					OR: [
+						{ updatedAt: { gte: thresholdDate! } },
+						{ createdAt: { gte: thresholdDate! } },
+					],
+				} : {
 					NOT: { sharedPoolTokenId: null },
 					OR: [
 						{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
