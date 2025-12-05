@@ -55,7 +55,7 @@ export default function HomePage() {
 					const endDay = new Date()
 					endDay.setHours(0, 0, 0, 0)
 					const startTs = endDay.getTime() - 6 * dayMs
-					const bins: Array<{ lenBI: bigint; secs: number }> = Array.from({ length: 7 }, () => ({ lenBI: 0n, secs: 0 }))
+					const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 7 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
 
 					const since = startTs
 					const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
@@ -79,11 +79,15 @@ export default function HomePage() {
 						if (idx >= 0 && idx < 7) {
 							bins[idx].lenBI += lenBI
 							bins[idx].secs += secs
+							if (bins[idx].latestMs === null || endMs > (bins[idx].latestMs as number)) {
+								bins[idx].latestMs = endMs
+							}
 						}
 					}
 
 					const points: Array<{ t: number; v: number }> = bins.map((b, i) => {
-						const t = startTs + i * dayMs
+						const fallbackMidnight = startTs + i * dayMs
+						const t = b.latestMs ?? fallbackMidnight
 						if (b.secs <= 0) return { t, v: 0 }
 						const bkeys = Number(b.lenBI / 1_000_000_000n)
 						const speed = bkeys / b.secs
