@@ -187,7 +187,7 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 									opacity={0.5}
 								/>
 								<XAxis
-									dataKey="t"
+									dataKey="ts"
 									tickLine={false}
 									axisLine={false}
 									tickMargin={10}
