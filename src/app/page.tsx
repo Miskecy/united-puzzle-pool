@@ -39,7 +39,7 @@ export default function HomePage() {
 		const fetchAll = async () => {
 			try {
 				const [statsRes, overviewRes] = await Promise.all([
-					fetch('/api/pool/stats?days=7', { cache: 'no-store' }),
+					fetch('/api/pool/stats?days=1', { cache: 'no-store' }),
 					fetch('/api/pool/overview', { cache: 'no-store' }),
 				])
 				if (statsRes.ok) {
@@ -50,17 +50,17 @@ export default function HomePage() {
 					const active = Array.isArray(stats?.activeBlocks) ? stats.activeBlocks : []
 					setRecentBlocks(recent)
 					setActiveBlocks(active)
-					// Aggregate into 7 daily bins for the chart (Mon–Sun)
-					const dayMs = 24 * 60 * 60 * 1000
-					const endDay = new Date()
-					endDay.setHours(0, 0, 0, 0)
-					const startTs = endDay.getTime() - 6 * dayMs
-					const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 7 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
+					// Aggregate into 24 hourly bins for today
+					const hourMs = 60 * 60 * 1000
+					const startDay = new Date()
+					startDay.setHours(0, 0, 0, 0)
+					const endDay = new Date(startDay.getTime() + 24 * hourMs)
+					const startTs = startDay.getTime()
+					const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
 
-					const since = startTs
 					const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
 						const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
-						return cm >= since
+						return cm >= startTs && cm < endDay.getTime()
 					})
 
 					let totalLenBI = 0n
@@ -75,8 +75,8 @@ export default function HomePage() {
 						const secs = Math.max(1, Math.floor((endMs - startMs) / 1000))
 						totalLenBI += lenBI
 						totalSeconds += secs
-						const idx = Math.floor((endMs - startTs) / dayMs)
-						if (idx >= 0 && idx < 7) {
+						const idx = Math.floor((endMs - startTs) / hourMs)
+						if (idx >= 0 && idx < 24) {
 							bins[idx].lenBI += lenBI
 							bins[idx].secs += secs
 							if (bins[idx].latestMs === null || endMs > (bins[idx].latestMs as number)) {
@@ -86,7 +86,7 @@ export default function HomePage() {
 					}
 
 					const points: Array<{ t: number; ts?: number; v: number }> = bins.map((b, i) => {
-						const fallbackMidnight = startTs + i * dayMs
+						const fallbackMidnight = startTs + i * hourMs
 						const latest = b.latestMs ?? fallbackMidnight
 						const t = fallbackMidnight
 						if (b.secs <= 0) return { t, ts: latest, v: 0 }

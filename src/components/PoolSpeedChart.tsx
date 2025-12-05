@@ -55,7 +55,7 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 	const dateFormatter = (value: number | string) => {
 		const num = typeof value === 'number' ? value : Number(value)
 		const d = new Date(num)
-		return d.toLocaleDateString(undefined, { weekday: 'short' })
+		return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 	}
 
 	// We no longer need explicit day window here; X axis uses per-point ts
@@ -86,12 +86,12 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 							</CardTitle>
 						</div>
 						<CardDescription className="text-sm text-gray-500 ml-11">
-							{avgLabel} average
+							{avgLabel} today average
 						</CardDescription>
 					</div>
 					<div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-200">
 						<Clock className="h-4 w-4 text-blue-600" />
-						<span className="text-xs font-semibold text-blue-700">Last 7 days</span>
+						<span className="text-xs font-semibold text-blue-700">Today</span>
 					</div>
 				</div>
 			</CardHeader>
