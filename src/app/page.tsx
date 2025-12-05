@@ -39,7 +39,7 @@ export default function HomePage() {
 		const fetchAll = async () => {
 			try {
 				const [statsRes, overviewRes] = await Promise.all([
-					fetch('/api/pool/stats?days=1', { cache: 'no-store' }),
+					fetch('/api/pool/stats', { cache: 'no-store' }),
 					fetch('/api/pool/overview', { cache: 'no-store' }),
 				])
 				if (statsRes.ok) {
@@ -261,7 +261,7 @@ export default function HomePage() {
 							</div>
 							<h3 className="text-xl font-semibold text-gray-900 mb-3">Fair Rewards</h3>
 							<p className="text-gray-600">
-								Earn credits for contributing compute power and receive your share when a solution is found.
+								Earn credits by contributing processing power and receive your share if one of my devices finds the solution. If you find it, it&apos;s yours!
 							</p>
 						</div>
 
