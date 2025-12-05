@@ -58,11 +58,7 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 		return d.toLocaleDateString(undefined, { weekday: 'short' })
 	}
 
-	const dayMs = 24 * 60 * 60 * 1000
-	const endDay = new Date()
-	endDay.setHours(0, 0, 0, 0)
-	const startTs = endDay.getTime() - 6 * dayMs
-	const ticks = Array.from({ length: 7 }, (_, i) => startTs + i * dayMs)
+	// We no longer need explicit day window here; X axis uses per-point ts
 
 	if (chartData.length === 0) {
 		return (
@@ -194,8 +190,6 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 									tickFormatter={dateFormatter}
 									className="text-xs fill-gray-500"
 									tick={{ fontSize: 11 }}
-									ticks={ticks}
-									interval={0}
 								/>
 								<YAxis
 									orientation="right"
