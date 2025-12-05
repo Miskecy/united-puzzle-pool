@@ -16,12 +16,14 @@ export default function SharedDocsPage() {
 	const [sharedLoading, setSharedLoading] = useState(true)
 	// removed copiedCurl state in favor of unified Snippet copy logic
 
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') as string
-    const curlGetDisplay = `curl -s \\
+	const baseUrl = (typeof window !== 'undefined' && window.location?.origin)
+		? window.location.origin
+		: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') as string
+	const curlGetDisplay = `curl -s \\
   -H "shared-pool-token: YOUR_TOKEN" \\
   "${baseUrl}/api/shared?start=0x400000&end=0x410000"`
 
-    const curlPostDisplay = `curl -s -X POST \\
+	const curlPostDisplay = `curl -s -X POST \\
   -H "Content-Type: application/json" \\
   -H "shared-pool-token: YOUR_TOKEN" \\
   -d '{

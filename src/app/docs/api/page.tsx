@@ -65,9 +65,11 @@ CodeBlock.displayName = 'CodeBlock';
 export default function DocsLandingPage() {
 
 
-    // --- Definições do Código (Mantidas como variáveis simples) ---
-    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') as string
-    const curlGenToken = `curl -s -X POST \\
+	// --- Definições do Código (Mantidas como variáveis simples) ---
+	const baseUrl = (typeof window !== 'undefined' && window.location?.origin)
+		? window.location.origin
+		: (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000') as string
+	const curlGenToken = `curl -s -X POST \\
   -H "Content-Type: application/json" \\
   -d '{"bitcoinAddress":"YOUR_BTC_ADDRESS"}' \\
   ${baseUrl}/api/token/generate`
@@ -78,7 +80,7 @@ export default function DocsLandingPage() {
   "createdAt": "2024-01-01T00:00:00.000Z"
 }`
 
-    const curlGetBlock = `curl -s \\
+	const curlGetBlock = `curl -s \\
   -H "pool-token: YOUR_TOKEN" \\
   "${baseUrl}/api/block?length=1T"`
 
@@ -91,7 +93,7 @@ export default function DocsLandingPage() {
   "message": "New block assigned successfully"
 }`
 
-    const curlSubmitKeys = `curl -s -X POST \\
+	const curlSubmitKeys = `curl -s -X POST \\
   -H "Content-Type: application/json" \\
   -H "pool-token: YOUR_TOKEN" \\
   -d '{"privateKeys":["0xaaaaaaaa...","0xbbbbbbbb..."],"blockId":"ck_block_123"}' \\
