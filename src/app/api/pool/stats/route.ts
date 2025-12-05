@@ -13,11 +13,14 @@ async function handler(req: NextRequest) {
 		}
 
 		// Get pool statistics
-		const url = req.nextUrl
-		const takeParam = Number(url.searchParams.get('take') || 0)
-		const skipParam = Number(url.searchParams.get('skip') || 0)
-		const take = (isFinite(takeParam) && takeParam > 0 && takeParam <= 100) ? takeParam : 20
-		const skip = (isFinite(skipParam) && skipParam >= 0) ? skipParam : 0
+    const url = req.nextUrl
+    const takeParam = Number(url.searchParams.get('take') || 0)
+    const skipParam = Number(url.searchParams.get('skip') || 0)
+    const daysParam = Number(url.searchParams.get('days') || 0)
+    const take = (isFinite(takeParam) && takeParam > 0 && takeParam <= 100) ? takeParam : 20
+    const skip = (isFinite(skipParam) && skipParam >= 0) ? skipParam : 0
+    const days = (isFinite(daysParam) && daysParam > 0 && daysParam <= 30) ? daysParam : 0
+    const thresholdDate = days > 0 ? new Date(Date.now() - days * 24 * 60 * 60 * 1000) : null
 		const [
 			totalTokens,
 			totalBlocks,
@@ -61,19 +64,22 @@ async function handler(req: NextRequest) {
 			}),
 
 			// Recent completed blocks (no 7-day filter to show fresh validations reliably)
-			prisma.blockAssignment.findMany({
-				where: { status: 'COMPLETED' },
-				include: {
-					userToken: { select: { bitcoinAddress: true } },
-					blockSolution: { select: { creditsAwarded: true, createdAt: true } },
-				},
-				orderBy: [
-					{ updatedAt: 'desc' },
-					{ createdAt: 'desc' },
-				],
-				skip,
-				take,
-			}),
+            prisma.blockAssignment.findMany({
+                where: days > 0 ? {
+                    status: 'COMPLETED',
+                    blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
+                } : { status: 'COMPLETED' },
+                include: {
+                    userToken: { select: { bitcoinAddress: true } },
+                    blockSolution: { select: { creditsAwarded: true, createdAt: true } },
+                },
+                orderBy: [
+                    { updatedAt: 'desc' },
+                    { createdAt: 'desc' },
+                ],
+                skip: days > 0 ? 0 : skip,
+                take: days > 0 ? 5000 : take,
+            }),
 
 			// Active blocks (currently being worked on)
 			prisma.blockAssignment.findMany({
