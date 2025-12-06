@@ -1,6 +1,65 @@
-# United Pool
+# United Puzzle Pool
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![React](https://img.shields.io/badge/React-v19.2.0-61DAFB)](https://react.dev/)
+[![Runtime Build and Test](<https://img.shields.io/badge/(Runtime)%20Build%20and%20Test-passing-brightgreen>)](#getting-started)
+[![Compiler TypeScript](<https://img.shields.io/badge/(Compiler)%20TypeScript-passing-brightgreen>)](https://www.typescriptlang.org/)
 
 A collaborative Bitcoin puzzle mining pool where users work together to solve Bitcoin puzzles by searching for private keys in specific hex ranges.
+
+## Online Project
+
+Visit https://unitedpuzzlepool.com/ to join the live pool:
+
+-   Collaborative work to cover more ground
+-   Fair rewards for contributed compute if my personal RIG finds a solution
+-   Focused targets for hardware efficiency
+-   Intelligent distribution to avoid duplicated effort
+
+Create your account and start contributing.
+
+## Self-Hosting
+
+You can run your own instance of United Puzzle Pool.
+
+### Docker Compose
+
+Prerequisites: Docker and Docker Compose.
+
+1. Copy `compose.yaml` to your server and adjust environment variables as needed (`SETUP_SECRET`, `APP_URL`, `REDIS_URL`, `DATABASE_URL`).
+2. Build and start:
+
+    ```bash
+    docker compose up -d --build
+    ```
+
+3. Open `http://localhost:3000/setup` and sign in with your `SETUP_SECRET` to configure puzzles.
+4. Data persists in the `app-data` volume at `/data/dev.db`.
+
+### Dockge
+
+If you use Dockge to manage Compose stacks:
+
+1. Create a new stack and paste the contents of `compose.yaml`.
+2. Set environment variables (`SETUP_SECRET`, `APP_URL`, `REDIS_URL`).
+3. Deploy the stack and access `http://localhost:3000/setup` to complete configuration.
+
+### Docker (direct)
+
+Alternatively, build and run the image directly:
+
+```bash
+docker build -t united-puzzle-pool .
+docker run -d -p 3000:3000 \
+  -e SETUP_SECRET="change-me" \
+  -e APP_URL="http://localhost:3000" \
+  -e REDIS_URL="redis://host.docker.internal:6379" \
+  -e DATABASE_URL="file:/data/dev.db" \
+  -v app-data:/data \
+  --name upp united-puzzle-pool
+```
+
+On container start, database migrations run automatically.
 
 ## Environment Configuration
 
@@ -107,9 +166,9 @@ When you find a valid private key, submit it to claim your reward.
 -   `PATCH /api/config/:id` — Update puzzle fields, including `solved` (admin)
 -   `DELETE /api/config/:id` — Delete puzzle; active deletion requires `?force=true` or header `x-force-delete: true` (admin)
 -   `PATCH /api/config/active` — Set active puzzle: `{ id }` (admin)
-  - `GET /api/config/backup` — Download SQLite DB file (admin). The download filename includes a timestamp: `dev-YYYY-MM-DD_HH-mm-ss.db`.
-  - `POST /api/config/backup` — Restore DB from uploaded file (admin)
-  - `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
+-   `GET /api/config/backup` — Download SQLite DB file (admin). The download filename includes a timestamp: `dev-YYYY-MM-DD_HH-mm-ss.db`.
+-   `POST /api/config/backup` — Restore DB from uploaded file (admin)
+-   `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
 
 ### Notes on Credits
 
@@ -124,7 +183,7 @@ When you find a valid private key, submit it to claim your reward.
 
 -   Key Range (Bits) is displayed in UI as `2^min…2^max`, derived from hex ranges.
 -   Setup/config page is organized into sections: Database Backup & Restore, Active Puzzle, Add New Puzzle, and Puzzles.
- -   In Setup → All Puzzles, each entry shows its Start and End hex ranges for quick inspection.
+-   In Setup → All Puzzles, each entry shows its Start and End hex ranges for quick inspection.
 
 ## Learn More
 
