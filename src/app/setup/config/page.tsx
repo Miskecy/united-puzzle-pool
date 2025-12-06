@@ -1,21 +1,33 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import RouteGuard from '@/components/RouteGuard'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCompactHexRange } from '@/lib/formatRange'
-import { Settings, Database, Download, Upload, Edit3, Trash2, CheckCircle2, Key, Hash, CheckCircle, XCircle, Copy, Shield, RotateCw, List, Clock } from 'lucide-react'
+import { formatAddress, formatBitcoinAddress } from '@/lib/utils'
+import { Settings, Database, Download, Upload, Edit3, Trash2, CheckCircle2, Key, Hash, CheckCircle, XCircle, Copy, Shield, RotateCw, List, Clock, Coins, Search, ChevronLeft, ChevronRight, Filter, MoreHorizontal } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-// Removed unused Table imports
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
-// --- Type Definitions ---
+// --- Type Definitions (from original code) ---
 type Item = { id: string; name?: string | null; address: string; startHex: string; endHex: string; active?: boolean; solved?: boolean; privateKey?: string | null }
 type Block = { id: string; startRange: string; endRange: string; createdAt: string; completedAt: string | null; positionPercent?: number }
+type RedeemItem = { id: string, userTokenId: string, address: string, puzzleAddress?: string, amount: number, status: string, createdAt: string | null, approvedAt?: string | null, updatedAt?: string | null, sharePercent?: number, estimatedBtc?: number, estimatedUsd?: number }
 
-// --- Utility Functions (Remaining the same) ---
+// --- Utility Functions (from original code) ---
 function timeAgo(s: string | null) {
 	if (!s) return '-'
 	const t = new Date(s).getTime()
@@ -44,15 +56,14 @@ function bitRangeLabel(start: string, end: string): string {
 	return 'Key Range (Bits): -'
 }
 
-
-// --- New Block Card Component (Enhanced) ---
+// --- Block Card Component (Enhanced) ---
 const BlockCard: React.FC<{ block: Block }> = ({ block }) => {
 	// Determine the color for the Position % badge
 	const positionColor = (percent?: number) => {
-		if (percent === undefined) return 'bg-gray-100 text-gray-700';
-		if (percent < 50) return 'bg-green-100 text-green-700';
-		if (percent < 90) return 'bg-yellow-100 text-yellow-700';
-		return 'bg-red-100 text-red-700';
+		if (percent === undefined) return 'bg-gray-100 text-gray-700 border border-gray-300';
+		if (percent < 50) return 'bg-green-100 text-green-700 border border-green-300';
+		if (percent < 90) return 'bg-yellow-100 text-yellow-700 border border-yellow-300';
+		return 'bg-red-100 text-red-700 border border-red-300';
 	};
 
 	return (
@@ -63,7 +74,7 @@ const BlockCard: React.FC<{ block: Block }> = ({ block }) => {
 						<span className="flex items-center gap-1">
 							<List className="h-4 w-4 text-blue-600" /> Block ID:
 						</span>
-						<code className="text-xs font-normal text-gray-600 break-all">{block.id}</code>
+						<code className="text-xs font-normal text-gray-600 break-all">{formatCompactHexRange(block.id)}</code>
 					</CardTitle>
 					<Badge className={`font-medium whitespace-nowrap ${positionColor(block.positionPercent)}`}>
 						{block.positionPercent !== undefined ? `${block.positionPercent.toFixed(2)}%` : '-'}
@@ -74,12 +85,12 @@ const BlockCard: React.FC<{ block: Block }> = ({ block }) => {
 				{/* Full Start Range */}
 				<div className="space-y-0.5 p-2 bg-gray-50 border border-gray-200 rounded-md">
 					<span className="text-gray-600 font-medium block">Start Range:</span>
-					<code className="font-mono text-gray-800 break-all">{formatCompactHexRange(block.startRange)}</code>
+					<code className="font-mono text-gray-800 break-all text-[10px] sm:text-xs">{formatCompactHexRange(block.startRange)}</code>
 				</div>
 				{/* Full End Range */}
 				<div className="space-y-0.5 p-2 bg-gray-50 border border-gray-200 rounded-md">
 					<span className="text-gray-600 font-medium block">End Range:</span>
-					<code className="font-mono text-gray-800 break-all">{formatCompactHexRange(block.endRange)}</code>
+					<code className="font-mono text-gray-800 break-all text-[10px] sm:text-xs">{formatCompactHexRange(block.endRange)}</code>
 				</div>
 
 				<div className="flex justify-between items-center pt-1 border-t border-gray-100">
@@ -95,7 +106,7 @@ const BlockCard: React.FC<{ block: Block }> = ({ block }) => {
 	);
 };
 
-// --- Block Card Skeleton Component (New) ---
+// --- Block Card Skeleton Component (from original code) ---
 const BlockCardSkeleton: React.FC = () => (
 	<Card className="bg-gray-100 border-gray-200 shadow-sm h-52 flex flex-col justify-between animate-pulse">
 		<CardHeader className="pb-2">
@@ -118,9 +129,10 @@ const BlockCardSkeleton: React.FC = () => (
 	</Card>
 );
 
+// --- Component Start ---
 
 export default function SetupConfigPage() {
-	// ... (Your state declarations remain the same)
+	// --- State Declarations ---
 	const [items, setItems] = useState<Item[]>([])
 	const [name, setName] = useState('')
 	const [address, setAddress] = useState('')
@@ -146,11 +158,36 @@ export default function SetupConfigPage() {
 	const [blocksPage, setBlocksPage] = useState(1)
 	const [blocksTotal, setBlocksTotal] = useState(0)
 	const [blocksLoading, setBlocksLoading] = useState(false)
+	const [redeemItems, setRedeemItems] = useState<RedeemItem[]>([])
+	const [redeemLoading, setRedeemLoading] = useState(false)
+	const [redeemMsg, setRedeemMsg] = useState('')
+	const [puzzleSearch, setPuzzleSearch] = useState('')
+	const [redeemStatusFilter, setRedeemStatusFilter] = useState<string>('')
+	const [redeemPuzzleFilter, setRedeemPuzzleFilter] = useState<string>('')
+	const [actionMenuId, setActionMenuId] = useState<string | null>(null)
 
+	// Close action menu on outside click or escape key
+	useEffect(() => {
+		function onDocClick(e: MouseEvent) {
+			const target = e.target as HTMLElement
+			if (!target.closest('.action-menu') && !target.closest('[aria-label="Actions"]')) {
+				setActionMenuId(null)
+			}
+		}
+		function onKey(e: KeyboardEvent) {
+			if (e.key === 'Escape') setActionMenuId(null)
+		}
+		document.addEventListener('click', onDocClick)
+		document.addEventListener('keydown', onKey)
+		return () => {
+			document.removeEventListener('click', onDocClick)
+			document.removeEventListener('keydown', onKey)
+		}
+	}, [])
 
-	// ... (Your fetchBlocks, addValid, addError, editValid functions remain the same)
 	const setupSecret = typeof window !== 'undefined' ? (localStorage.getItem('setup_secret') || '') : ''
 
+	// --- Data Fetching and Logic ---
 	async function fetchBlocks(page = 1) {
 		setBlocksLoading(true)
 		try {
@@ -165,29 +202,27 @@ export default function SetupConfigPage() {
 		finally { setBlocksLoading(false) }
 	}
 
-	const addValid = (() => {
+	const addValid = useMemo(() => {
 		const s = hexToBigInt(startHex)
 		const e = hexToBigInt(endHex)
 		return !!(address && s !== null && e !== null && s < e)
-	})()
-	const addError = (() => {
+	}, [address, startHex, endHex])
+
+	const addError = useMemo(() => {
 		if (!address) return 'Address required'
 		const s = hexToBigInt(startHex)
 		const e = hexToBigInt(endHex)
-		if (s === null || e === null) return 'Start and End must be hex'
+		if (s === null || e === null) return 'Start and End must be valid hex values'
 		if (s >= e) return 'Start must be less than End'
 		return ''
-	})()
+	}, [address, startHex, endHex])
 
-	const editValid = (() => {
+	const editValid = useMemo(() => {
 		const s = hexToBigInt(editStartHex)
 		const e = hexToBigInt(editEndHex)
 		return !!(editAddress && s !== null && e !== null && s < e)
-	})()
-	// no-op
+	}, [editAddress, editStartHex, editEndHex])
 
-
-	// ... (Your useEffects, addPuzzle, setActive, startEdit, cancelEdit, saveEdit, deleteItem, toggleSharedApi functions remain the same)
 	useEffect(() => {
 		(async () => {
 			try {
@@ -205,6 +240,65 @@ export default function SetupConfigPage() {
 
 	useEffect(() => { fetchBlocks(1) }, [])
 
+	const fetchRedeems = useCallback(async () => {
+		setRedeemLoading(true)
+		try {
+			const sp = new URLSearchParams()
+			if (redeemStatusFilter) sp.set('status', redeemStatusFilter)
+			if (redeemPuzzleFilter) sp.set('puzzleAddress', redeemPuzzleFilter)
+			const r = await fetch(`/api/admin/redeem${sp.toString() ? `?${sp.toString()}` : ''}`, { headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
+			if (r.ok) {
+				const j = await r.json()
+				const items = Array.isArray(j.items) ? (j.items as { id: unknown, userTokenId: unknown, address: unknown, puzzleAddress?: unknown, amount: unknown, status: unknown, createdAt?: unknown, approvedAt?: unknown, updatedAt?: unknown, sharePercent?: unknown, estimatedBtc?: unknown, estimatedUsd?: unknown }[]) : []
+				setRedeemItems(items.map(it => ({ id: String(it.id), userTokenId: String(it.userTokenId), address: String(it.address), puzzleAddress: it.puzzleAddress ? String(it.puzzleAddress) : '', amount: Number(it.amount || 0), status: String(it.status || 'PENDING'), createdAt: it.createdAt ? String(it.createdAt) : null, approvedAt: it.approvedAt ? String(it.approvedAt) : null, updatedAt: it.updatedAt ? String(it.updatedAt) : null, sharePercent: Number(it.sharePercent || 0), estimatedBtc: Number(it.estimatedBtc || 0), estimatedUsd: Number(it.estimatedUsd || 0) })))
+			}
+		} catch { }
+		finally { setRedeemLoading(false) }
+	}, [setupSecret, redeemStatusFilter, redeemPuzzleFilter])
+
+	useEffect(() => { fetchRedeems() }, [fetchRedeems])
+
+	// --- Action Handlers ---
+	async function approveRedeem(id: string) {
+		setRedeemMsg('')
+		try {
+			const r = await fetch(`/api/admin/redeem/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'approve' }) })
+			const j = await r.json().catch(() => ({}))
+			if (!r.ok) { setRedeemMsg(String(j?.error || 'Failed to approve')); return }
+			setRedeemItems(prev => prev.map(it => it.id === id ? { ...it, status: 'APPROVED', approvedAt: new Date().toISOString() } : it))
+			setRedeemMsg('Request approved successfully!')
+		} catch { setRedeemMsg('Failed to approve') }
+	}
+	async function denyRedeem(id: string) {
+		setRedeemMsg('')
+		try {
+			const r = await fetch(`/api/admin/redeem/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'deny' }) })
+			const j = await r.json().catch(() => ({}))
+			if (!r.ok) { setRedeemMsg(String(j?.error || 'Failed to deny')); return }
+			setRedeemItems(prev => prev.map(it => it.id === id ? { ...it, status: 'DENIED', updatedAt: new Date().toISOString() } : it))
+			setRedeemMsg('Request denied.')
+		} catch { setRedeemMsg('Failed to deny') }
+	}
+	async function markPaid(id: string) {
+		setRedeemMsg('')
+		try {
+			const r = await fetch(`/api/admin/redeem/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'paid' }) })
+			const j = await r.json().catch(() => ({}))
+			if (!r.ok) { setRedeemMsg(String(j?.error || 'Failed to mark paid')); return }
+			setRedeemItems(prev => prev.map(it => it.id === id ? { ...it, status: 'PAID', updatedAt: new Date().toISOString() } : it))
+			setRedeemMsg('Marked as paid.')
+		} catch { setRedeemMsg('Failed to mark paid') }
+	}
+	async function cancelPayment(id: string) {
+		setRedeemMsg('')
+		try {
+			const r = await fetch(`/api/admin/redeem/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'cancel' }) })
+			const j = await r.json().catch(() => ({}))
+			if (!r.ok) { setRedeemMsg(String(j?.error || 'Failed to cancel')); return }
+			setRedeemItems(prev => prev.map(it => it.id === id ? { ...it, status: 'CANCELED', updatedAt: new Date().toISOString() } : it))
+			setRedeemMsg('Marked as canceled.')
+		} catch { setRedeemMsg('Failed to cancel') }
+	}
 	async function addPuzzle(e: React.FormEvent) {
 		e.preventDefault()
 		setAddMsg('')
@@ -220,10 +314,9 @@ export default function SetupConfigPage() {
 			setItems([j, ...items])
 			setAddMsg('Puzzle added successfully!')
 		} else {
-			setAddMsg('Failed to add')
+			setAddMsg('Failed to add puzzle.')
 		}
 	}
-
 	async function setActive(id: string) {
 		const r = await fetch('/api/config/active', {
 			method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id })
@@ -231,12 +324,11 @@ export default function SetupConfigPage() {
 		if (r.ok) {
 			const j = await r.json()
 			setItems(items.map(i => ({ ...i, active: i.id === j.id })))
-			setPuzzlesMsg('Active puzzle updated')
+			setPuzzlesMsg('Active puzzle updated successfully!')
 		} else {
-			setPuzzlesMsg('Failed to set active')
+			setPuzzlesMsg('Failed to set active.')
 		}
 	}
-
 	function startEdit(i: Item) {
 		setEditingId(i.id)
 		setEditName(i.name || '')
@@ -245,7 +337,6 @@ export default function SetupConfigPage() {
 		setEditEndHex(i.endHex)
 		setEditSolved(!!i.solved)
 	}
-
 	function cancelEdit() {
 		setEditingId(null)
 		setEditName('')
@@ -254,7 +345,6 @@ export default function SetupConfigPage() {
 		setEditEndHex('')
 		setEditSolved(false)
 	}
-
 	async function saveEdit(id: string) {
 		setPuzzlesMsg('')
 		if (!editValid) { setPuzzlesMsg('Invalid range'); return }
@@ -266,12 +356,11 @@ export default function SetupConfigPage() {
 			const j = await r.json()
 			setItems(items.map(it => it.id === id ? j : it))
 			cancelEdit()
-			setPuzzlesMsg('Puzzle updated')
+			setPuzzlesMsg('Puzzle updated successfully!')
 		} else {
-			setPuzzlesMsg('Failed to update')
+			setPuzzlesMsg('Failed to update puzzle.')
 		}
 	}
-
 	async function deleteItem(id: string) {
 		setPuzzlesMsg('')
 		const target = items.find(it => it.id === id)
@@ -285,13 +374,11 @@ export default function SetupConfigPage() {
 		if (r.ok) {
 			setItems(items.filter(it => it.id !== id))
 			if (editingId === id) cancelEdit()
-			setPuzzlesMsg('Puzzle deleted')
+			setPuzzlesMsg('Puzzle deleted successfully!')
 		} else {
-			setPuzzlesMsg('Failed to delete')
+			setPuzzlesMsg('Failed to delete puzzle.')
 		}
 	}
-
-	// Função para tratar o PATCH do Shared API
 	async function toggleSharedApi(checked: boolean) {
 		setSharedMsg('Updating...')
 		try {
@@ -312,8 +399,19 @@ export default function SetupConfigPage() {
 		}
 	}
 
-	const totalPages = Math.ceil(blocksTotal / 50)
+	// --- Filtered Puzzles List ---
+	const filteredItems = useMemo(() => {
+		if (!puzzleSearch) return items.sort((a, b) => (b.active === a.active ? 0 : b.active ? 1 : -1)); // Active first
+		const lowerSearch = puzzleSearch.toLowerCase();
+		return items.filter(item =>
+			item.name?.toLowerCase().includes(lowerSearch) ||
+			item.address.toLowerCase().includes(lowerSearch) ||
+			item.startHex.toLowerCase().includes(lowerSearch) ||
+			item.endHex.toLowerCase().includes(lowerSearch)
+		).sort((a, b) => (b.active === a.active ? 0 : b.active ? 1 : -1)); // Active first
+	}, [items, puzzleSearch]);
 
+	const totalPages = Math.ceil(blocksTotal / 50)
 
 	return (
 		<RouteGuard fallback={<div className="min-h-screen flex items-center justify-center"><div className="loading-overlay">
@@ -322,322 +420,313 @@ export default function SetupConfigPage() {
 				<span className="loading-text">Redirecting…</span>
 			</div>
 		</div></div>}>
-			<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100">
-				<div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+			<div className="min-h-screen bg-gray-50">
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
 					{/* Header Padronizado */}
 					<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 border-b border-gray-200 pb-4">
 						<div className="flex items-center gap-3">
-							<div className="p-3 bg-blue-100 rounded-full">
-								<Settings className="h-6 w-6 text-blue-600" />
+							<div className="p-3 bg-blue-100 rounded-xl">
+								<Settings className="h-7 w-7 text-blue-600" />
 							</div>
 							<div>
-								<h1 className="text-3xl font-bold text-gray-900">Puzzle Configuration</h1>
-								<div className="text-sm text-gray-600 mt-0.5">Manage active puzzle, ranges, and system settings.</div>
+								<h1 className="text-3xl font-bold text-gray-900">System Configuration</h1>
+								<div className="text-sm text-gray-600 mt-0.5">Manage Puzzles, Pool Blocks, and Admin Settings.</div>
 							</div>
 						</div>
-						<div className="mt-3 sm:mt-0">
-							<Badge className={`font-semibold ${sharedApiEnabled ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>
-								{sharedApiEnabled ? 'Shared API: Enabled' : 'Shared API: Disabled'}
-							</Badge>
-						</div>
+						<Badge className={`mt-3 sm:mt-0 font-semibold text-base px-3 py-1 ${sharedApiEnabled ? 'bg-green-600 text-white' : 'bg-red-500 text-white'}`}>
+							{sharedApiEnabled ? 'Shared API: Enabled' : 'Shared API: Disabled'}
+						</Badge>
 					</div>
 
-					{/* Database Backup & Restore */}
-					<Card className="mb-6 bg-white border-gray-200 shadow-md hover:shadow-lg transition-shadow">
-						<CardHeader className='border-b pb-4'>
-							<CardTitle className="text-gray-900 flex items-center gap-2 text-lg"><Database className="h-5 w-5 text-blue-600" />Database Backup & Restore</CardTitle>
-							<CardDescription className="text-gray-600">Safely export the database for backup, or restore from a previously saved file. Restoring will replace the current database.</CardDescription>
-						</CardHeader>
-						<CardContent className='pt-6'>
-							<div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-								<Button
-									type="button"
-									className="bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-2 w-full md:w-auto"
-									onClick={async () => {
-										try {
-											const r = await fetch('/api/config/backup', { headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
-											if (!r.ok) return
-											const blob = await r.blob()
-											const url = URL.createObjectURL(blob)
-											const a = document.createElement('a')
-											a.href = url
-											a.download = 'dev.db'
-											document.body.appendChild(a)
-											a.click()
-											a.remove()
-											URL.revokeObjectURL(url)
-										} catch { }
-									}}
-								>
-									<Download className="h-4 w-4" /> Download Backup
-								</Button>
-								<div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full md:w-auto">
-									<Input
-										type="file"
-										accept=".db,application/octet-stream"
-										onChange={e => setRestoreFile(e.target.files?.[0] || null)}
-										className="bg-gray-50 border-gray-300 flex-1"
-									/>
-									<Button
-										type="button"
-										disabled={!restoreFile || restoring}
-										className={`inline-flex items-center gap-2 w-full md:w-auto ${!restoreFile || restoring ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
-										onClick={async () => {
-											if (!restoreFile) return
-											setRestoring(true)
-											setRestoreMsg('')
-											try {
-												const fd = new FormData()
-												fd.append('file', restoreFile)
-												const r = await fetch('/api/config/backup', { method: 'POST', body: fd, headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
-												if (r.ok) {
-													setRestoreMsg('Database restored successfully! Reloading data...')
-													// Reload items and data (simplified logic for client-side reload)
-													setTimeout(() => window.location.reload(), 1500);
-												} else { setRestoreMsg('Restore failed') }
-											} catch { setRestoreMsg('Restore failed') }
-											finally { setRestoring(false); setRestoreFile(null) }
-										}}
-									>
-										{restoring ? <RotateCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} {restoring ? 'Restoring...' : 'Restore Backup'}
-									</Button>
-								</div>
-							</div>
-							{restoreMsg && <div className="text-sm text-gray-700 mt-2">{restoreMsg}</div>}
-						</CardContent>
-					</Card>
+					<Tabs defaultValue="puzzles" className="w-full">
+						<TabsList className="grid w-full grid-cols-4 h-auto p-1 mb-6 bg-white shadow-md border border-gray-200">
+							<TabsTrigger value="puzzles" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Key className="h-4 w-4 mr-2" /> Puzzles
+							</TabsTrigger>
+							<TabsTrigger value="blocks" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<List className="h-4 w-4 mr-2" /> Blocks
+							</TabsTrigger>
+							<TabsTrigger value="redeem" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Coins className="h-4 w-4 mr-2" /> Redemptions
+							</TabsTrigger>
+							<TabsTrigger value="settings" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Database className="h-4 w-4 mr-2" /> Admin Tools
+							</TabsTrigger>
+						</TabsList>
 
-					{/* Shared Pool API Settings */}
-					<Card className="mb-6 bg-white border-gray-200 shadow-md hover:shadow-lg transition-shadow">
-						<CardHeader className='border-b pb-4'>
-							<CardTitle className="text-gray-900 flex items-center gap-2 text-lg"><Shield className="h-5 w-5 text-purple-600" />Shared Pool API</CardTitle>
-							<CardDescription className="text-gray-600">Enable or disable the shared pool API for external integrations. This allows other pools to query validation status and submit solutions.</CardDescription>
-						</CardHeader>
-						<CardContent className='pt-6'>
-							<div className="flex items-center gap-3">
-								<label className="inline-flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer">
-									<input
-										type="checkbox"
-										checked={sharedApiEnabled}
-										onChange={(e) => toggleSharedApi(e.target.checked)}
-										className="h-5 w-5 rounded accent-blue-600 focus:ring-blue-500"
-									/>
-									<Badge
-										className={`font-semibold ${sharedApiEnabled ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}
-									>
-										{sharedApiEnabled ? 'Status: Enabled' : 'Status: Disabled'}
-									</Badge>
-								</label>
-								{sharedMsg && <span className="text-sm text-gray-600">{sharedMsg}</span>}
-							</div>
-						</CardContent>
-					</Card>
+						{/* --- Puzzles Tab --- */}
+						<TabsContent value="puzzles" className="space-y-6">
 
-					{/* Active Puzzle (Consolidado) */}
-					{(() => {
-						const active = items.find(i => i.active)
-						if (!active) return null
-						return (
-							<Card className="mb-6 bg-blue-50 border-blue-300 shadow-md">
-								<CardHeader className='border-b border-blue-300 pb-4'>
-									<CardTitle className="text-gray-900 flex items-center gap-2 text-lg"><Key className="h-5 w-5 text-blue-600" />Active Puzzle</CardTitle>
-									<CardDescription className="text-gray-700">This puzzle is currently active across the site and API.</CardDescription>
-								</CardHeader>
-								<CardContent className='pt-6'>
-									<div className="flex items-center gap-2 mb-3">
-										<Badge className="bg-blue-600 text-white font-semibold">Active</Badge>
-										{active.solved ? (
-											<Badge className="inline-flex items-center gap-1 bg-green-100 text-green-700 border border-green-300"><CheckCircle className="h-3 w-3" />Solved</Badge>
-										) : (
-											<Badge className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 border border-yellow-300"><XCircle className="h-3 w-3" />Not solved</Badge>
-										)}
-										<span className="text-sm text-gray-700 font-medium ml-auto">{active.name || '(unnamed)'}</span>
-									</div>
-									<div className="text-sm text-gray-700 mb-2">{bitRangeLabel(active.startHex, active.endHex)}</div>
+							{/* Active Puzzle (Consolidado) - REDESIGNED SECTION */}
+							{useMemo(() => {
+								const active = items.find(i => i.active);
+								if (!active) return null;
+								const bitRange = bitRangeLabel(active.startHex, active.endHex).replace('Key Range (Bits): ', '');
 
-									<div className='space-y-1 p-3 bg-white border border-gray-200 rounded-lg'>
-										<div className="text-xs text-gray-600 font-mono flex items-center justify-between">address: <span className="text-blue-600 break-all">{active.address}</span></div>
-										<div className="text-xs text-gray-600 font-mono flex items-center justify-between">start: <span className='break-all'>{active.startHex}</span></div>
-										<div className="text-xs text-gray-600 font-mono flex items-center justify-between">end: <span className='break-all'>{active.endHex}</span></div>
-									</div>
-
-									{active.privateKey ? (
-										<div className="mt-4 p-3 bg-green-50 border border-green-300 rounded-lg flex flex-col gap-2">
-											<h4 className="text-green-700 font-semibold text-sm">Solution Key Found:</h4>
-											<div className='flex items-center justify-between'>
-												<code className="text-green-800 font-mono text-xs break-all flex-1 pr-3">{active.privateKey}</code>
-												<button
-													type="button"
-													className="text-green-700 hover:text-green-900 text-xs inline-flex items-center gap-1 border border-green-300 rounded px-2 py-1 bg-white ml-2 shrink-0"
-													onClick={async () => { try { await navigator.clipboard.writeText(active.privateKey || ''); setCopiedActive(true); setTimeout(() => setCopiedActive(false), 1500); } catch { } }}
-												>
-													{copiedActive ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-													<span>{copiedActive ? 'Copied' : 'Copy'}</span>
-												</button>
+								return (
+									<Card className="bg-blue-50 border-blue-400 shadow-xl overflow-hidden">
+										<div className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between">
+											<div className='flex flex-col gap-1'>
+												<CardTitle className="text-gray-900 flex items-center gap-2 text-xl font-bold">
+													<Key className="h-6 w-6 text-blue-600" /> Active Puzzle
+												</CardTitle>
+												<CardDescription className="text-blue-700 text-sm">This is the current priority for all workers.</CardDescription>
+											</div>
+											<div className="mt-3 sm:mt-0 flex items-center gap-2 shrink-0">
+												<Badge className="bg-blue-600 text-white font-semibold text-sm">ACTIVE</Badge>
+												{active.solved ? (
+													<Badge className="inline-flex items-center gap-1 bg-green-600 text-white border border-green-700 text-sm"><CheckCircle className="h-4 w-4" />SOLVED</Badge>
+												) : (
+													<Badge className="inline-flex items-center gap-1 bg-yellow-500 text-white border border-yellow-600 text-sm"><XCircle className="h-4 w-4" />UNSOLVED</Badge>
+												)}
 											</div>
 										</div>
-									) : null}
-								</CardContent>
-							</Card>
-						)
-					})()}
-
-					{/* Add New Puzzle */}
-					<Card className="mb-6 bg-white border-gray-200 shadow-md hover:shadow-lg transition-shadow">
-						<CardHeader className='border-b pb-4'>
-							<CardTitle className="text-gray-900 flex items-center gap-2 text-lg"><Hash className="h-5 w-5 text-blue-600" />Add New Puzzle</CardTitle>
-							<CardDescription className="text-gray-600">Create a puzzle by setting its address and key range in hex. You can mark it as solved if known.</CardDescription>
-						</CardHeader>
-						<CardContent className='pt-6'>
-							<form onSubmit={addPuzzle} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<Input placeholder="Name (optional)" value={name} onChange={e => setName(e.target.value)} className="bg-gray-50 border-gray-300" />
-								<Input placeholder="Puzzle Address" value={address} onChange={e => setAddress(e.target.value)} className="bg-gray-50 border-gray-300" />
-								<Input placeholder="Start Range (hex)" value={startHex} onChange={e => setStartHex(e.target.value)} className="bg-gray-50 border-gray-300" />
-								<Input placeholder="End Range (hex)" value={endHex} onChange={e => setEndHex(e.target.value)} className="bg-gray-50 border-gray-300" />
-								<div className="md:col-span-2 flex items-center gap-2">
-									<input id="solved" type="checkbox" checked={solved} onChange={e => setSolved(e.target.checked)} className="h-4 w-4 accent-blue-600" />
-									<label htmlFor="solved" className="text-sm text-gray-700">Puzzle solved</label>
-								</div>
-								<div className="md:col-span-2 flex items-center gap-3">
-									<Button type="submit" disabled={!addValid} className={addValid ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'}>
-										Add Puzzle
-									</Button>
-									{(!addValid && addError) && <span className="text-sm text-red-600 font-medium">{addError}</span>}
-									{addMsg && <span className="text-sm text-green-600 font-medium">{addMsg}</span>}
-								</div>
-							</form>
-						</CardContent>
-					</Card>
-
-					{/* Puzzle List & Management */}
-					<Card className="bg-white border-gray-200 shadow-md hover:shadow-lg transition-shadow">
-						<CardHeader className='border-b pb-4'>
-							<CardTitle className="text-gray-900 flex items-center gap-2 text-lg"><Key className="h-5 w-5 text-blue-600" />All Puzzles ({items.length})</CardTitle>
-							<CardDescription className="text-gray-600">Manage existing puzzles: set active, edit details, or delete entries.</CardDescription>
-						</CardHeader>
-						<CardContent className='pt-6'>
-							{puzzlesMsg && <div className="mb-4 text-sm text-gray-700">{puzzlesMsg}</div>}
-							<div className="grid grid-cols-1 gap-4">
-								{items.filter(i => !i.active).length === 0 && !items.find(i => i.active) && (
-									<div className="text-center py-6 text-gray-600 border border-gray-200 rounded-lg bg-gray-50">No puzzles added yet.</div>
-								)}
-
-								{items.map(i => (
-									<Card key={i.id} className={`bg-gray-50 border ${i.active ? 'border-green-400 shadow-lg' : 'border-gray-200'} transition-shadow`}>
-										<CardHeader className='pb-3'>
-											<div className="flex items-start justify-between">
-												<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-													{i.active && <Badge className="bg-green-600 text-white font-semibold mr-1">Active</Badge>}
-													{i.name || '(unnamed)'}
-												</CardTitle>
-												<div className="flex items-center gap-2">
-													{i.solved ? (
-														<Badge className="inline-flex items-center gap-1 bg-green-100 text-green-700 border border-green-300"><CheckCircle className="h-3 w-3" />Solved</Badge>
-													) : (
-														<Badge className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 border border-yellow-300"><XCircle className="h-3 w-3" />Unsolved</Badge>
-													)}
-													{!i.active && (
-														<Button onClick={() => setActive(i.id)} className="bg-blue-600 text-white hover:bg-blue-700 h-8 text-sm px-3">Set Active</Button>
-													)}
+										<div className='bg-white p-4 sm:p-6 border-t border-blue-200 grid grid-cols-1 md:grid-cols-3 gap-4'>
+											<div className="flex flex-col">
+												<span className="text-xs font-medium text-gray-500 uppercase">Name</span>
+												<span className="text-lg font-semibold text-gray-900">{active.name || 'Unnamed Puzzle'}</span>
+											</div>
+											<div className="flex flex-col">
+												<span className="text-xs font-medium text-gray-500 uppercase">Address</span>
+												<code className="text-sm font-mono text-blue-600 break-all">{active.address}</code>
+											</div>
+											<div className="flex flex-col">
+												<span className="text-xs font-medium text-gray-500 uppercase">Key Range</span>
+												<span className="text-base font-semibold text-gray-800">{bitRange}</span>
+											</div>
+											<div className='md:col-span-3 space-y-2 pt-2'>
+												<div className="text-xs text-gray-600 font-mono flex items-center justify-between">
+													<span className="font-semibold text-gray-500">Start:</span>
+													<code className='break-all text-gray-800 text-[10px] sm:text-xs pl-2'>{active.startHex}</code>
+												</div>
+												<div className="text-xs text-gray-600 font-mono flex items-center justify-between">
+													<span className="font-semibold text-gray-500">End:</span>
+													<code className='break-all text-gray-800 text-[10px] sm:text-xs pl-2'>{active.endHex}</code>
 												</div>
 											</div>
-											<CardDescription className="text-gray-600 pt-1">
-												<code className="text-blue-600 font-mono text-sm break-all">{i.address}</code>
-											</CardDescription>
-										</CardHeader>
-										<CardContent className='pt-3'>
-											{editingId === i.id ? (
-												/* Edição */
-												<div className="p-4 bg-white border border-gray-300 rounded-lg shadow-inner">
-													<h4 className='text-md font-semibold text-gray-900 mb-3'>Editing: {i.name || i.address.slice(0, 8)}...</h4>
-													<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-														<Input placeholder="Name (optional)" value={editName} onChange={e => setEditName(e.target.value)} className="bg-gray-50 border-gray-300" />
-														<Input placeholder="Puzzle Address" value={editAddress} onChange={e => setEditAddress(e.target.value)} className="bg-gray-50 border-gray-300" />
-														<Input placeholder="Start Range (hex)" value={editStartHex} onChange={e => setEditStartHex(e.target.value)} className="bg-gray-50 border-gray-300" />
-														<Input placeholder="End Range (hex)" value={editEndHex} onChange={e => setEditEndHex(e.target.value)} className="bg-gray-50 border-gray-300" />
-														<div className="md:col-span-2 flex items-center gap-2">
-															<input id={`edit-solved-${i.id}`} type="checkbox" checked={editSolved} onChange={e => setEditSolved(e.target.checked)} className="h-4 w-4 accent-blue-600" />
-															<label htmlFor={`edit-solved-${i.id}`} className="text-sm text-gray-700">Puzzle solved</label>
-														</div>
-														<div className="md:col-span-2 flex items-center gap-2 mt-2">
-															<Button onClick={() => saveEdit(i.id)} disabled={!editValid} className={!editValid ? 'bg-gray-400 text-white' : 'bg-green-600 text-white hover:bg-green-700'}>
-																<CheckCircle2 className="h-4 w-4 mr-2" /> Save Changes
-															</Button>
-															<Button onClick={cancelEdit} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100">Cancel</Button>
-														</div>
+											{active.privateKey && (
+												<div className="md:col-span-3 mt-4 p-3 bg-green-100 border border-green-400 rounded-lg flex items-center justify-between">
+													<div className="flex flex-col gap-1 flex-1 pr-3">
+														<h4 className="text-green-800 font-semibold text-sm flex items-center gap-2"><CheckCircle2 className='w-4 h-4' /> Solution Found:</h4>
+														<code className="text-green-900 font-mono text-xs break-all">{active.privateKey}</code>
 													</div>
+													<Button
+														type="button"
+														variant="default"
+														size="sm"
+														className="text-white bg-green-600 hover:bg-green-700 shrink-0 h-8"
+														onClick={async () => { try { await navigator.clipboard.writeText(active.privateKey || ''); setCopiedActive(true); setTimeout(() => setCopiedActive(false), 1500); } catch { } }}
+													>
+														{copiedActive ? <CheckCircle2 className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
+														{copiedActive ? 'Copied' : 'Copy Key'}
+													</Button>
 												</div>
-											) : (
-												/* Visualização */
-												<>
-													<div className="text-sm text-gray-700 mb-2">{bitRangeLabel(i.startHex, i.endHex)}</div>
-													<div className="text-xs text-gray-600 font-mono">start: {i.startHex}</div>
-													<div className="text-xs text-gray-600 font-mono mb-2">end: {i.endHex}</div>
+											)}
+										</div>
+									</Card>
+								)
+							}, [items, copiedActive])}
 
-													{i.privateKey && (
-														<div className="mt-2 p-2 bg-green-50 border border-green-300 rounded-lg flex items-center justify-between">
-															<code className="text-green-800 font-mono text-xs break-all flex-1 pr-3">Solution: {i.privateKey}</code>
-															<button
-																type="button"
-																className="text-green-700 hover:text-green-900 text-xs inline-flex items-center gap-1 border border-green-300 rounded px-2 py-1 bg-white ml-2 shrink-0"
-																onClick={async () => { try { await navigator.clipboard.writeText(i.privateKey || ''); setCopiedId(i.id); setTimeout(() => setCopiedId(null), 1500); } catch { } }}
-															>
-																{copiedId === i.id ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-																<span>{copiedId === i.id ? 'Copied' : 'Copy Key'}</span>
-															</button>
+
+							{/* Add New Puzzle - REDESIGNED SECTION */}
+							<Card className="bg-white border-gray-200 shadow-md">
+								<CardHeader className='border-b pb-4'>
+									<CardTitle className="text-gray-900 flex items-center gap-2 text-xl"><Hash className="h-6 w-6 text-blue-600" />Add New Puzzle</CardTitle>
+									<CardDescription className="text-gray-600">Create a puzzle by setting its address and key range in hex. The smallest range is the most efficient.</CardDescription>
+								</CardHeader>
+								<CardContent className='pt-6'>
+									<form onSubmit={addPuzzle} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<div className="md:col-span-2">
+											<Label htmlFor="add-name">Name (optional)</Label>
+											<Input id="add-name" placeholder="Name" value={name} onChange={e => setName(e.target.value)} className="bg-gray-50 border-gray-300 mt-1" />
+										</div>
+										<div className="md:col-span-2">
+											<Label htmlFor="add-address">Puzzle Address</Label>
+											<Input id="add-address" placeholder="Puzzle Address" value={address} onChange={e => setAddress(e.target.value)} className="bg-gray-50 border-gray-300 mt-1" />
+										</div>
+										<div>
+											<Label htmlFor="add-start">Start Range (hex)</Label>
+											<Input id="add-start" placeholder="Start Range (hex)" value={startHex} onChange={e => setStartHex(e.target.value)} className="bg-gray-50 border-gray-300 mt-1" />
+										</div>
+										<div>
+											<Label htmlFor="add-end">End Range (hex)</Label>
+											<Input id="add-end" placeholder="End Range (hex)" value={endHex} onChange={e => setEndHex(e.target.value)} className="bg-gray-50 border-gray-300 mt-1" />
+										</div>
+										<div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-4 mt-2">
+											<div className="flex items-center space-x-2 shrink-0">
+												<Checkbox id="add-solved" checked={solved} onCheckedChange={(checked) => setSolved(!!checked)} />
+												<label htmlFor="add-solved" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+													Mark as Solved
+												</label>
+											</div>
+											<div className="flex-1 w-full sm:w-auto">
+												<Button type="submit" disabled={!addValid} className={`w-full ${addValid ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'}`}>
+													Add Puzzle
+												</Button>
+											</div>
+											{(!addValid && addError) && <span className="text-sm text-red-600 font-medium mt-1 sm:mt-0 sm:ml-4">{addError}</span>}
+											{addMsg && <span className={`text-sm font-medium mt-1 sm:mt-0 sm:ml-4 ${addMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>{addMsg}</span>}
+										</div>
+									</form>
+								</CardContent>
+							</Card>
+
+							{/* Puzzle List & Management - REDESIGNED SECTION */}
+							<Card className="bg-white border-gray-200 shadow-md">
+								<CardHeader className='border-b pb-4'>
+									<CardTitle className="text-gray-900 flex items-center gap-2 text-xl"><Key className="h-6 w-6 text-blue-600" />All Puzzles ({items.length})</CardTitle>
+									<CardDescription className="text-gray-600">Manage existing puzzles: set active, edit details, or delete entries.</CardDescription>
+								</CardHeader>
+								<CardContent className='pt-6'>
+									{/* Search/Filter Bar */}
+									<div className="flex items-center space-x-2 mb-6">
+										<Search className="h-4 w-4 text-gray-500 shrink-0" />
+										<Input
+											placeholder="Search by name, address, or hex range..."
+											value={puzzleSearch}
+											onChange={e => setPuzzleSearch(e.target.value)}
+											className="bg-white border-gray-300"
+										/>
+										<Button variant="outline" size="icon" title="Clear Search" onClick={() => setPuzzleSearch('')} className="shrink-0">
+											<Filter className="h-4 w-4" />
+										</Button>
+									</div>
+									{puzzlesMsg && <div className="mb-4 text-sm text-gray-700 font-medium">{puzzlesMsg}</div>}
+
+									{/* Responsive List View */}
+									<div className="space-y-4">
+										{filteredItems.length === 0 && (
+											<div className="text-center py-6 text-gray-600 border border-gray-200 rounded-lg bg-gray-50">
+												{items.length === 0 ? 'No puzzles added yet. Start by adding one above.' : 'No puzzles matched your search criteria.'}
+											</div>
+										)}
+
+										{filteredItems.map(i => (
+											<Card key={i.id} className={`bg-gray-50 transition-all ${i.active ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-blue-300'}`}>
+												<CardContent className='p-4'>
+													<div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+														{/* Left Section (Key Details) */}
+														<div className="flex flex-col gap-1 flex-1 min-w-0">
+															<div className="flex items-center flex-wrap gap-2">
+																{i.active && <Badge className="bg-blue-600 text-white font-bold text-xs shrink-0">ACTIVE</Badge>}
+																{i.solved ? (
+																	<Badge className="inline-flex items-center gap-1 bg-green-600 text-white text-xs shrink-0"><CheckCircle className="h-3 w-3" />Solved</Badge>
+																) : (
+																	<Badge className="inline-flex items-center gap-1 bg-yellow-500 text-white text-xs shrink-0"><XCircle className="h-3 w-3" />Unsolved</Badge>
+																)}
+																<span className="font-semibold text-gray-900 text-base break-all flex-1 min-w-0">
+																	{i.name || `Address: ${formatAddress(i.address)}`}
+																</span>
+															</div>
+															<div className='flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 mt-1'>
+																<code className='font-medium text-blue-600 font-mono'>{i.address}</code>
+																<span className="text-gray-500 ml-auto lg:ml-0">
+																	<span className="font-medium text-gray-700">{bitRangeLabel(i.startHex, i.endHex)}</span>
+																</span>
+																<div className="flex items-center gap-2 mt-1 text-xs text-gray-700">
+																	<span className="text-gray-600">Start:</span>
+																	<code className="font-mono text-gray-800 break-all">{formatCompactHexRange(i.startHex)}</code>
+																	<span className="text-gray-400">→</span>
+																	<span className="text-gray-600">End:</span>
+																	<code className="font-mono text-gray-800 break-all">{formatCompactHexRange(i.endHex)}</code>
+																</div>
+															</div>
+														</div>
+
+														{/* Right Section (Actions) */}
+														{editingId === i.id ? (
+															<div className="flex items-center gap-2 mt-2 lg:mt-0 shrink-0">
+																<Button onClick={() => saveEdit(i.id)} disabled={!editValid} className="h-8 text-xs px-3 bg-green-600 text-white hover:bg-green-700">Save</Button>
+																<Button onClick={cancelEdit} variant="outline" className="h-8 text-xs px-3">Cancel</Button>
+															</div>
+														) : (
+															<div className="flex items-center gap-2 mt-2 lg:mt-0 shrink-0">
+																{!i.active && (
+																	<Button onClick={() => setActive(i.id)} className="bg-blue-600 text-white hover:bg-blue-700 h-8 text-xs px-3">Set Active</Button>
+																)}
+																<Button onClick={() => startEdit(i)} variant="outline" size="icon" title="Edit" className="h-8 w-8">
+																	<Edit3 className="h-4 w-4 text-blue-600" />
+																</Button>
+																<Button onClick={() => deleteItem(i.id)} variant="destructive" size="icon" title="Delete" className="h-8 w-8 bg-red-600 hover:bg-red-700">
+																	<Trash2 className="h-4 w-4" />
+																</Button>
+															</div>
+														)}
+													</div>
+
+													{/* Full Edit Form (Expands below on edit) */}
+													{editingId === i.id && (
+														<div className="mt-4 p-4 bg-white border border-gray-300 rounded-lg shadow-inner">
+															<h4 className='text-md font-semibold text-gray-900 mb-4 border-b pb-2'>Edit Puzzle Details</h4>
+															<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+																<Input placeholder="Name (optional)" value={editName} onChange={e => setEditName(e.target.value)} className="bg-gray-50 border-gray-300" />
+																<Input placeholder="Puzzle Address" value={editAddress} onChange={e => setEditAddress(e.target.value)} className="bg-gray-50 border-gray-300" />
+																<Input placeholder="Start Range (hex)" value={editStartHex} onChange={e => setEditStartHex(e.target.value)} className="bg-gray-50 border-gray-300" />
+																<Input placeholder="End Range (hex)" value={editEndHex} onChange={e => setEditEndHex(e.target.value)} className="bg-gray-50 border-gray-300" />
+																<div className="md:col-span-2 flex items-center space-x-2">
+																	<Checkbox id={`edit-solved-${i.id}`} checked={editSolved} onCheckedChange={(checked) => setEditSolved(!!checked)} />
+																	<label htmlFor={`edit-solved-${i.id}`} className="text-sm font-medium leading-none">Puzzle solved</label>
+																</div>
+																<div className="md:col-span-2 flex items-center gap-2 mt-2">
+																	<Button onClick={() => saveEdit(i.id)} disabled={!editValid} className={!editValid ? 'bg-gray-400 text-white' : 'bg-green-600 text-white hover:bg-green-700'}>
+																		<CheckCircle2 className="h-4 w-4 mr-2" /> Save Changes
+																	</Button>
+																	<Button onClick={cancelEdit} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100">Cancel</Button>
+																</div>
+															</div>
 														</div>
 													)}
+													{/* Solved Key Display (View Mode) */}
+													{editingId !== i.id && i.privateKey && (
+														<div className="mt-3 p-2 bg-green-50 border border-green-300 rounded-lg flex items-center justify-between">
+															<code className="text-green-800 font-mono text-xs break-all flex-1 pr-3">Solution: {i.privateKey}</code>
+															<Button
+																type="button"
+																variant="outline"
+																size="sm"
+																className="text-green-700 hover:text-green-900 border-green-300 bg-white ml-2 shrink-0 h-8 text-xs"
+																onClick={async () => { try { await navigator.clipboard.writeText(i.privateKey || ''); setCopiedId(i.id); setTimeout(() => setCopiedId(null), 1500); } catch { } }}
+															>
+																{copiedId === i.id ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+															</Button>
+														</div>
+													)}
+												</CardContent>
+											</Card>
+										))}
+									</div>
+								</CardContent>
+							</Card>
+						</TabsContent>
 
-													<div className="mt-3 flex items-center gap-2">
-														<Button onClick={() => startEdit(i)} variant="outline" className="inline-flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-100">
-															<Edit3 className="h-4 w-4 text-blue-600" /> Edit Details
-														</Button>
-														<Button onClick={() => deleteItem(i.id)} variant="destructive" className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700">
-															<Trash2 className="h-4 w-4" /> Delete
-														</Button>
-													</div>
-												</>
-											)}
-										</CardContent>
-									</Card>
-								))}
-							</div>
-						</CardContent>
-					</Card>
+						{/* --- Blocks Tab (Grid View) --- */}
+						<TabsContent value="blocks" className="space-y-6">
+							<Card className="bg-white border-gray-200 shadow-md">
+								<CardHeader className='border-b pb-4'>
+									<CardTitle className="text-gray-900 flex items-center gap-2 text-xl"><List className="h-6 w-6 text-blue-600" />Recent Completed Blocks</CardTitle>
+									<CardDescription className="text-gray-600">Last 50 completed blocks per page, displayed in a responsive card grid for easy reading.</CardDescription>
+								</CardHeader>
+								<CardContent className='pt-6'>
+									<div className="flex items-center justify-end gap-2 mb-4">
+										<Button
+											variant="outline"
+											disabled={blocksLoading}
+											onClick={() => fetchBlocks(blocksPage)}
+										>
+											{blocksLoading ? <RotateCw className="h-4 w-4 animate-spin mr-2" /> : <RotateCw className="h-4 w-4 mr-2" />}
+											Refresh
+										</Button>
+									</div>
 
-					{/* --- ENHANCED Recent Blocks Card with Card View and Skeletons --- */}
-					<Card className="mt-6 bg-white border-gray-200 shadow-md hover:shadow-lg transition-shadow">
-						<CardHeader className='border-b pb-4'>
-							<CardTitle className="text-gray-900 flex items-center gap-2 text-lg"><List className="h-5 w-5 text-blue-600" />Recent Completed Blocks</CardTitle>
-							<CardDescription className="text-gray-600">Last 50 completed blocks per page for easy reading and navigation.</CardDescription>
-						</CardHeader>
-						<CardContent className='pt-6'>
-							<Tabs defaultValue="list">
-								<div className="flex items-center justify-between gap-2 mb-4">
-									<TabsList>
-										<TabsTrigger value="list">Block Overview</TabsTrigger>
-									</TabsList>
-									<Button
-										variant="outline"
-										disabled={blocksLoading}
-										onClick={() => fetchBlocks(blocksPage)}
-									>
-										{blocksLoading ? <RotateCw className="h-4 w-4 animate-spin mr-2" /> : <RotateCw className="h-4 w-4 mr-2" />}
-										Refresh
-									</Button>
-								</div>
-								<TabsContent value="list">
-									<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+									<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 										{blocksLoading ? (
-											// Display 9 skeletons while loading
-											Array.from({ length: 9 }).map((_, i) => (
+											Array.from({ length: 6 }).map((_, i) => (
 												<BlockCardSkeleton key={`sk-block-${i}`} />
 											))
 										) : blocks.length === 0 ? (
 											<div className="col-span-full text-center py-6 text-gray-600 border border-gray-200 rounded-lg bg-gray-50">No completed blocks data available.</div>
 										) : (
-											// Card Grid View
 											blocks.map(b => <BlockCard key={b.id} block={b} />)
 										)}
 									</div>
@@ -650,26 +739,276 @@ export default function SetupConfigPage() {
 										<div className="flex items-center gap-2">
 											<Button
 												variant="outline"
+												size="sm"
 												disabled={blocksPage <= 1 || blocksLoading}
 												onClick={() => fetchBlocks(blocksPage - 1)}
 											>
-												Prev
+												<ChevronLeft className="h-4 w-4" />
 											</Button>
 											<div className="text-sm font-medium text-gray-700">Page {blocksPage} of {totalPages}</div>
 											<Button
 												variant="outline"
+												size="sm"
 												disabled={blocksPage >= totalPages || blocksLoading}
 												onClick={() => fetchBlocks(blocksPage + 1)}
 											>
-												Next
+												<ChevronRight className="h-4 w-4" />
 											</Button>
 										</div>
 									</div>
-								</TabsContent>
-							</Tabs>
-						</CardContent>
-					</Card>
-					{/* --- END ENHANCED Recent Blocks Card --- */}
+								</CardContent>
+							</Card>
+						</TabsContent>
+
+						{/* --- Redemptions Tab (Table View) --- */}
+						<TabsContent value="redeem" className="space-y-6">
+							<Card className="bg-white border-gray-200 shadow-md">
+								<CardHeader className='border-b pb-4'>
+									<CardTitle className="text-gray-900 flex items-center gap-2 text-xl"><Coins className="h-6 w-6 text-purple-600" />Redemption Requests</CardTitle>
+									<CardDescription className="text-gray-600">Review user reward redemption requests and approve or deny them.</CardDescription>
+								</CardHeader>
+								<CardContent className='pt-6'>
+									{/* Filters and Refresh */}
+									<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
+										<div className="text-sm text-gray-700 font-medium shrink-0">{redeemLoading ? 'Loading requests…' : `${redeemItems.length} request(s) found`}</div>
+										<div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
+											<select value={redeemStatusFilter} onChange={e => setRedeemStatusFilter(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm h-9 bg-white">
+												<option value="">Status: All</option>
+												<option value="PENDING">Pending</option>
+												<option value="APPROVED">Approved</option>
+												<option value="PAID">Paid</option>
+												<option value="DENIED">Denied</option>
+												<option value="CANCELED">Canceled</option>
+											</select>
+											<Input placeholder="Filter by puzzle address" value={redeemPuzzleFilter} onChange={e => setRedeemPuzzleFilter(e.target.value)} className="bg-white border-gray-300 h-9 text-sm flex-1 sm:flex-none sm:w-48" />
+											<Button variant="outline" onClick={fetchRedeems} disabled={redeemLoading} className="h-9 shrink-0">
+												{redeemLoading ? <RotateCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+											</Button>
+										</div>
+									</div>
+									{redeemMsg && <div className={`text-sm mb-4 font-medium ${redeemMsg.includes('success') || redeemMsg.includes('approved') || redeemMsg.includes('paid') ? 'text-green-600' : 'text-red-600'}`}>{redeemMsg}</div>}
+
+									<div className="overflow-x-auto rounded-lg border border-gray-200">
+										<Table className="min-w-full divide-y divide-gray-200">
+											<TableHeader className="bg-gray-50">
+												<TableRow>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">ID (User Token)</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Recipient Address</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Puzzle</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600 text-right">Amount</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600 text-right">Est. BTC</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Status</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Requested</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Share %</TableHead>
+													<TableHead className="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Actions</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody className='divide-y divide-gray-200'>
+												{redeemItems.map(it => (
+													<TableRow key={it.id} className="hover:bg-blue-50/50 text-xs">
+														<TableCell className="py-3 px-3 font-mono break-all text-gray-800">{formatAddress(it.userTokenId)}</TableCell>
+														<TableCell className="py-3 px-3 font-mono break-all text-blue-600">{formatBitcoinAddress(it.address)}</TableCell>
+														<TableCell className="py-3 px-3 font-mono break-all text-gray-600">{it.puzzleAddress ? formatBitcoinAddress(it.puzzleAddress) : '-'}</TableCell>
+														<TableCell className="py-3 px-3 font-bold text-gray-900 text-right">{it.amount.toFixed(3)}</TableCell>
+														<TableCell className="py-3 px-3 font-medium text-right text-gray-800">{Number(it.estimatedBtc || 0).toFixed(8)}</TableCell>
+														<TableCell className="py-3 px-3">
+															{/* Enhanced Badges */}
+															{it.status === 'PAID' ? <Badge className="bg-green-600 text-white">Paid</Badge> :
+																it.status === 'APPROVED' ? <Badge className="bg-blue-600 text-white">Approved</Badge> :
+																	it.status === 'DENIED' ? <Badge className="bg-red-500 text-white">Denied</Badge> :
+																		it.status === 'CANCELED' ? <Badge className="bg-gray-400 text-white">Canceled</Badge> :
+																			<Badge className="bg-yellow-500 text-white">Pending</Badge>}
+														</TableCell>
+														<TableCell className="py-3 px-3 text-gray-600">{it.createdAt ? timeAgo(it.createdAt) : '-'}</TableCell>
+														<TableCell className="py-3 px-3 font-medium text-gray-800">{(it.sharePercent || 0).toFixed(2)}%</TableCell>
+														<TableCell className="py-3 px-3 text-right">
+															{/* --- REDESIGNED ACTION MENU USING DropdownMenu --- */}
+															<DropdownMenu>
+																<DropdownMenuTrigger asChild>
+																	<Button variant="outline" size="icon" aria-label="Actions" className="h-8 w-8">
+																		<MoreHorizontal className="h-4 w-4 text-gray-700" />
+																	</Button>
+																</DropdownMenuTrigger>
+																<DropdownMenuContent align="end" className="w-44 shadow-xl">
+
+																	<DropdownMenuItem
+																		className="flex items-center gap-2 text-sm text-green-700 font-medium"
+																		onSelect={() => approveRedeem(it.id)}
+																		disabled={it.status !== 'PENDING'}
+																	>
+																		<CheckCircle2 className="h-4 w-4" /> Approve
+																	</DropdownMenuItem>
+
+																	<DropdownMenuItem
+																		className="flex items-center gap-2 text-sm text-red-700 font-medium"
+																		onSelect={() => denyRedeem(it.id)}
+																		disabled={it.status !== 'PENDING'}
+																	>
+																		<XCircle className="h-4 w-4" /> Deny
+																	</DropdownMenuItem>
+
+																	<DropdownMenuSeparator />
+
+																	<DropdownMenuItem
+																		className="flex items-center gap-2 text-sm text-blue-700 font-medium"
+																		onSelect={() => markPaid(it.id)}
+																		disabled={it.status !== 'APPROVED'}
+																	>
+																		<CheckCircle className="h-4 w-4" /> Mark Paid
+																	</DropdownMenuItem>
+
+																	<DropdownMenuItem
+																		className="flex items-center gap-2 text-sm text-gray-700 font-medium"
+																		onSelect={() => cancelPayment(it.id)}
+																		disabled={it.status !== 'APPROVED'}
+																	>
+																		<XCircle className="h-4 w-4" /> Cancel
+																	</DropdownMenuItem>
+																</DropdownMenuContent>
+															</DropdownMenu>
+														</TableCell>
+													</TableRow>
+												))}
+												{redeemItems.length === 0 && !redeemLoading && (
+													<TableRow><TableCell className="py-4 px-3 text-gray-600 text-center" colSpan={9}>No redemption requests found for the current filters.</TableCell></TableRow>
+												)}
+											</TableBody>
+										</Table>
+									</div>
+								</CardContent>
+							</Card>
+						</TabsContent>
+
+						{/* --- Admin Tools Tab (Settings) --- */}
+						<TabsContent value="settings" className="space-y-6">
+
+							{/* Database Backup & Restore - REDESIGNED SECTION */}
+							<Card className="bg-white border-gray-200 shadow-md">
+								<CardHeader className='border-b pb-4'>
+									<CardTitle className="text-gray-900 flex items-center gap-2 text-xl"><Database className="h-6 w-6 text-blue-600" />Database Management</CardTitle>
+									<CardDescription className="text-gray-600">Safely export the database for backup, or restore from a previously saved file.</CardDescription>
+								</CardHeader>
+								<CardContent className='pt-6 space-y-6'>
+									{/* Backup */}
+									<div className='pb-4 border-b border-gray-100'>
+										<h3 className='text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2'><Download className="h-5 w-5 text-blue-500" /> Backup Database</h3>
+										<p className='text-sm text-gray-600 mb-3'>Download the current database file to your local machine for safekeeping.</p>
+										<Button
+											type="button"
+											className="bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-2 w-full sm:w-auto"
+											onClick={async () => {
+												try {
+													const r = await fetch('/api/config/backup', { headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
+													if (!r.ok) return
+													const blob = await r.blob()
+													const url = URL.createObjectURL(blob)
+													const a = document.createElement('a')
+													a.href = url
+													const now = new Date()
+													const pad = (n: number) => n.toString().padStart(2, '0')
+													const fname = `dev-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.db`
+													a.download = fname
+													document.body.appendChild(a)
+													a.click()
+													a.remove()
+													URL.revokeObjectURL(url)
+												} catch { }
+											}}
+										>
+											<Download className="h-4 w-4" /> Download Backup
+										</Button>
+									</div>
+									{/* Restore */}
+									<div>
+										<h3 className='text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2'><Upload className="h-5 w-5 text-green-600" /> Restore Database (CAUTION)</h3>
+										<p className='text-sm text-red-600 font-medium mb-3'>**Warning:** Restoring a backup will **overwrite** all current data.</p>
+										<div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
+											<Input
+												type="file"
+												accept=".db,application/octet-stream"
+												onChange={e => setRestoreFile(e.target.files?.[0] || null)}
+												className="bg-gray-50 border-gray-300 flex-1"
+											/>
+											<Button
+												type="button"
+												disabled={!restoreFile || restoring}
+												className={`inline-flex items-center gap-2 w-full sm:w-auto ${!restoreFile || restoring ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
+												onClick={async () => {
+													if (!restoreFile) return
+													setRestoring(true)
+													setRestoreMsg('')
+													try {
+														const fd = new FormData()
+														fd.append('file', restoreFile)
+														const r = await fetch('/api/config/backup', { method: 'POST', body: fd, headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
+														if (r.ok) {
+															setRestoreMsg('Database restored successfully! Reloading data...')
+															setTimeout(() => window.location.reload(), 1500);
+														} else { setRestoreMsg('Restore failed') }
+													} catch { setRestoreMsg('Restore failed') }
+													finally { setRestoring(false); setRestoreFile(null) }
+												}}
+											>
+												{restoring ? <RotateCw className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />} {restoring ? 'Restoring...' : 'Restore Backup'}
+											</Button>
+										</div>
+										{restoreMsg && <div className={`text-sm mt-3 font-medium ${restoreMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>{restoreMsg}</div>}
+									</div>
+								</CardContent>
+							</Card>
+
+							{/* Shared Pool API Settings - REDESIGNED SECTION */}
+							<Card className="bg-white border-gray-200 shadow-md">
+								<CardHeader className='border-b pb-4'>
+									<CardTitle className="text-gray-900 flex items-center gap-2 text-xl"><Shield className="h-6 w-6 text-purple-600" />Shared Pool API Settings</CardTitle>
+									<CardDescription className="text-gray-600">Control the accessibility of the shared pool API for external integrations.</CardDescription>
+								</CardHeader>
+								<CardContent className='pt-6 space-y-4'>
+									<div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+										<div className="flex items-center gap-3 flex-1">
+											<input
+												id="shared-api-toggle"
+												type="checkbox"
+												checked={sharedApiEnabled}
+												onChange={(e) => toggleSharedApi(e.target.checked)}
+												className="h-5 w-5 rounded accent-blue-600 focus:ring-blue-500 shrink-0"
+											/>
+											<div className="space-y-0.5">
+												<Label htmlFor="shared-api-toggle" className="text-sm font-semibold text-gray-800 cursor-pointer">Enable Shared Pool API</Label>
+												<p className="text-xs text-gray-600">Allows other clients to query block validation status and submit solutions.</p>
+											</div>
+										</div>
+										<Badge
+											className={`font-bold text-sm px-3 py-1.5 shrink-0 ${sharedApiEnabled ? 'bg-green-600 text-white' : 'bg-red-500 text-white'}`}
+										>
+											{sharedApiEnabled ? 'Enabled' : 'Disabled'}
+										</Badge>
+									</div>
+
+									<div className='pt-2 flex items-center gap-3'>
+										<Button
+											variant="outline"
+											className='text-blue-600 border-blue-200 hover:bg-blue-50'
+											onClick={async () => {
+												try {
+													const r = await fetch('/api/config', { headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
+													if (r.ok) {
+														const j = await r.json();
+														setItems(Array.isArray(j) ? j : [])
+														setSharedMsg('Puzzles refreshed from database.')
+													}
+												} catch { setSharedMsg('Failed to refresh puzzles.') }
+											}}
+										>
+											<RotateCw className='w-4 h-4 mr-2' /> Refresh Puzzles Data
+										</Button>
+										{sharedMsg && <span className="text-sm text-gray-600">{sharedMsg}</span>}
+									</div>
+								</CardContent>
+							</Card>
+						</TabsContent>
+					</Tabs>
+
 				</div>
 			</div>
 		</RouteGuard>

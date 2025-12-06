@@ -42,6 +42,9 @@ async function handler(req: NextRequest) {
 	if (req.method === 'GET') {
 		try {
 			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
+			const now = new Date()
+			const pad = (n: number) => n.toString().padStart(2, '0')
+			const fname = `dev-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.db`
 			const tmp = path.join(path.dirname(dbFile), `backup-${Date.now()}.db`)
 			try {
 				withDb(db => {
@@ -55,7 +58,7 @@ async function handler(req: NextRequest) {
 					status: 200,
 					headers: {
 						'Content-Type': 'application/octet-stream',
-						'Content-Disposition': 'attachment; filename="dev.db"',
+						'Content-Disposition': `attachment; filename="${fname}"`,
 					},
 				})
 			} catch {
@@ -64,7 +67,7 @@ async function handler(req: NextRequest) {
 					status: 200,
 					headers: {
 						'Content-Type': 'application/octet-stream',
-						'Content-Disposition': 'attachment; filename="dev.db"',
+						'Content-Disposition': `attachment; filename="${fname}"`,
 					},
 				})
 			}

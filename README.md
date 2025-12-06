@@ -107,9 +107,9 @@ When you find a valid private key, submit it to claim your reward.
 -   `PATCH /api/config/:id` — Update puzzle fields, including `solved` (admin)
 -   `DELETE /api/config/:id` — Delete puzzle; active deletion requires `?force=true` or header `x-force-delete: true` (admin)
 -   `PATCH /api/config/active` — Set active puzzle: `{ id }` (admin)
--   `GET /api/config/backup` — Download SQLite DB file (admin)
--   `POST /api/config/backup` — Restore DB from uploaded file (admin)
--   `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
+  - `GET /api/config/backup` — Download SQLite DB file (admin). The download filename includes a timestamp: `dev-YYYY-MM-DD_HH-mm-ss.db`.
+  - `POST /api/config/backup` — Restore DB from uploaded file (admin)
+  - `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
 
 ### Notes on Credits
 
@@ -124,6 +124,7 @@ When you find a valid private key, submit it to claim your reward.
 
 -   Key Range (Bits) is displayed in UI as `2^min…2^max`, derived from hex ranges.
 -   Setup/config page is organized into sections: Database Backup & Restore, Active Puzzle, Add New Puzzle, and Puzzles.
+ -   In Setup → All Puzzles, each entry shows its Start and End hex ranges for quick inspection.
 
 ## Learn More
 
