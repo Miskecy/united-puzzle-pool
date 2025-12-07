@@ -39,7 +39,7 @@ export default function HomePage() {
 		const fetchAll = async () => {
 			try {
 				const [statsRes, overviewRes] = await Promise.all([
-					fetch('/api/pool/stats', { cache: 'no-store' }),
+					fetch('/api/pool/stats?days=1', { cache: 'no-store' }),
 					fetch('/api/pool/overview', { cache: 'no-store' }),
 				])
 				if (statsRes.ok) {
@@ -50,19 +50,16 @@ export default function HomePage() {
 					const active = Array.isArray(stats?.activeBlocks) ? stats.activeBlocks : []
 					setRecentBlocks(recent)
 					setActiveBlocks(active)
-					// Aggregate into 24 hourly bins for today
+					// Aggregate into 24 hourly bins for the last 24 hours (rolling window)
 					const hourMs = 60 * 60 * 1000
-					const startDay = new Date()
-					startDay.setHours(0, 0, 0, 0)
-					const endDay = new Date(startDay.getTime() + 24 * hourMs)
-					const startTs = startDay.getTime()
+					const endTs = Date.now()
+					const startTs = endTs - 24 * hourMs
 					const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
-					const nowMs = Date.now()
-					const currentHourIdx = Math.max(0, Math.min(23, Math.floor((nowMs - startTs) / hourMs)))
+					const currentHourIdx = 23
 
 					const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
 						const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
-						return cm >= startTs && cm < endDay.getTime()
+						return cm >= startTs && cm <= endTs
 					})
 
 					let totalLenBI = 0n
@@ -87,7 +84,7 @@ export default function HomePage() {
 						}
 					}
 
-					const points: Array<{ t: number; ts?: number; v: number }> = bins.slice(0, currentHourIdx + 1).map((b, i) => {
+					const points: Array<{ t: number; ts?: number; v: number }> = bins.map((b, i) => {
 						const hourStart = startTs + i * hourMs
 						const latest = b.latestMs ?? hourStart
 						const t = hourStart

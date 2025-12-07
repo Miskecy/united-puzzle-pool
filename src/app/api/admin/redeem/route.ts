@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { prisma } from '@/lib/prisma'
 import { loadPuzzleConfig } from '@/lib/config'
+import { Prisma } from '@prisma/client'
 
 function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
@@ -100,7 +101,16 @@ async function handler(req: NextRequest) {
 		if (statusFilter && ['PENDING', 'APPROVED', 'DENIED', 'PAID', 'CANCELED'].includes(statusFilter)) { where.push(`status = ?`); params.push(statusFilter) }
 		if (puzzleFilter) { where.push(`puzzle_address = ?`); params.push(puzzleFilter) }
 		const sql = `SELECT id, user_token_id, address, amount, status, created_at, updated_at, approved_at, puzzle_address FROM reward_redemptions ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT 200`
-		const rows = await prisma.$queryRawUnsafe<Row[]>(sql, ...params)
+		let rows: Row[] = []
+		try {
+			rows = await prisma.$queryRawUnsafe<Row[]>(sql, ...params)
+		} catch (err: unknown) {
+			const isKnown = err instanceof Prisma.PrismaClientKnownRequestError
+			const code = isKnown ? err.code : ''
+			const msg = isKnown ? err.message : String(err)
+			const isEmptyDb = code === 'P2021' || msg.includes('does not exist') || msg.includes('no such table')
+			if (!isEmptyDb) throw err
+		}
 
 		// Fetch BTC balance per puzzle address to compute per-row estimated BTC
 		const uniqueAddrs = Array.from(new Set(rows.map(r => String(r.puzzle_address || '')).filter(a => !!a)))
@@ -118,7 +128,19 @@ async function handler(req: NextRequest) {
 			} catch { }
 		}
 
-		const byUser = await prisma.creditTransaction.groupBy({ by: ['userTokenId'], _sum: { amount: true } })
+		let byUser: Array<{ userTokenId: string; _sum: { amount: number | null } }> = []
+		try {
+			const rowsAgg = await prisma.$queryRawUnsafe<{ userTokenId: string, amount: number | null }[]>(
+				`SELECT user_token_id as userTokenId, SUM(amount) as amount FROM credit_transactions GROUP BY user_token_id`
+			)
+			byUser = (rowsAgg || []).map(r => ({ userTokenId: String(r.userTokenId || ''), _sum: { amount: r.amount } }))
+		} catch (err: unknown) {
+			const isKnown = err instanceof Prisma.PrismaClientKnownRequestError
+			const code = isKnown ? err.code : ''
+			const msg = isKnown ? err.message : String(err)
+			const isEmptyDb = code === 'P2021' || msg.includes('does not exist') || msg.includes('no such table')
+			if (!isEmptyDb) throw err
+		}
 		let totalMu = 0
 		const map: Record<string, number> = {}
 		for (const g of byUser) {

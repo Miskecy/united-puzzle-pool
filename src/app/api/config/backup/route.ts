@@ -25,7 +25,9 @@ async function handler(req: NextRequest) {
 		if (!p) {
 			p = path.join(process.cwd(), 'prisma', 'dev.db')
 		} else if (!path.isAbsolute(p)) {
-			p = path.join(process.cwd(), p)
+			const normalized = p.replace(/^[./\\]+/, '')
+			const inPrisma = normalized.startsWith('prisma/') || normalized.startsWith(`prisma${path.sep}`)
+			p = inPrisma ? path.join(process.cwd(), normalized) : path.join(process.cwd(), 'prisma', normalized)
 		}
 		const wal = `${p}-wal`
 		const shm = `${p}-shm`
@@ -40,6 +42,31 @@ async function handler(req: NextRequest) {
 	}
 
 	if (req.method === 'GET') {
+		const url = new URL(req.url)
+		const statusMode = url.searchParams.get('status') === '1'
+		if (statusMode) {
+			try {
+				try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
+				let tables = 0
+				let tableNames: string[] = []
+				let sizeBytes = 0
+				try {
+					const rows = await prisma.$queryRaw<{ name: string }[]>`SELECT name FROM sqlite_master WHERE type='table'`
+					tableNames = Array.isArray(rows) ? rows.map(r => String(r.name)) : []
+					tables = tableNames.length
+				} catch { }
+				try { const st = await fs.stat(dbFile); sizeBytes = st.size } catch { }
+				const envUrl = (process.env.DATABASE_URL || '').trim()
+				let envRaw = ''
+				if (envUrl.startsWith('file:')) { envRaw = envUrl.slice(5) }
+				const envInPrisma = !!envRaw && (/^(?:\.\/|\.\\)?prisma[\/\\]/.test(envRaw) || envRaw.startsWith('prisma/'))
+				const suggestedEnvUrl = envUrl.startsWith('file:') ? `file:./prisma/${path.basename(envRaw || 'dev.db') || 'dev.db'}` : ''
+				const pathMismatch = !envInPrisma
+				return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl, sizeBytes, envRaw, envInPrisma, pathMismatch, suggestedEnvUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+			} catch {
+				return new Response(JSON.stringify({ error: 'Status failed' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+			}
+		}
 		try {
 			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
 			const now = new Date()
@@ -106,12 +133,17 @@ async function handler(req: NextRequest) {
 				})
 			} catch { }
 			try { await prisma.$connect() } catch { }
+			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
 			let tables = 0
+			let tableNames: string[] = []
+			let sizeBytes = 0
 			try {
 				const rows = await prisma.$queryRaw<{ name: string }[]>`SELECT name FROM sqlite_master WHERE type='table'`
-				tables = Array.isArray(rows) ? rows.length : 0
+				tableNames = Array.isArray(rows) ? rows.map(r => String(r.name)) : []
+				tables = tableNames.length
 			} catch { }
-			return new Response(JSON.stringify({ ok: true, tables }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+			try { const st = await fs.stat(dbFile); sizeBytes = st.size } catch { }
+			return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl: (process.env.DATABASE_URL || '').trim(), sizeBytes }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 		} catch {
 			return new Response(JSON.stringify({ error: 'Restore failed' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 		}

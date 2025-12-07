@@ -2,6 +2,29 @@ import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { rateLimitMiddleware } from '@/lib/rate-limit';
 import { formatCompactHexRange } from '@/lib/formatRange';
+import { Prisma } from '@prisma/client';
+
+type TopContributor = { userTokenId: string | null; _sum: { amount: number | null } };
+type RecentBlock = {
+	id: string;
+	puzzleAddressSnapshot?: string | null;
+	userToken: { bitcoinAddress: string };
+	puzzleNameSnapshot?: string | null;
+	startRange: string;
+	endRange: string;
+	createdAt: Date;
+	blockSolution?: { creditsAwarded: number | null; createdAt: Date } | null;
+};
+type ActiveBlock = {
+	id: string;
+	puzzleAddressSnapshot?: string | null;
+	userToken: { bitcoinAddress: string };
+	puzzleNameSnapshot?: string | null;
+	startRange: string;
+	endRange: string;
+	createdAt: Date;
+	expiresAt: Date;
+};
 
 async function handler(req: NextRequest) {
 	try {
@@ -21,137 +44,90 @@ async function handler(req: NextRequest) {
 		const skip = (isFinite(skipParam) && skipParam >= 0) ? skipParam : 0
 		const days = (isFinite(daysParam) && daysParam > 0 && daysParam <= 30) ? daysParam : 0
 		const thresholdDate = days > 0 ? new Date(Date.now() - days * 24 * 60 * 60 * 1000) : null
-		const [
-			totalTokens,
-			totalBlocks,
-			completedBlocks,
-			pendingBlocks,
-			expiredBlocks,
-			totalCreditsAwarded,
-			recentBlocks,
-			activeBlocks,
-			topContributors,
-			userTokens7d,
-			sharedTokens7d,
-		] = await Promise.all([
-			// Total tokens
-			prisma.userToken.count(),
+		let totalTokens = 0
+		let totalBlocks = 0
+		let completedBlocks = 0
+		let pendingBlocks = 0
+		let expiredBlocks = 0
+		let totalCreditsAwarded: { _sum: { amount: number | null } } = { _sum: { amount: 0 } }
+		let recentBlocks: RecentBlock[] = []
+		let activeBlocks: ActiveBlock[] = []
+		let topContributors: TopContributor[] = []
+		let userTokens7d: Array<{ userTokenId: string | null }> = []
+		let sharedTokens7d: Array<{ sharedPoolTokenId: string | null }> = []
 
-			// Total blocks
-			prisma.blockAssignment.count(),
-
-			// Completed blocks
-			prisma.blockAssignment.count({
-				where: days > 0 ? {
-					status: 'COMPLETED',
-					blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
-				} : { status: 'COMPLETED' }
-			}),
-
-			// Pending blocks
-			prisma.blockAssignment.count({
-				where: { status: 'ACTIVE' }
-			}),
-
-			// Expired blocks
-			prisma.blockAssignment.count({
-				where: { status: 'EXPIRED' }
-			}),
-
-			// Total credits awarded
-			prisma.creditTransaction.aggregate({
-				where: { type: 'EARNED' },
-				_sum: {
-					amount: true
-				},
-			}),
-
-			// Recent completed blocks (no 7-day filter to show fresh validations reliably)
-			prisma.blockAssignment.findMany({
-				where: days > 0 ? {
-					status: 'COMPLETED',
-					blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
-				} : { status: 'COMPLETED' },
-				include: {
-					userToken: { select: { bitcoinAddress: true } },
-					blockSolution: { select: { creditsAwarded: true, createdAt: true } },
-				},
-				orderBy: [
-					{ updatedAt: 'desc' },
-					{ createdAt: 'desc' },
-				],
-				skip: days > 0 ? 0 : skip,
-				take: days > 0 ? 5000 : take,
-			}),
-
-			// Active blocks (currently being worked on)
-			prisma.blockAssignment.findMany({
-				where: { status: 'ACTIVE' },
-				include: {
-					userToken: { select: { bitcoinAddress: true } },
-				},
-				orderBy: { createdAt: 'desc' },
-				take: take,
-			}),
-
-			// Top contributors by credits earned
-			prisma.creditTransaction.groupBy({
-				by: ['userTokenId'],
-				where: { type: 'EARNED' },
-				_sum: {
-					amount: true
-				},
-				orderBy: {
-					_sum: {
-						amount: 'desc'
-					}
-				},
-				take: 10
-			}),
-
-
-			// Active miners in last N days (default 7)
-			prisma.blockAssignment.findMany({
-				where: days > 0 ? {
-					OR: [
-						{ updatedAt: { gte: thresholdDate! } },
-						{ createdAt: { gte: thresholdDate! } },
-					],
-				} : {
-					OR: [
-						{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-						{ createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-					],
-				},
-				select: { userTokenId: true },
-				distinct: ['userTokenId'],
-			}),
-
-			// Active shared pool tokens in last N days (default 7)
-			prisma.blockAssignment.findMany({
-				where: days > 0 ? {
-					NOT: { sharedPoolTokenId: null },
-					OR: [
-						{ updatedAt: { gte: thresholdDate! } },
-						{ createdAt: { gte: thresholdDate! } },
-					],
-				} : {
-					NOT: { sharedPoolTokenId: null },
-					OR: [
-						{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-						{ createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-					],
-				},
-				select: { sharedPoolTokenId: true },
-				distinct: ['sharedPoolTokenId'],
-			}),
-		]);
+		try {
+			;[
+				totalTokens,
+				totalBlocks,
+				completedBlocks,
+				pendingBlocks,
+				expiredBlocks,
+				totalCreditsAwarded,
+				recentBlocks,
+				activeBlocks,
+				topContributors,
+				userTokens7d,
+				sharedTokens7d,
+			] = await Promise.all([
+				prisma.userToken.count(),
+				prisma.blockAssignment.count(),
+				prisma.blockAssignment.count({
+					where: days > 0 ? {
+						status: 'COMPLETED',
+						blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
+					} : { status: 'COMPLETED' }
+				}),
+				prisma.blockAssignment.count({ where: { status: 'ACTIVE' } }),
+				prisma.blockAssignment.count({ where: { status: 'EXPIRED' } }),
+				prisma.creditTransaction.aggregate({ where: { type: 'EARNED' }, _sum: { amount: true } }),
+				prisma.blockAssignment.findMany({
+					where: days > 0 ? {
+						status: 'COMPLETED',
+						blockSolution: { is: { createdAt: { gte: thresholdDate! } } },
+					} : { status: 'COMPLETED' },
+					include: { userToken: { select: { bitcoinAddress: true } }, blockSolution: { select: { creditsAwarded: true, createdAt: true } } },
+					orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+					skip: days > 0 ? 0 : skip,
+					take: days > 0 ? 5000 : take,
+				}),
+				prisma.blockAssignment.findMany({
+					where: { status: 'ACTIVE' },
+					include: { userToken: { select: { bitcoinAddress: true } } },
+					orderBy: { createdAt: 'desc' },
+					take: take,
+				}),
+				prisma.creditTransaction.groupBy({
+					by: ['userTokenId'],
+					where: { type: 'EARNED' },
+					_sum: { amount: true },
+					orderBy: { _sum: { amount: 'desc' } },
+					take: 10,
+				}),
+				prisma.blockAssignment.findMany({
+					where: days > 0 ? { OR: [{ updatedAt: { gte: thresholdDate! } }, { createdAt: { gte: thresholdDate! } }] } : { OR: [{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }, { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }] },
+					select: { userTokenId: true },
+					distinct: ['userTokenId'],
+				}),
+				prisma.blockAssignment.findMany({
+					where: days > 0 ? { NOT: { sharedPoolTokenId: null }, OR: [{ updatedAt: { gte: thresholdDate! } }, { createdAt: { gte: thresholdDate! } }] } : { NOT: { sharedPoolTokenId: null }, OR: [{ updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }, { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }] },
+					select: { sharedPoolTokenId: true },
+					distinct: ['sharedPoolTokenId'],
+				}),
+			])
+		} catch (err: unknown) {
+			const isKnown = err instanceof Prisma.PrismaClientKnownRequestError
+			const code = isKnown ? err.code : ''
+			const msg = isKnown ? err.message : String(err)
+			const isEmptyDb = code === 'P2021' || msg.includes('does not exist')
+			if (!isEmptyDb) throw err
+		}
 
 		// Get token details for top contributors
 		const topContributorsWithDetails = await Promise.all(
 			topContributors.map(async (contributor) => {
 				const token = await prisma.userToken.findUnique({
-					where: { id: contributor.userTokenId },
+					where: { id: contributor.userTokenId ?? undefined },
 					select: { bitcoinAddress: true }
 				});
 

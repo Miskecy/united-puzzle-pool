@@ -6,6 +6,7 @@ import NavigationHeader from "@/components/NavigationHeader";
 import PuzzleBanner from "@/components/PuzzleBanner";
 import Footer from "@/components/Footer";
 import ClientInit from "@/components/ClientInit";
+import Script from "next/script";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -35,6 +36,9 @@ export default function RootLayout({
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-black`}
 			>
+				<Script id="perf-measure-patch" strategy="beforeInteractive">
+					{`(function(){try{var p=window.performance;if(!p||!p.measure)return;var orig=p.measure.bind(p);p.measure=function(name,startOrOptions,endMark){try{return orig(name,startOrOptions,endMark);}catch(e){var msg=e&&e.message?String(e.message):String(e||'');if(msg.includes('negative time stamp')||msg.includes("Failed to execute 'measure'")){return;}throw e;}}}catch(_){}})();`}
+				</Script>
 				<ClientInit />
 				<NavigationHeader />
 				<PuzzleBanner />

@@ -86,7 +86,7 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 							</CardTitle>
 						</div>
 						<CardDescription className="text-sm text-gray-500 ml-11">
-							{avgLabel} today average
+							{avgLabel} last 24h average
 						</CardDescription>
 					</div>
 					<div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-200">
@@ -293,7 +293,7 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 				{/* Footer Info */}
 				<div className="flex items-center justify-between text-xs text-gray-500 pt-2">
 					<span>{chartData.length} data points recorded</span>
-					<span className="text-gray-400">Period: Today (24h)</span>
+					<span className="text-gray-400">Period: Last 24h</span>
 				</div>
 			</CardContent>
 		</Card>

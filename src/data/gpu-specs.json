@@ -1,0 +1,264 @@
+[
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 2080 Ti",
+        "Architecture": "Turing",
+        "Series": "RTX 20",
+        "CoreUnits": 4352,
+        "TDP_W": 250
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 2080 SUPER",
+        "Architecture": "Turing",
+        "Series": "RTX 20",
+        "CoreUnits": 3072,
+        "TDP_W": 250
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 2070 SUPER",
+        "Architecture": "Turing",
+        "Series": "RTX 20",
+        "CoreUnits": 2560,
+        "TDP_W": 215
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 2060",
+        "Architecture": "Turing",
+        "Series": "RTX 20",
+        "CoreUnits": 1920,
+        "TDP_W": 160
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "GTX 1660 Ti",
+        "Architecture": "Turing",
+        "Series": "GTX 16",
+        "CoreUnits": 1536,
+        "TDP_W": 120
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "GTX 1650",
+        "Architecture": "Turing",
+        "Series": "GTX 16",
+        "CoreUnits": 896,
+        "TDP_W": 75
+    },
+
+    {
+        "Brand": "AMD",
+        "Model": "Radeon VII",
+        "Architecture": "Vega",
+        "Series": "Radeon VII",
+        "CoreUnits": 3840,
+        "TDP_W": 300
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 5700 XT",
+        "Architecture": "RDNA 1",
+        "Series": "RX 5000",
+        "CoreUnits": 2560,
+        "TDP_W": 225
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 5600 XT",
+        "Architecture": "RDNA 1",
+        "Series": "RX 5000",
+        "CoreUnits": 2304,
+        "TDP_W": 150
+    },
+
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 3090 Ti",
+        "Architecture": "Ampere",
+        "Series": "RTX 30",
+        "CoreUnits": 10752,
+        "TDP_W": 450
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 3080",
+        "Architecture": "Ampere",
+        "Series": "RTX 30",
+        "CoreUnits": 8704,
+        "TDP_W": 320
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 3070 Ti",
+        "Architecture": "Ampere",
+        "Series": "RTX 30",
+        "CoreUnits": 6144,
+        "TDP_W": 290
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 3060 Ti",
+        "Architecture": "Ampere",
+        "Series": "RTX 30",
+        "CoreUnits": 4864,
+        "TDP_W": 200
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 3050",
+        "Architecture": "Ampere",
+        "Series": "RTX 30",
+        "CoreUnits": 2560,
+        "TDP_W": 130
+    },
+
+    {
+        "Brand": "AMD",
+        "Model": "RX 6950 XT",
+        "Architecture": "RDNA 2",
+        "Series": "RX 6000",
+        "CoreUnits": 5120,
+        "TDP_W": 335
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 6800 XT",
+        "Architecture": "RDNA 2",
+        "Series": "RX 6000",
+        "CoreUnits": 4608,
+        "TDP_W": 300
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 6600 XT",
+        "Architecture": "RDNA 2",
+        "Series": "RX 6000",
+        "CoreUnits": 2048,
+        "TDP_W": 160
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 6500 XT",
+        "Architecture": "RDNA 2",
+        "Series": "RX 6000",
+        "CoreUnits": 1024,
+        "TDP_W": 107
+    },
+
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 4090",
+        "Architecture": "Ada Lovelace",
+        "Series": "RTX 40",
+        "CoreUnits": 16384,
+        "TDP_W": 450
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 4080 SUPER",
+        "Architecture": "Ada Lovelace",
+        "Series": "RTX 40",
+        "CoreUnits": 10240,
+        "TDP_W": 320
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 4070 Ti SUPER",
+        "Architecture": "Ada Lovelace",
+        "Series": "RTX 40",
+        "CoreUnits": 8448,
+        "TDP_W": 285
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 4070 SUPER",
+        "Architecture": "Ada Lovelace",
+        "Series": "RTX 40",
+        "CoreUnits": 7168,
+        "TDP_W": 220
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 4060 Ti",
+        "Architecture": "Ada Lovelace",
+        "Series": "RTX 40",
+        "CoreUnits": 4352,
+        "TDP_W": 165
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 4060",
+        "Architecture": "Ada Lovelace",
+        "Series": "RTX 40",
+        "CoreUnits": 3072,
+        "TDP_W": 115
+    },
+
+    {
+        "Brand": "AMD",
+        "Model": "RX 7900 XTX",
+        "Architecture": "RDNA 3",
+        "Series": "RX 7000",
+        "CoreUnits": 6144,
+        "TDP_W": 355
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 7900 XT",
+        "Architecture": "RDNA 3",
+        "Series": "RX 7000",
+        "CoreUnits": 5376,
+        "TDP_W": 315
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 7700 XT",
+        "Architecture": "RDNA 3",
+        "Series": "RX 7000",
+        "CoreUnits": 3456,
+        "TDP_W": 245
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 7600 XT",
+        "Architecture": "RDNA 3",
+        "Series": "RX 7000",
+        "CoreUnits": 2048,
+        "TDP_W": 190
+    },
+
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 5090",
+        "Architecture": "Blackwell",
+        "Series": "RTX 50",
+        "CoreUnits": 21760,
+        "TDP_W": 575
+    },
+    {
+        "Brand": "NVIDIA",
+        "Model": "RTX 5080",
+        "Architecture": "Blackwell",
+        "Series": "RTX 50",
+        "CoreUnits": 18432,
+        "TDP_W": 360
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 9900 XTX",
+        "Architecture": "RDNA 4",
+        "Series": "RX 9000",
+        "CoreUnits": 7680,
+        "TDP_W": 400
+    },
+    {
+        "Brand": "AMD",
+        "Model": "RX 9800 XT",
+        "Architecture": "RDNA 4",
+        "Series": "RX 9000",
+        "CoreUnits": 6144,
+        "TDP_W": 300
+    }
+]

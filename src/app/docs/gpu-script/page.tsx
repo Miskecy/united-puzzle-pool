@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 // Componentes UI assumidos (Button, Link)
 // Assumindo que você tem um Button simples, vou usar classes Tailwind/HTML para consistência de estilo de botão.
-import { BookOpen, Code, Settings, Terminal, FileText, Github } from 'lucide-react';
+import { BookOpen, Code, Settings, Terminal, FileText, Github, Code2Icon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import CodeSnippet from '@/components/CodeSnippet'
 
@@ -51,7 +51,7 @@ export default function GPUScriptDocs() {
 				<div className="text-center mb-12">
 					<div className="flex justify-center mb-4">
 						<div className="p-4 bg-blue-100 rounded-2xl">
-							<BookOpen className="w-12 h-12 text-blue-600" />
+							<Code2Icon className="w-12 h-12 text-blue-600" />
 						</div>
 					</div>
 					{/* Cores de texto PADRÃO: gray-900 e gray-600 */}

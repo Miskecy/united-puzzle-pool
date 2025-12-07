@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 
 function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
@@ -27,7 +28,19 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 		}
 
 		type Row = { id: string, user_token_id: string, amount: number, status: string }
-		const rows = await prisma.$queryRawUnsafe<Row[]>(`SELECT id, user_token_id, amount, status FROM reward_redemptions WHERE id = ? LIMIT 1`, id)
+        let rows: Row[] = []
+        try {
+            rows = await prisma.$queryRawUnsafe<Row[]>(`SELECT id, user_token_id, amount, status FROM reward_redemptions WHERE id = ? LIMIT 1`, id)
+        } catch (err: unknown) {
+            const isKnown = err instanceof Prisma.PrismaClientKnownRequestError
+            const code = isKnown ? err.code : ''
+            const msg = isKnown ? err.message : String(err)
+            const isEmptyDb = code === 'P2021' || msg.includes('does not exist') || msg.includes('no such table')
+            if (isEmptyDb) {
+                return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+            }
+            throw err
+        }
 		const row = rows && rows[0]
 		if (!row) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
 
@@ -41,7 +54,19 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 			if (status !== 'PENDING') {
 				return new Response(JSON.stringify({ error: 'Already processed' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
 			}
-			const availableAgg = await prisma.creditTransaction.aggregate({ where: { userTokenId }, _sum: { amount: true } })
+            let availableAgg: { _sum: { amount: number | null } } = { _sum: { amount: 0 } }
+            try {
+                availableAgg = await prisma.creditTransaction.aggregate({ where: { userTokenId }, _sum: { amount: true } })
+            } catch (err: unknown) {
+                const isKnown = err instanceof Prisma.PrismaClientKnownRequestError
+                const code = isKnown ? err.code : ''
+                const msg = isKnown ? err.message : String(err)
+                const isEmptyDb = code === 'P2021' || msg.includes('does not exist') || msg.includes('no such table')
+                if (isEmptyDb) {
+                    return new Response(JSON.stringify({ error: 'No credits available to deduct' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+                }
+                throw err
+            }
 			const availableMu = Number(availableAgg._sum.amount || 0)
 			const deductMu = Math.min(availableMu, amountMu)
 			if (!isFinite(deductMu) || deductMu <= 0) {

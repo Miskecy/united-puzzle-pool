@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCompactHexRange } from '@/lib/formatRange'
 import { formatAddress, formatBitcoinAddress } from '@/lib/utils'
-import { Settings, Database, Download, Upload, Edit3, Trash2, CheckCircle2, Key, Hash, CheckCircle, XCircle, Copy, Shield, RotateCw, List, Clock, Coins, Search, ChevronLeft, ChevronRight, Filter, MoreHorizontal } from 'lucide-react'
+import { Settings, Database, Download, Upload, Edit3, Trash2, CheckCircle2, Key, Hash, CheckCircle, XCircle, Copy, Shield, RotateCw, List, Clock, Coins, Search, ChevronLeft, ChevronRight, Filter, MoreHorizontal, Cpu } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -166,6 +166,13 @@ export default function SetupConfigPage() {
 	const [redeemPuzzleFilter, setRedeemPuzzleFilter] = useState<string>('')
 	const [actionMenuId, setActionMenuId] = useState<string | null>(null)
 
+	const [dbStatus, setDbStatus] = useState<{ tables: number; tableNames: string[]; dbFile: string; envUrl: string; sizeBytes: number; envRaw?: string; envInPrisma?: boolean; pathMismatch?: boolean; suggestedEnvUrl?: string } | null>(null)
+	const [dbStatusLoading, setDbStatusLoading] = useState(false)
+
+	const [userGpuItems, setUserGpuItems] = useState<{ id: string; model: string; approx_keys_per_second_mkeys: number; tdp_w?: number; brand?: string; architecture?: string; series?: string; status: 'PENDING' | 'APPROVED' | 'DENIED'; createdAt: string }[]>([])
+	const [userGpuLoading, setUserGpuLoading] = useState(false)
+	const [userGpuMsg, setUserGpuMsg] = useState('')
+
 	// Close action menu on outside click or escape key
 	useEffect(() => {
 		function onDocClick(e: MouseEvent) {
@@ -200,6 +207,18 @@ export default function SetupConfigPage() {
 			}
 		} catch { }
 		finally { setBlocksLoading(false) }
+	}
+
+	async function checkDbStatus() {
+		setDbStatusLoading(true)
+		try {
+			const r = await fetch('/api/config/backup?status=1', { headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
+			if (r.ok) {
+				const j = await r.json()
+				setDbStatus({ tables: Number(j.tables || 0), tableNames: Array.isArray(j.tableNames) ? j.tableNames.map((s: unknown) => String(s)) : [], dbFile: String(j.dbFile || ''), envUrl: String(j.envUrl || ''), sizeBytes: Number(j.sizeBytes || 0), envRaw: j.envRaw ? String(j.envRaw) : undefined, envInPrisma: !!j.envInPrisma, pathMismatch: !!j.pathMismatch, suggestedEnvUrl: j.suggestedEnvUrl ? String(j.suggestedEnvUrl) : undefined })
+			}
+		} catch { }
+		finally { setDbStatusLoading(false) }
 	}
 
 	const addValid = useMemo(() => {
@@ -239,6 +258,19 @@ export default function SetupConfigPage() {
 	}, [])
 
 	useEffect(() => { fetchBlocks(1) }, [])
+	useEffect(() => { fetchUserGpusAdmin() }, [])
+
+	async function fetchUserGpusAdmin() {
+		setUserGpuLoading(true)
+		try {
+			const headers = setupSecret ? { 'x-setup-secret': setupSecret } : undefined
+			const r = await fetch('/api/user-gpus', { headers })
+			if (r.ok) { const j = await r.json(); setUserGpuItems(Array.isArray(j.items) ? j.items : []) }
+		} catch { }
+		finally { setUserGpuLoading(false) }
+	}
+
+
 
 	const fetchRedeems = useCallback(async () => {
 		setRedeemLoading(true)
@@ -440,7 +472,7 @@ export default function SetupConfigPage() {
 					</div>
 
 					<Tabs defaultValue="puzzles" className="w-full">
-						<TabsList className="grid w-full grid-cols-4 h-auto p-1 mb-6 bg-white shadow-md border border-gray-200">
+						<TabsList className="grid w-full grid-cols-5 h-auto p-1 mb-6 bg-white shadow-md border border-gray-200">
 							<TabsTrigger value="puzzles" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
 								<Key className="h-4 w-4 mr-2" /> Puzzles
 							</TabsTrigger>
@@ -452,6 +484,9 @@ export default function SetupConfigPage() {
 							</TabsTrigger>
 							<TabsTrigger value="settings" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
 								<Database className="h-4 w-4 mr-2" /> Admin Tools
+							</TabsTrigger>
+							<TabsTrigger value="user-gpus" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Cpu className="h-4 w-4 mr-2" /> User GPUs
 							</TabsTrigger>
 						</TabsList>
 
@@ -954,6 +989,46 @@ export default function SetupConfigPage() {
 										</div>
 										{restoreMsg && <div className={`text-sm mt-3 font-medium ${restoreMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>{restoreMsg}</div>}
 									</div>
+									<div className='pt-4 border-t border-gray-100'>
+										<h3 className='text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2'><RotateCw className="h-5 w-5 text-gray-600" /> Database Status</h3>
+										<div className='flex flex-col sm:flex-row gap-3 sm:items-center'>
+											<Button type="button" className={`inline-flex items-center gap-2 ${dbStatusLoading ? 'bg-gray-400 text-white' : 'bg-gray-700 text-white hover:bg-gray-800'} w-full sm:w-auto`} disabled={dbStatusLoading} onClick={checkDbStatus}>
+												{dbStatusLoading ? <RotateCw className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />} Check DB Status
+											</Button>
+											{dbStatus && (
+												<div className='flex-1 grid grid-cols-1 md:grid-cols-2 gap-3'>
+													{(dbStatus.pathMismatch || !(dbStatus.envUrl || '').toLowerCase().includes('prisma/')) && (
+														<div className='md:col-span-2 p-3 bg-red-50 border border-red-300 rounded'>
+															<div className='text-xs text-red-700 font-semibold mb-1'>Warning: DATABASE_URL points outside prisma/</div>
+															<div className='text-xs text-red-700'>Current: <code className='text-[11px]'>{dbStatus.envUrl || '-'}</code></div>
+															<div className='text-xs text-red-700'>Suggested: <code className='text-[11px]'>{dbStatus.suggestedEnvUrl || 'file:./prisma/dev.db'}</code></div>
+															<div className='text-xs text-red-700 mt-1'>Update your environment variable and restart the app.</div>
+														</div>
+													)}
+													<div className='p-3 bg-gray-50 border border-gray-200 rounded'>
+														<div className='text-xs text-gray-600'>Database URL</div>
+														<code className='text-xs text-gray-800 break-all'>{dbStatus.envUrl || '-'}</code>
+													</div>
+													<div className='p-3 bg-gray-50 border border-gray-200 rounded'>
+														<div className='text-xs text-gray-600'>Database File</div>
+														<code className='text-xs text-gray-800 break-all'>{dbStatus.dbFile || '-'}</code>
+													</div>
+													<div className='p-3 bg-gray-50 border border-gray-200 rounded'>
+														<div className='text-xs text-gray-600'>Tables</div>
+														<span className='text-sm font-semibold text-gray-900'>{dbStatus.tables}</span>
+													</div>
+													<div className='p-3 bg-gray-50 border border-gray-200 rounded'>
+														<div className='text-xs text-gray-600'>File Size</div>
+														<span className='text-sm font-semibold text-gray-900'>{dbStatus.sizeBytes ? `${(dbStatus.sizeBytes / (1024 * 1024)).toFixed(2)} MB` : '-'}</span>
+													</div>
+													<div className='md:col-span-2 p-3 bg-gray-50 border border-gray-200 rounded'>
+														<div className='text-xs text-gray-600 mb-1'>Table Names</div>
+														<code className='text-xs text-gray-800 break-words'>{dbStatus.tableNames && dbStatus.tableNames.length ? dbStatus.tableNames.join(', ') : '-'}</code>
+													</div>
+												</div>
+											)}
+										</div>
+									</div>
 								</CardContent>
 							</Card>
 
@@ -1003,6 +1078,64 @@ export default function SetupConfigPage() {
 											<RotateCw className='w-4 h-4 mr-2' /> Refresh Puzzles Data
 										</Button>
 										{sharedMsg && <span className="text-sm text-gray-600">{sharedMsg}</span>}
+									</div>
+								</CardContent>
+							</Card>
+						</TabsContent>
+
+						{/* --- User GPUs Tab --- */}
+						<TabsContent value="user-gpus" className="space-y-6">
+							<Card className="bg-white border-gray-200 shadow-md">
+								<CardHeader className='border-b pb-4'>
+									<CardTitle className="text-gray-900 flex items-center gap-2 text-xl"><Cpu className="h-6 w-6 text-blue-600" />User GPU Submissions</CardTitle>
+									<CardDescription className="text-gray-600">Approve or deny user-submitted GPU performance entries.</CardDescription>
+								</CardHeader>
+								<CardContent className='pt-6'>
+									<div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+										<div className="text-sm text-gray-700 font-medium">{userGpuLoading ? 'Loading…' : `${userGpuItems.length} submission(s)`}</div>
+										<div className="flex items-center gap-2">
+											<Button variant="outline" onClick={fetchUserGpusAdmin} disabled={userGpuLoading}><RotateCw className="h-4 w-4 mr-2" /> Refresh</Button>
+										</div>
+									</div>
+									{userGpuMsg && <div className={`text-sm mb-4 font-medium ${userGpuMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>{userGpuMsg}</div>}
+									<div className="overflow-x-auto rounded-lg border border-gray-200">
+										<Table className="min-w-full divide-y divide-gray-200">
+											<TableHeader className="bg-gray-50">
+												<TableRow>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Model</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600 text-right">Speed (MKeys/s)</TableHead>
+													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Status</TableHead>
+													<TableHead className="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Actions</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody className='divide-y divide-gray-200'>
+												{userGpuItems.map(it => (
+													<TableRow key={it.id} className="hover:bg-blue-50/50 text-xs">
+														<TableCell className="py-3 px-3 font-medium text-gray-900">{it.model}</TableCell>
+														<TableCell className="py-3 px-3 font-mono break-all text-blue-700 text-right">{Number(it.approx_keys_per_second_mkeys).toFixed(0)}</TableCell>
+														<TableCell className="py-3 px-3">
+															{it.status === 'APPROVED' ? <Badge className="bg-green-600 text-white">Approved</Badge> : it.status === 'DENIED' ? <Badge className="bg-red-500 text-white">Denied</Badge> : <Badge className="bg-yellow-500 text-white">Pending</Badge>}
+														</TableCell>
+														<TableCell className="py-3 px-3 text-right">
+															<div className="flex items-center justify-end gap-2">
+																<Button variant="outline" size="sm" disabled={it.status !== 'PENDING'} onClick={async () => { setUserGpuMsg(''); try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'approve' }) }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to approve')); return } setUserGpuItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'APPROVED' } : x)); setUserGpuMsg('Submission approved successfully!'); } catch { setUserGpuMsg('Failed to approve') } }}>
+																	<CheckCircle2 className="h-4 w-4 mr-1" /> Approve
+																</Button>
+																<Button variant="destructive" size="sm" disabled={it.status !== 'PENDING'} onClick={async () => { setUserGpuMsg(''); try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'deny' }) }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to deny')); return } setUserGpuItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'DENIED' } : x)); setUserGpuMsg('Submission denied'); } catch { setUserGpuMsg('Failed to deny') } }}>
+																	<XCircle className="h-4 w-4 mr-1" /> Deny
+																</Button>
+																<Button variant="outline" size="sm" onClick={async () => { setUserGpuMsg(''); const ok = typeof window !== 'undefined' ? window.confirm('Remove this submission?') : true; if (!ok) return; try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'DELETE', headers: { ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) } }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to remove')); return } setUserGpuItems(prev => prev.filter(x => x.id !== it.id)); setUserGpuMsg('Submission removed'); } catch { setUserGpuMsg('Failed to remove') } }}>
+																	<Trash2 className="h-4 w-4 mr-1" /> Remove
+																</Button>
+															</div>
+														</TableCell>
+													</TableRow>
+												))}
+												{userGpuItems.length === 0 && !userGpuLoading && (
+													<TableRow><TableCell className="py-4 px-3 text-gray-600 text-center" colSpan={4}>No submissions found.</TableCell></TableRow>
+												)}
+											</TableBody>
+										</Table>
 									</div>
 								</CardContent>
 							</Card>

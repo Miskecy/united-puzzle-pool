@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { loadPuzzleConfig, parseHexBI } from '@/lib/config'
+import { Prisma } from '@prisma/client'
 
 async function handler(req: NextRequest) {
 	try {
@@ -15,17 +16,27 @@ async function handler(req: NextRequest) {
 		const pageSize = (isFinite(pageSizeParam) && pageSizeParam > 0 && pageSizeParam <= 100) ? pageSizeParam : 50
 		const skip = (page - 1) * pageSize
 
-		const [total, items, cfg] = await Promise.all([
-			prisma.blockAssignment.count({ where: { status: 'COMPLETED' } }),
-			prisma.blockAssignment.findMany({
-				where: { status: 'COMPLETED' },
-				include: { blockSolution: { select: { createdAt: true } } },
-				orderBy: { blockSolution: { createdAt: 'desc' } },
-				skip,
-				take: pageSize,
-			}),
-			loadPuzzleConfig()
-		])
+		let total = 0
+		let items: Array<{ id: string; startRange: string; endRange: string; createdAt: Date; blockSolution?: { createdAt: Date } | null }> = []
+		const cfg = await loadPuzzleConfig()
+		try {
+			;[total, items] = await Promise.all([
+				prisma.blockAssignment.count({ where: { status: 'COMPLETED' } }),
+				prisma.blockAssignment.findMany({
+					where: { status: 'COMPLETED' },
+					include: { blockSolution: { select: { createdAt: true } } },
+					orderBy: { blockSolution: { createdAt: 'desc' } },
+					skip,
+					take: pageSize,
+				}),
+			])
+		} catch (err: unknown) {
+			const isKnown = err instanceof Prisma.PrismaClientKnownRequestError
+			const code = isKnown ? err.code : ''
+			const msg = isKnown ? err.message : String(err)
+			const isEmptyDb = code === 'P2021' || msg.includes('does not exist') || msg.includes('no such table')
+			if (!isEmptyDb) throw err
+		}
 
 		const pStart = parseHexBI(cfg?.startHex || null) ?? 0n
 		const pEnd = parseHexBI(cfg?.endHex || null) ?? 0n

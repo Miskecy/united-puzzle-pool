@@ -3,22 +3,29 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Menu, X, Home, BarChart3, BookOpen, Grid3X3, Calculator, ChevronDown, GitBranch, Terminal, GpuIcon } from 'lucide-react';
+import { Menu, X, Home, BarChart3, BookOpen, Grid3X3, Calculator, ChevronDown, GitBranch, Terminal, GpuIcon, Code2Icon, Wrench } from 'lucide-react';
 
 export default function NavigationHeader() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [isDocsOpen, setIsDocsOpen] = useState(false);
+	const [isGpuOpen, setIsGpuOpen] = useState(false);
 
 	const pathname = usePathname();
 
 	const docsRef = useRef<HTMLDivElement | null>(null);
+	const gpuRef = useRef<HTMLDivElement | null>(null);
 	const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
 
 	// Módulos de Documentação
 	const docItems = [
 		{ href: '/docs/api', label: 'API Endpoints', icon: Terminal },
 		{ href: '/docs/shared', label: 'Shared Pool API', icon: GitBranch },
-		{ href: '/docs/gpu-script', label: 'GPU Script Guide', icon: GpuIcon },
+		{ href: '/docs/gpu-script', label: 'GPU Script Guide', icon: Code2Icon },
+	];
+
+	const gpuItems = [
+		{ href: '/tools/gpu-ranking', label: 'GPU Ranking', icon: GpuIcon },
+		{ href: '/tools/calc', label: 'Calculator', icon: Calculator },
 	];
 
 	// Navegação Principal
@@ -26,13 +33,12 @@ export default function NavigationHeader() {
 		{ href: '/', label: 'Home', icon: Home },
 		{ href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
 		{ href: '/overview', label: 'Overview', icon: Grid3X3 },
-		{ href: '/calc', label: 'Calculator', icon: Calculator },
 	];
 
 	const toggleMenu = useCallback(() => {
 		setIsMenuOpen(v => !v);
 		// Garante que o menu de Docs feche se o menu principal abrir
-		if (!isMenuOpen) setIsDocsOpen(false);
+		if (!isMenuOpen) { setIsDocsOpen(false); setIsGpuOpen(false); }
 	}, [isMenuOpen]);
 
 	// --- Lógica de Dropdown Desktop Aprimorada (Hover Controlado) ---
@@ -55,11 +61,15 @@ export default function NavigationHeader() {
 	useEffect(() => {
 		function onDocClick(e: MouseEvent) {
 			const el = docsRef.current;
+			const gel = gpuRef.current;
 			if (!el || !(e.target instanceof Node)) return;
 
 			// Fecha se o clique foi fora do dropdown (e não foi o botão de toggle móvel)
 			if (isDocsOpen && !el.contains(e.target)) {
 				setIsDocsOpen(false);
+			}
+			if (isGpuOpen && gel && !gel.contains(e.target)) {
+				setIsGpuOpen(false);
 			}
 		}
 		document.addEventListener('mousedown', onDocClick);
@@ -67,7 +77,7 @@ export default function NavigationHeader() {
 			document.removeEventListener('mousedown', onDocClick);
 			if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
 		};
-	}, [isDocsOpen]);
+	}, [isDocsOpen, isGpuOpen]);
 
 
 	// --- Helpers ---
@@ -83,6 +93,7 @@ export default function NavigationHeader() {
 	}, [pathname]);
 
 	const docsActive = pathname?.startsWith('/docs') ?? false;
+	const gpuActive = pathname?.startsWith('/tools') ?? false;
 
 	// --- Renderização ---
 	return (
@@ -120,6 +131,43 @@ export default function NavigationHeader() {
 								</Link>
 							);
 						})}
+
+						{/* Dropdown de GPU */}
+						<div
+							ref={gpuRef}
+							className="relative"
+						>
+							<button
+								type="button"
+								className={`${gpuActive ? 'bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100' : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50 font-medium'} flex items-center space-x-2 px-3 py-2.5 rounded-lg text-sm transition-all duration-200`}
+								onClick={() => setIsGpuOpen(v => !v)}
+							>
+								<Wrench size={18} className={gpuActive ? 'text-blue-700' : 'text-blue-500'} />
+								<span>Tools</span>
+								<ChevronDown size={16} className={`transition-transform duration-300 ${isGpuOpen ? 'rotate-180' : ''} text-gray-500`} />
+							</button>
+							<div
+								className={`absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-2xl py-2 z-50 transform origin-top-right transition-all duration-300 ease-in-out ${isGpuOpen ? 'opacity-100 scale-100 visible' : 'opacity-0 scale-95 pointer-events-none'}`}
+							>
+								<div className='p-2'>
+									{gpuItems.map((item) => {
+										const Icon = item.icon;
+										const active = isActive(item.href);
+										return (
+											<Link
+												key={item.href}
+												href={item.href}
+												className={`flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors duration-200 ${active ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-800 hover:bg-gray-100'}`}
+												onClick={() => setIsGpuOpen(false)}
+											>
+												<Icon size={16} className={active ? 'text-blue-700' : 'text-blue-600'} />
+												<span className='font-medium'>{item.label}</span>
+											</Link>
+										);
+									})}
+								</div>
+							</div>
+						</div>
 
 						{/* Dropdown de Documentação */}
 						<div
@@ -211,6 +259,24 @@ export default function NavigationHeader() {
 										</Link>
 									)
 								})}
+
+								<div className="pt-2">
+									<span className='text-xs font-semibold text-gray-500 px-3 pb-1 block'>Tools</span>
+									{gpuItems.map((item) => {
+										const Icon = item.icon;
+										return (
+											<Link
+												key={item.href}
+												href={item.href}
+												className="flex items-center space-x-3 text-gray-700 hover:text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 hover:bg-gray-100"
+												onClick={toggleMenu}
+											>
+												<Icon size={18} className="text-blue-500" />
+												<span>{item.label}</span>
+											</Link>
+										);
+									})}
+								</div>
 							</div>
 
 						</div>

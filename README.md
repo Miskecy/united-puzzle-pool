@@ -170,6 +170,13 @@ When you find a valid private key, submit it to claim your reward.
 -   `POST /api/config/backup` — Restore DB from uploaded file (admin)
 -   `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
 
+#### Database Backup & Restore Notes
+
+-   Local development should use `DATABASE_URL=file:./prisma/dev.db` so Prisma reads/writes the database under the `prisma/` folder.
+-   The Restore API resolves relative `file:` URLs to `prisma/` by default. If your `DATABASE_URL` points outside `prisma/`, update it and restart the app.
+-   Verify live state via `GET /api/config/backup?status=1` (admin). The response includes `envUrl`, `dbFile`, `tables`, `tableNames`, and `sizeBytes`.
+-   On `/setup/config`, use “Database Status” to check configuration and see a warning if `DATABASE_URL` is misconfigured.
+
 ### Notes on Credits
 
 -   Credits are tracked internally in milliunits and exposed with up to 3 decimal places.
