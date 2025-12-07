@@ -1,52 +1,52 @@
-# Documentação da API - United Pool
+# API Documentation - United Puzzle Pool
 
-## Visão Geral
+## Overview
 
-Esta API permite que usuários participem de um pool de mineração para resolver puzzles Bitcoin. O sistema atribui blocos de chaves privadas para cada usuário e verifica as soluções enviadas.
+This API allows users to participate in a mining pool to solve Bitcoin puzzles. The system assigns private key ranges (blocks) to each user and verifies submitted solutions.
 
-Base URL: defina `APP_URL` no arquivo `.env` (padrão `http://localhost:3000`).
+Base URL: set `APP_URL` in the `.env` file (default `http://localhost:3000`).
 
-## Configuração Inicial
+## Initial Setup
 
-### 1. Gerar Token de Acesso
+### 1. Generate Access Token
 
 **Endpoint:** `POST /api/token/generate`
 
-**Descrição:** Gera um novo token de acesso para o usuário.
+**Description:** Generates a new access token for the user.
 
-**Método:** POST
+**Method:** POST
 
-**Headers:** Nenhum necessário
+**Headers:** None required
 
-**Body:** Nenhum necessário
+**Body:** None required
 
-**Resposta de Sucesso (200):**
+**Success Response (200):**
 
 ```json
 {
-    "token": "seu-token-aqui-12345",
+    "token": "your-token-here-12345",
     "bitcoinAddress": "1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9",
     "createdAt": "2024-01-01T00:00:00.000Z"
 }
 ```
 
-### 2. Obter Estatísticas do Usuário
+### 2. Get User Stats
 
 **Endpoint:** `GET /api/user/stats`
 
-**Descrição:** Retorna as estatísticas do usuário associado ao token.
+**Description:** Returns statistics for the user associated with the token.
 
-**Método:** GET
+**Method:** GET
 
 **Headers:**
 
--   `pool-token`: Seu token de acesso
+-   `pool-token`: Your access token
 
-**Resposta de Sucesso (200):**
+**Success Response (200):**
 
 ```json
 {
-    "token": "seu-token-aqui-12345",
+    "token": "your-token-here-12345",
     "bitcoinAddress": "1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9",
     "totalBlocks": 5,
     "completedBlocks": 2,
@@ -63,23 +63,23 @@ Base URL: defina `APP_URL` no arquivo `.env` (padrão `http://localhost:3000`).
 }
 ```
 
-## Operações de Bloco
+## Block Operations
 
-### 3. Obter ou Atribuir Novo Bloco
+### 3. Get or Assign New Block
 
 **Endpoint:** `GET /api/block`
 
-**Descrição:** Retorna um bloco ativo existente ou atribui um novo bloco para o usuário.
+**Description:** Returns an existing active block or assigns a new block to the user.
 
-Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range retornado estará sempre dentro do intervalo `[puzzleStart, puzzleEnd)` do puzzle marcado como ativo, não havendo sobreposição com blocos `ACTIVE` ou `COMPLETED` existentes.
+All assignments respect the **active puzzle** configured in the system. The returned range will always be within `[puzzleStart, puzzleEnd)` of the puzzle marked as active, with no overlap with existing `ACTIVE` or `COMPLETED` blocks.
 
-**Método:** GET
+**Method:** GET
 
 **Headers:**
 
--   `pool-token`: Seu token de acesso
+-   `pool-token`: Your access token
 
-**Resposta de Sucesso (200):**
+**Success Response (200):**
 
 ```json
 {
@@ -105,17 +105,17 @@ Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range
 }
 ```
 
-### 4. Enviar Solução do Bloco
+### 4. Submit Block Solution
 
 **Endpoint:** `POST /api/block/submit`
 
-**Descrição:** Envia as chaves privadas encontradas para verificação.
+**Description:** Submits found private keys for verification.
 
-**Método:** POST
+**Method:** POST
 
 **Headers:**
 
--   `pool-token`: Seu token de acesso
+-   `pool-token`: Your access token
 -   `Content-Type`: application/json
 
 **Body:**
@@ -137,13 +137,13 @@ Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range
 }
 ```
 
-**Regras de Envio:**
+**Submission Rules:**
 
--   Envie entre **10 e 30** chaves privadas (hex de 64 caracteres; aceita prefixo `0x`).
--   As chaves enviadas devem cobrir os **10** endereços em `checkwork_addresses`; chaves extras são permitidas.
--   Se qualquer chave enviada derivar o endereço do puzzle Bitcoin, ela será registrada de forma segura no sistema.
+-   Send between **10 and 30** private keys (64-character hex; `0x` prefix accepted).
+-   The submitted keys must cover the **10** addresses in `checkwork_addresses`; extra keys are allowed.
+-   If any submitted key derives the puzzle Bitcoin address, it will be securely recorded by the system.
 
-**Resposta de Sucesso (200):**
+**Success Response (200):**
 
 ```json
 {
@@ -155,24 +155,24 @@ Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range
             "address": "15VniC13nbt36dWrWirJ2xULudEZsKHY6n",
             "isValid": true
         }
-        // ... resultados para as 10 chaves
+        // ... results for the 10 keys
     ],
     "creditsEarned": 10,
     "flags": { "puzzleDetected": true }
 }
 ```
 
-## Transferência de Créditos
+## Credit Transfers
 
-### 5. Iniciar Transferência
+### 5. Initiate Transfer
 
 **Endpoint:** `POST /api/credits/transfer/init`
 
-**Descrição:** Inicia uma sessão de transferência de créditos. Retorna uma mensagem e um `nonce` que devem ser assinados com o endereço Bitcoin associado ao seu token.
+**Description:** Starts a credit transfer session. Returns a message and a `nonce` that must be signed using the Bitcoin address associated with your token.
 
 **Headers:**
 
--   `pool-token: seu-token-aqui-12345` ou `Authorization: Bearer seu-token-aqui-12345`
+-   `pool-token: your-token-here-12345` or `Authorization: Bearer your-token-here-12345`
 
 **Body:**
 
@@ -183,7 +183,7 @@ Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range
 }
 ```
 
-**Resposta de Sucesso (200):**
+**Success Response (200):**
 
 ```json
 {
@@ -195,15 +195,15 @@ Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range
 }
 ```
 
-### 6. Confirmar Transferência
+### 6. Confirm Transfer
 
 **Endpoint:** `POST /api/credits/transfer/confirm`
 
-**Descrição:** Verifica a assinatura da mensagem da etapa de inicialização e efetiva a transferência dos créditos.
+**Description:** Verifies the signature of the message from the initialization step and finalizes the credits transfer.
 
 **Headers:**
 
--   `pool-token` ou `Authorization: Bearer` (mesmo token da inicialização)
+-   `pool-token` or `Authorization: Bearer` (same token used at initialization)
 
 **Body:**
 
@@ -214,7 +214,7 @@ Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range
 }
 ```
 
-**Resposta de Sucesso (200):**
+**Success Response (200):**
 
 ```json
 {
@@ -225,30 +225,30 @@ Todas as atribuições respeitam o **puzzle ativo** definido no sistema. O range
 }
 ```
 
-### Notas de Créditos
+### Credit Notes
 
-1. Créditos são armazenados em milliunidades e expostos com até 3 casas decimais.
-2. A assinatura usa `bitcoinjs-message.verify` sobre a mensagem retornada por `/api/credits/transfer/init`.
-3. O endereço Bitcoin usado deve ser o mesmo associado ao seu token.
+1. Credits are stored internally in milliunits and exposed with up to 3 decimal places.
+2. Signing uses `bitcoinjs-message.verify` over the message returned by `/api/credits/transfer/init`.
+3. The Bitcoin address used must be the same one associated with your token.
 
-## API de Pool Compartilhado
+## Shared Pool API
 
-### 7. Consultar Status de Validação
+### 7. Query Validation Status
 
 **Endpoint:** `GET /api/shared`
 
 **Headers:**
 
--   `x-shared-secret: <segredo>` ou `shared-pool-token: <token>`
+-   `x-shared-secret: <secret>` or `shared-pool-token: <token>`
 
 **Query:**
 
--   `start`: hex de 64 caracteres (`0x...`)
--   `end`: hex de 64 caracteres (`0x...`)
+-   `start`: 64-character hex (`0x...`)
+-   `end`: 64-character hex (`0x...`)
 
-Observação: O range consultado deve estar contido no puzzle ativo. Caso contrário, o serviço retornará `409`.
+Note: The queried range must be contained within the active puzzle. Otherwise, the service returns `409`.
 
-**Resposta:**
+**Response:**
 
 ```json
 {
@@ -259,17 +259,17 @@ Observação: O range consultado deve estar contido no puzzle ativo. Caso contr�
 }
 ```
 
-Erros comuns:
+Common errors:
 
--   `409`: Range fora do puzzle ativo
+-   `409`: Range outside the active puzzle
 
-### 8. Submeter Validação Compartilhada
+### 8. Submit Shared Validation
 
 **Endpoint:** `POST /api/shared`
 
 **Headers:**
 
--   `x-shared-secret` ou `shared-pool-token`
+-   `x-shared-secret` or `shared-pool-token`
 
 **Body:**
 
@@ -283,9 +283,9 @@ Erros comuns:
 }
 ```
 
-Observação: O range enviado deve estar contido no puzzle ativo. Caso contrário, o serviço retornará `409` e não registrará a validação.
+Note: The submitted range must be contained within the active puzzle. Otherwise, the service returns `409` and does not record the validation.
 
-### 9. Gerar Token para Pool Compartilhado
+### 9. Generate Token for Shared Pool
 
 **Endpoint:** `POST /api/shared/token/generate`
 
@@ -295,83 +295,83 @@ Observação: O range enviado deve estar contido no puzzle ativo. Caso contrári
 { "puzzleaddress": "1..." }
 ```
 
-**Resposta:**
+**Response:**
 
 ```json
 { "token": "..." }
 ```
 
-## Fluxo Completo do Usuário
+## Full User Flow
 
-### Passo 1: Gerar Token
+### Step 1: Generate Token
 
 ```bash
 curl -X POST ${APP_URL}/api/token/generate
 ```
 
-### Passo 2: Armazenar Token
+### Step 2: Store Token
 
-Guarde o token recebido em localStorage ou variável de ambiente:
+Save the received token in localStorage or an environment variable:
 
 ```javascript
-localStorage.setItem('pool-token', 'seu-token-aqui-12345');
+localStorage.setItem('pool-token', 'your-token-here-12345');
 ```
 
-### Passo 3: Obter Estatísticas
+### Step 3: Get Stats
 
 ```bash
 curl -X GET ${APP_URL}/api/user/stats \
-  -H "pool-token: seu-token-aqui-12345"
+  -H "pool-token: your-token-here-12345"
 ```
 
-### Passo 4: Obter Bloco para Trabalhar
+### Step 4: Get Work Block
 
 ```bash
 curl -X GET ${APP_URL}/api/block \
-  -H "pool-token: seu-token-aqui-12345"
+  -H "pool-token: your-token-here-12345"
 ```
 
-### Passo 5: Processar Bloco
+### Step 5: Process Block
 
-Use o software de mineração para processar o range de chaves privadas:
+Use your cracking/mining software to process the private key range:
 
--   Range inicial: `0x6280b9fa585e522400`
--   Range final: `0x6280b9fe585e5223ff`
+-   Start range: `0x6280b9fa585e522400`
+-   End range: `0x6280b9fe585e5223ff`
 
-### Passo 6: Enviar Resultados
+### Step 6: Submit Results
 
-Quando encontrar chaves privadas válidas:
+When you find valid private keys:
 
 ```bash
 curl -X POST ${APP_URL}/api/block/submit \
-  -H "pool-token: seu-token-aqui-12345" \
+  -H "pool-token: your-token-here-12345" \
   -H "Content-Type: application/json" \
   -d '{
     "privateKeys": [
       "0x000000000000000000000000000000000000000000000004388c2b4bf7d206c3",
-      // ... mais 9 chaves
+      // ... plus 9 more keys
     ]
   }'
 ```
 
-## Códigos de Erro
+## Error Codes
 
--   `400`: Requisição inválida (JSON malformado, dados incorretos)
--   `401`: Token não fornecido ou inválido
--   `405`: Método HTTP não permitido
--   `500`: Erro interno do servidor
+-   `400`: Invalid request (malformed JSON, incorrect data)
+-   `401`: Token not provided or invalid
+-   `405`: HTTP method not allowed
+-   `500`: Internal server error
 
-## Informações do Puzzle
+## Puzzle Information
 
--   **Bitcoin Address do Puzzle**: exemplo `1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9`
--   **Range Inicial**: depende do puzzle ativo (hex)
--   **Range Final**: depende do puzzle ativo (hex)
+-   **Puzzle Bitcoin Address**: example `1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9`
+-   **Start Range**: depends on the active puzzle (hex)
+-   **End Range**: depends on the active puzzle (hex)
 
-## Notas Importantes
+## Important Notes
 
-1. Todas as APIs operam estritamente dentro do **puzzle ativo**. Ranges fora do puzzle ativo são rejeitados.
-2. Cada bloco contém exatamente 10 endereços de verificação.
-3. Você deve enviar entre 10 e 30 chaves privadas no POST.
-4. Cada bloco tem validade de 12 horas.
-5. Os créditos são ganhos quando chaves válidas são encontradas.
-6. Use o dashboard web para visualizar seu progresso e gerenciar tokens.
+1. All APIs operate strictly within the **active puzzle**. Ranges outside the active puzzle are rejected.
+2. Each block contains exactly 10 checkwork addresses.
+3. You must submit between 10 and 30 private keys in the POST.
+4. Each block is valid for 12 hours.
+5. Credits are earned when valid keys are found.
+6. Use the web dashboard to view your progress and manage tokens.
