@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { formatNumber } from '@/lib/utils';
 import { formatCompactHexRange, isValidBitcoinAddress } from '@/lib/formatRange';
-import { Zap, Target, Clock, Bitcoin, Copy, BookOpen, Eye, EyeOff, Coins, Key, CheckCircle2, ArrowRight, XCircle, RotateCw, LogOut } from 'lucide-react';
+import { Zap, Target, Clock, Bitcoin, Copy, BookOpen, Eye, EyeOff, Coins, Key, CheckCircle2, ArrowRight, XCircle, RotateCw, LogOut, Award } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
 import Link from 'next/link';
@@ -34,6 +34,15 @@ interface UserStats {
 		assignedAt: string;
 		expiresAt: string;
 	} | null;
+}
+
+interface DistInfo {
+	balanceBtc: number;
+	poolShareBtc: number;
+	totalAvailableCredits: number;
+	userAvailableCredits: number;
+	userSharePercent: number;
+	expectedRewardBtc: number;
 }
 
 interface HistoryBlock {
@@ -69,6 +78,8 @@ export default function UserDashboard() {
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [copiedToken, setCopiedToken] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+	const [poolDist, setPoolDist] = useState<DistInfo | null>(null);
+	const [usdPrice, setUsdPrice] = useState<number | null>(null);
 
 	function formatLastUpdated(ts: number | null): string {
 		if (!ts) return '—';
@@ -81,6 +92,32 @@ export default function UserDashboard() {
 		const d = Math.floor(h / 24);
 		return `${d}d ago`;
 	}
+
+	useEffect(() => {
+		(async () => {
+			try {
+				const token = typeof window !== 'undefined' ? localStorage.getItem('pool-token') : '';
+				if (!token) return;
+				const r = await fetch('/api/pool/distribution', { headers: { 'pool-token': token } });
+				if (!r.ok) return;
+				const j: DistInfo = await r.json();
+				setPoolDist(j);
+			} catch { }
+		})();
+	}, []);
+
+	useEffect(() => {
+		(async () => {
+			try {
+				const info = await fetch('/api/puzzle/info', { cache: 'no-store' });
+				if (!info.ok) return;
+				const j = await info.json();
+				const btc = Number(j?.balanceBtc || 0);
+				const usd = Number(j?.balanceUsd || 0);
+				if (btc > 0 && usd > 0) setUsdPrice(usd / btc);
+			} catch { }
+		})();
+	}, []);
 	const parsedKeys = useMemo(() => keysText
 		.split(/\s|,|;|\n|\r/)
 		.map(s => s.trim())
@@ -935,24 +972,31 @@ export default function UserDashboard() {
 									<CardDescription className="text-gray-600">Your unique identifier and associated Bitcoin address.</CardDescription>
 								</div>
 							</div>
-							<div className="flex gap-3">
+							<div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
 								<Button
 									onClick={() => router.push('/dashboard/transfer')}
-									className="bg-green-600 hover:bg-green-700 text-white font-semibold inline-flex items-center gap-2"
+									className="bg-green-600 hover:bg-green-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
 									disabled={loading}
 								>
 									<Coins className='h-4 w-4' /> Transfer Credits
 								</Button>
 								<Button
+									onClick={() => router.push('/dashboard/redeem')}
+									className="bg-purple-600 hover:bg-purple-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
+									disabled={loading}
+								>
+									<Award className='h-4 w-4' /> Redeem Reward
+								</Button>
+								<Button
 									onClick={generateNewToken}
-									className="bg-blue-600 hover:bg-blue-700 text-white font-semibold inline-flex items-center gap-2"
+									className="bg-blue-600 hover:bg-blue-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
 									disabled={loading}
 								>
 									<RotateCw className='h-4 w-4' /> Rotate Token
 								</Button>
 								<Button
 									onClick={handleLogout}
-									className="bg-red-600 hover:bg-red-700 text-white font-semibold inline-flex items-center gap-2"
+									className="bg-red-600 hover:bg-red-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
 								>
 									<LogOut className='h-4 w-4' /> Log Out
 								</Button>
@@ -1021,6 +1065,28 @@ export default function UserDashboard() {
 						<CardContent>
 							<div className="text-xl font-bold text-gray-900">{userStats.totalCredits.toFixed(3)}</div>
 							<p className="text-xs text-gray-600">{userStats.availableCredits.toFixed(3)} available</p>
+						</CardContent>
+					</Card>
+
+					{/* Estimated Payout (25%) */}
+					<Card className="shadow-sm border-gray-200">
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+							<CardTitle className="text-sm font-medium text-gray-600">Estimated Payout (25%)</CardTitle>
+							<Award className="h-4 w-4 text-purple-500" />
+						</CardHeader>
+						<CardContent>
+							{poolDist ? (
+								<div className="space-y-1">
+									<div className="text-xl font-bold text-gray-900">{poolDist.expectedRewardBtc.toFixed(8)} BTC</div>
+									<p className="text-xs text-gray-600">Share: {poolDist.userSharePercent.toFixed(2)}%</p>
+									<p className="text-xs text-gray-600">Puzzle Balance: {poolDist.balanceBtc.toFixed(8)} BTC</p>
+									{usdPrice && poolDist.expectedRewardBtc > 0 && (
+										<p className="text-xs text-gray-600">≈ ${(poolDist.expectedRewardBtc * usdPrice).toFixed(2)} USD</p>
+									)}
+								</div>
+							) : (
+								<p className="text-xs text-gray-600">Loading estimate…</p>
+							)}
 						</CardContent>
 					</Card>
 

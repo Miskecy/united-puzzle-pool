@@ -74,20 +74,47 @@ function formatDifficultyPrecise(lenHexStart: string, lenHexEnd: string): string
 	}
 }
 
+interface BlockData {
+	id: string;
+	bitcoinAddress: string;
+	tokenMasked: string;
+	hexRangeStart: string;
+	hexRangeEnd: string;
+	hexRangeStartRaw: string;
+	hexRangeEndRaw: string;
+	assignedAt: string;
+	completedAt?: string | null;
+	durationSeconds: number | null;
+	keysValidated: number;
+	avgSpeedKeysPerSec: number | null;
+	creditsAwarded: number;
+	checkworkAddresses: string[];
+	privateKeys: (string | undefined)[];
+	addressMap: { privateKey?: string; address: string; isValid: boolean }[];
+	matchedCount: number;
+	missingAddresses: string[];
+}
+
 export default async function BlockDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
-    const base = process.env.APP_URL || ''
-    let res: Response
-    if (base) {
-        res = await fetch(`${base}/api/block/${id}`, { cache: 'no-store' })
-    } else {
-        const h = await headers()
-        const host = h.get('host') || 'localhost:3000'
-        const proto = h.get('x-forwarded-proto') || 'http'
-        res = await fetch(`${proto}://${host}/api/block/${id}`, { cache: 'no-store' })
-    }
+	const { id } = await params
+	const base = process.env.APP_URL || ''
+	let res: Response
+	if (base) {
+		res = await fetch(`${base}/api/block/${id}`, { cache: 'no-store' })
+	} else {
+		const h = await headers()
+		const host = h.get('host') || 'localhost:3000'
+		const proto = h.get('x-forwarded-proto') || 'http'
+		res = await fetch(`${proto}://${host}/api/block/${id}`, { cache: 'no-store' })
+	}
 	const ok = res.ok
-	const data = ok ? await res.json() : null
+	let block: BlockData | null = null
+	let dataError: { error?: string } | null = null
+	try {
+		const parsed = await res.json()
+		if (ok) block = parsed as BlockData
+		else dataError = parsed as { error?: string }
+	} catch { }
 
 	return (
 		// PADRÃO 1: Fundo com degradê
@@ -109,25 +136,25 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 				{!ok && (
 					<Card className="bg-white border-red-400 border shadow-sm">
 						<CardContent className="p-4">
-							<div className="text-red-600 font-medium">Failed to load block: {id}. This block may not exist.</div>
+							<div className="text-red-600 font-medium">Failed to load block: {id}. {dataError?.error || 'This block may not exist.'}</div>
 						</CardContent>
 					</Card>
 				)}
 
 				{/* Content */}
-				{ok && data && (
+				{ok && block && (
 					<div className="space-y-6">
 
 						{/* Status Bar */}
 						<div className="flex flex-wrap items-center gap-3">
 							<span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded font-semibold text-sm">
-								<Hash className="h-4 w-4" /> Block ID: {data.id}
+								<Hash className="h-4 w-4" /> Block ID: {block.id}
 							</span>
 							<span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded font-medium text-sm">
-								<Clock className="h-4 w-4" /> Completed: {timeAgoStr(data.completedAt)}
+								<Clock className="h-4 w-4" /> Completed: {timeAgoStr(block.completedAt)}
 							</span>
 							<span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded font-medium text-sm">
-								<Gauge className="h-4 w-4" /> Difficulty: {formatDifficultyPrecise(data.hexRangeStartRaw, data.hexRangeEndRaw)}
+								<Gauge className="h-4 w-4" /> Difficulty: {formatDifficultyPrecise(block.hexRangeStartRaw, block.hexRangeEndRaw)}
 							</span>
 						</div>
 
@@ -144,25 +171,25 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 								<CardContent className="pt-4 space-y-3 text-sm">
 
 									<div className="bg-gray-50 border border-gray-200 p-3 rounded-md font-mono text-gray-800 break-all">
-										{data.hexRangeStart} <ArrowRight className="inline h-3 w-3 mx-1 text-gray-500" /> {data.hexRangeEnd}
+										{block.hexRangeStart} <ArrowRight className="inline h-3 w-3 mx-1 text-gray-500" /> {block.hexRangeEnd}
 									</div>
 
 									<div className="grid grid-cols-2 gap-4">
 										<div>
 											<div className="text-xs font-medium text-gray-600">Assigned By (Address)</div>
-											<div className="text-sm font-mono text-gray-800">{mask(data.bitcoinAddress)}</div>
+											<div className="text-sm font-mono text-gray-800">{mask(block.bitcoinAddress)}</div>
 										</div>
 										<div>
 											<div className="text-xs font-medium text-gray-600">Token Mask</div>
-											<div className="text-sm font-mono text-gray-800">{data.tokenMasked}</div>
+											<div className="text-sm font-mono text-gray-800">{block.tokenMasked}</div>
 										</div>
 										<div>
 											<div className="text-xs font-medium text-gray-600">Assigned At</div>
-											<div className="text-sm text-gray-800">{new Date(data.assignedAt).toLocaleString()}</div>
+											<div className="text-sm text-gray-800">{new Date(block.assignedAt).toLocaleString()}</div>
 										</div>
 										<div>
 											<div className="text-xs font-medium text-gray-600">Duration</div>
-											<div className="text-sm text-gray-800 font-mono">{formatDuration(data.durationSeconds)}</div>
+											<div className="text-sm text-gray-800 font-mono">{formatDuration(block.durationSeconds)}</div>
 										</div>
 									</div>
 								</CardContent>
@@ -178,15 +205,15 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 								<CardContent className="pt-4 space-y-2 text-sm">
 									<div className="flex justify-between">
 										<span className="text-gray-600">Average Speed:</span>
-										<span className="font-mono text-green-700 font-semibold">{formatSpeed(data.avgSpeedKeysPerSec)}</span>
+										<span className="font-mono text-green-700 font-semibold">{formatSpeed(block.avgSpeedKeysPerSec)}</span>
 									</div>
 									<div className="flex justify-between">
 										<span className="text-gray-600">Keys Validated:</span>
-										<span className="font-mono text-gray-800">{data.keysValidated.toLocaleString()}</span>
+										<span className="font-mono text-gray-800">{block.keysValidated.toLocaleString()}</span>
 									</div>
 									<div className="flex justify-between">
 										<span className="text-gray-600">Credits Awarded:</span>
-										<span className="font-mono text-blue-700">{data.creditsAwarded}</span>
+										<span className="font-mono text-blue-700">{block.creditsAwarded}</span>
 									</div>
 								</CardContent>
 							</Card>
@@ -204,16 +231,16 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 
 								{/* Checkwork Addresses (Matched / Pending) */}
 								<div>
-									<div className="text-sm font-semibold text-gray-800 mb-2">Checkwork Addresses ({data.checkworkAddresses?.length ?? 0})</div>
+									<div className="text-sm font-semibold text-gray-800 mb-2">Checkwork Addresses ({block.checkworkAddresses?.length ?? 0})</div>
 									<div className="flex flex-wrap gap-2 text-xs mb-3">
-										<span className="px-2 py-0.5 bg-green-100 text-green-700 rounded">Matched {data.matchedCount ?? 0}</span>
-										<span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded">Missing {data.missingAddresses?.length ?? 0}</span>
-										<span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded">Total Keys {data.privateKeys?.length ?? 0}</span>
+										<span className="px-2 py-0.5 bg-green-100 text-green-700 rounded">Matched {block.matchedCount ?? 0}</span>
+										<span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded">Missing {block.missingAddresses?.length ?? 0}</span>
+										<span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded">Total Keys {block.privateKeys?.length ?? 0}</span>
 									</div>
 									<div className="space-y-3 h-fit overflow-y-auto pr-2">
-										{data.checkworkAddresses && data.checkworkAddresses.length > 0 ? (
-											data.checkworkAddresses.map((addr: string, i: number) => {
-												const matchedForAddr = (data.addressMap || []).filter((m: { address: string; isValid: boolean }) => m.address === addr && m.isValid)
+										{block.checkworkAddresses && block.checkworkAddresses.length > 0 ? (
+											block.checkworkAddresses.map((addr: string, i: number) => {
+												const matchedForAddr = (block.addressMap || []).filter((m: { address: string; isValid: boolean }) => m.address === addr && m.isValid)
 												const isMatched = matchedForAddr.length > 0
 
 												return (
@@ -240,15 +267,15 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 
 								{/* Unmatched Private Keys */}
 								<div>
-									<div className="text-sm font-semibold text-gray-800 mb-2">Unmatched Private Keys ({data.privateKeys?.length ?? 0})</div>
+									<div className="text-sm font-semibold text-gray-800 mb-2">Unmatched Private Keys ({block.privateKeys?.length ?? 0})</div>
 									<div className="text-xs text-gray-600 mb-2">Keys that did not match any checkwork address upon submission.</div>
 									<div className="space-y-1 max-h-60 overflow-y-auto pr-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
-										{(data.addressMap || []).filter((m: { isValid: boolean }) => !m.isValid).map((m: { privateKey: string; address: string }, i: number) => (
+										{(block.addressMap || []).filter((m: { isValid: boolean }) => !m.isValid).map((m: { privateKey?: string; address: string }, i: number) => (
 											<div key={`u2-${i}`} className="text-xs font-mono text-gray-800 break-all border-b border-gray-100 pb-1 last:border-b-0">
 												{m.privateKey}
 											</div>
 										))}
-										{data.addressMap && data.addressMap.filter((m: { isValid: boolean }) => !m.isValid).length === 0 && (
+										{block.addressMap && block.addressMap.filter((m: { isValid: boolean }) => !m.isValid).length === 0 && (
 											<div className="text-xs text-gray-600 text-center py-4">All submitted keys were matched or deemed valid.</div>
 										)}
 									</div>

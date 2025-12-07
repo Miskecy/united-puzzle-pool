@@ -213,7 +213,7 @@ export default function PoolActivityTimelineStandalone({
         @keyframes spin { to { transform: rotate(360deg); } }
         .block3d { isolation: isolate; height: 180px; cursor: pointer; will-change: left, transform; }
         .block3d-content { position: relative; z-index: 1; height: 100%; border-radius: 8px; background: #ffffff; border: 1px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0,0,0,.08); transition: transform .2s ease, box-shadow .2s ease; }
-        .duration-fill { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(156,163,175,.24); border-radius: 8px; pointer-events: none; transition: height .5s ease; }
+        .duration-fill { position: absolute; left: 0; right: 0; bottom: 0; background: #d1fae5; border-radius: 8px; pointer-events: none; transition: height .5s ease; }
         .time-fill { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(245,158,11,.18); border-radius: 8px; pointer-events: none; transition: height .5s ease; }
         .block3d:before { content: ''; position: absolute; top: -4px; left: -4px; width: 100%; height: 100%; background: #4b4b4b; border-radius: 8px; z-index: 0; }
         .block3d-active:before { background: #f59e0b; }

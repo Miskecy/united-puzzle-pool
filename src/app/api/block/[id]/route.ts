@@ -71,7 +71,7 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 			durationSeconds,
 			keysValidated,
 			avgSpeedKeysPerSec: avgSpeed,
-            creditsAwarded: Number(block.blockSolution?.creditsAwarded || 0) / 1000,
+			creditsAwarded: Number(block.blockSolution?.creditsAwarded || 0) / 1000,
 			checkworkAddresses,
 			privateKeys,
 			addressMap,
