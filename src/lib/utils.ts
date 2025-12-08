@@ -209,25 +209,60 @@ export function samplePrivateKeysInRange(startHex: string, endHex: string, count
 		return allKeys.slice(0, count);
 	}
 
-	console.log('Gerando chaves privadas aleatórias com crypto.randomBytes...');
-	let attempts = 0;
-	const maxAttempts = count * 100; // Limite de tentativas para evitar loops infinitos
+	console.log('Gerando chaves privadas com ancoras e amostragem estratificada...');
 
-	while (privateKeys.length < count && attempts < maxAttempts) {
-		// Gerar bytes aleatórios e converter para BigInt
-		const randomBytes = crypto.randomBytes(32);
-		const randomHex = randomBytes.toString('hex');
-		const randomBigInt = BigInt('0x' + randomHex);
+	if (count === 1) {
+		const midOffset = randomBigIntBelow(range);
+		const midBI = startBigInt + midOffset;
+		privateKeys.push(bigIntToHex64(midBI));
+		return privateKeys;
+	}
 
-		// Calcular offset usando módulo
-		const randomOffset = randomBigInt % range;
-		const privateKeyBigInt = startBigInt + randomOffset;
-		const privateKeyHex = bigIntToHex64(privateKeyBigInt);
+	const fivePctLen = range / 20n; // ~5%
+	const twoPctLen = range / 50n;  // ~2%
+	const startSegLen = fivePctLen > 0n ? fivePctLen : 1n;
+	const endSegLen = twoPctLen > 0n ? twoPctLen : 1n;
 
-		if (!used.has(privateKeyHex)) {
-			used.add(privateKeyHex);
-			privateKeys.push(privateKeyHex);
+	const anchorStartBI = startBigInt + (startSegLen > 1n ? randomBigIntBelow(startSegLen) : 0n);
+	const anchorEndStart = endBigInt - endSegLen;
+	const anchorEndBI = (anchorEndStart > startBigInt ? anchorEndStart : startBigInt) + (endSegLen > 1n ? randomBigIntBelow(endSegLen) : 0n);
+
+	const anchorStartHex = bigIntToHex64(anchorStartBI);
+	const anchorEndHex = bigIntToHex64(anchorEndBI);
+	if (!used.has(anchorStartHex)) { used.add(anchorStartHex); privateKeys.push(anchorStartHex); }
+	if (!used.has(anchorEndHex)) { used.add(anchorEndHex); privateKeys.push(anchorEndHex); }
+
+	const remaining = count - privateKeys.length;
+	if (remaining > 0) {
+		let midStart = startBigInt + startSegLen;
+		let midEnd = endBigInt - endSegLen;
+		if (midEnd <= midStart) { midStart = startBigInt; midEnd = endBigInt; }
+		const midRange = midEnd - midStart;
+		const segments = BigInt(remaining);
+		const segmentSize = segments > 0n ? (midRange / segments) : midRange;
+		for (let i = 0; i < remaining; i++) {
+			const idx = BigInt(i);
+			const segStart = midStart + (segmentSize * idx);
+			let segEnd = i === remaining - 1 ? midEnd : (segStart + segmentSize);
+			if (segEnd <= segStart) segEnd = segStart + 1n;
+			const segLen = segEnd - segStart;
+			const offset = segLen > 1n ? randomBigIntBelow(segLen) : 0n;
+			const privBI = segStart + offset;
+			const privHex = bigIntToHex64(privBI);
+			if (!used.has(privHex)) {
+				used.add(privHex);
+				privateKeys.push(privHex);
+			}
 		}
+	}
+
+	let attempts = 0;
+	const maxAttempts = count * 100;
+	while (privateKeys.length < count && attempts < maxAttempts) {
+		const offset = randomBigIntBelow(range);
+		const privBI = startBigInt + offset;
+		const privHex = bigIntToHex64(privBI);
+		if (!used.has(privHex)) { used.add(privHex); privateKeys.push(privHex); }
 		attempts++;
 	}
 
@@ -277,15 +312,9 @@ export function deriveBitcoinAddressFromPrivateKeyHex(hex: string): string {
 export function generateCheckworkAddresses(start: string, end: string, count: number = 10): string[] {
 	console.log('generateCheckworkAddresses chamado com:', start, end, count);
 
-	// Generate random private keys within the range
 	const privateKeys = samplePrivateKeysInRange(start.replace('0x', ''), end.replace('0x', ''), count);
 	console.log('Private keys gerados:', privateKeys.length, privateKeys);
 
-	if (privateKeys.length < count) {
-		throw new Error(`Não foi possível gerar ${count} chaves privadas únicas dentro do range`);
-	}
-
-	// Convert private keys to Bitcoin addresses
 	const addresses: string[] = [];
 	for (const privateKeyHex of privateKeys) {
 		try {
@@ -296,10 +325,6 @@ export function generateCheckworkAddresses(start: string, end: string, count: nu
 			console.error('Erro ao gerar Bitcoin address:', error);
 			throw new Error(`Falha ao gerar endereço Bitcoin da chave privada: ${error}`);
 		}
-	}
-
-	if (addresses.length !== count) {
-		throw new Error(`Não foi possível gerar ${count} endereços Bitcoin`);
 	}
 
 	console.log('Endereços Bitcoin gerados:', addresses.length, addresses);

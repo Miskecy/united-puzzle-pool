@@ -355,29 +355,21 @@ async function handler(req: NextRequest) {
 				hexRange = { start: startHex, end: endHex };
 			}
 
-			// Generate checkwork addresses using the new function
-			console.log('Generating checkwork addresses...');
-			const checkworkAddresses = generateCheckworkAddresses(hexRange.start, hexRange.end, 10);
-			console.log('Checkwork addresses generated:', checkworkAddresses.length, checkworkAddresses);
+            // Generate checkwork addresses with dynamic count near range end
+            console.log('Generating checkwork addresses...');
+            const desiredCount = assignedSize < 10n ? Number(assignedSize) : 10;
+            const checkworkAddresses = generateCheckworkAddresses(hexRange.start, hexRange.end, desiredCount);
+            console.log('Checkwork addresses generated:', checkworkAddresses.length, checkworkAddresses);
 
-			// Validate that we have exactly 10 unique addresses
-			if (checkworkAddresses.length !== 10) {
-				console.error(`Erro: esperado 10 endereços, mas foram gerados ${checkworkAddresses.length}`);
-				return new Response(
-					JSON.stringify({ error: 'Falha ao gerar endereços Bitcoin' }),
-					{ status: 500, headers: { 'Content-Type': 'application/json' } }
-				);
-			}
-
-			// Check for duplicate addresses
-			const uniqueAddresses = new Set(checkworkAddresses);
-			if (uniqueAddresses.size !== checkworkAddresses.length) {
-				console.error('Erro: endereços duplicados detectados');
-				return new Response(
-					JSON.stringify({ error: 'Endereços Bitcoin duplicados gerados' }),
-					{ status: 500, headers: { 'Content-Type': 'application/json' } }
-				);
-			}
+            // Basic validation: ensure we have at least one unique address
+            const uniqueAddresses = new Set(checkworkAddresses);
+            if (uniqueAddresses.size < 1) {
+                console.error('Erro: nenhum endereço gerado');
+                return new Response(
+                    JSON.stringify({ error: 'Falha ao gerar endereços Bitcoin' }),
+                    { status: 500, headers: { 'Content-Type': 'application/json' } }
+                );
+            }
 
 			const expiresAt = calculateExpirationTime(12);
 

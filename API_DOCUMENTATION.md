@@ -140,7 +140,7 @@ All assignments respect the **active puzzle** configured in the system. The retu
 **Submission Rules:**
 
 -   Send between **10 and 30** private keys (64-character hex; `0x` prefix accepted).
--   The submitted keys must cover the **10** addresses in `checkwork_addresses`; extra keys are allowed.
+-   The submitted keys must cover all addresses in `checkwork_addresses` (may be fewer than 10); extra keys are allowed.
 -   If any submitted key derives the puzzle Bitcoin address, it will be securely recorded by the system.
 
 **Success Response (200):**
@@ -349,7 +349,7 @@ curl -X POST ${APP_URL}/api/block/submit \
   -d '{
     "privateKeys": [
       "0x000000000000000000000000000000000000000000000004388c2b4bf7d206c3",
-      // ... plus 9 more keys
+      // ... plus more keys totaling 10–30
     ]
   }'
 ```
@@ -370,7 +370,7 @@ curl -X POST ${APP_URL}/api/block/submit \
 ## Important Notes
 
 1. All APIs operate strictly within the **active puzzle**. Ranges outside the active puzzle are rejected.
-2. Each block contains exactly 10 checkwork addresses.
+2. Each block contains up to 10 checkwork addresses; smaller assigned ranges may include fewer.
 3. You must submit between 10 and 30 private keys in the POST.
 4. Each block is valid for 12 hours.
 5. Credits are earned when valid keys are found.

@@ -42,11 +42,12 @@ export default function MiningBlock({ token, onBlockCompleted }: MiningBlockProp
 				throw new Error('Failed to fetch block');
 			}
 
-			const data = await response.json();
-			setBlock(data);
+            const data = await response.json();
+            setBlock(data);
 
-			// Initialize private keys array
-			setPrivateKeys(['', '', '', '', '', '', '', '', '', '']);
+            // Initialize private keys array to match the number of checkwork addresses
+            const addrCount = Array.isArray(data.checkwork_addresses) ? data.checkwork_addresses.length : 10;
+            setPrivateKeys(Array.from({ length: addrCount }, () => ''));
 
 		} catch (error) {
 			console.error('Error fetching block:', error);
@@ -97,11 +98,11 @@ export default function MiningBlock({ token, onBlockCompleted }: MiningBlockProp
 		}
 
 		// Validate all keys are provided
-		const emptyKeys = privateKeys.filter(key => !key.trim()).length;
-		if (emptyKeys > 0) {
-			toast.error(`Please provide all 10 private keys (${emptyKeys} missing)`);
-			return;
-		}
+        const emptyKeys = privateKeys.filter(key => !key.trim()).length;
+        if (emptyKeys > 0) {
+            toast.error(`Please provide all ${privateKeys.length} private keys (${emptyKeys} missing)`);
+            return;
+        }
 
 		try {
 			setSubmitting(true);

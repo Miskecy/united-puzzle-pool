@@ -130,7 +130,7 @@ curl -H "pool-token: YOUR_TOKEN" ${APP_URL}/api/block
 Use your mining software to search the assigned hex range for valid private keys. The response includes:
 
 -   `hexRangeStart` and `hexRangeEnd`: Your search range
--   `checkworkAddresses`: 10 Bitcoin addresses to check against
+-   `checkworkAddresses`: up to 10 Bitcoin addresses to check against
 
 ### 4. Submit Solutions
 
@@ -142,7 +142,7 @@ When you find a valid private key, submit it to claim your reward.
 
 -   `POST /api/token/generate` — Generate a new mining token
 -   `GET /api/block` — Get block assignment (requires `pool-token`)
--   `POST /api/block/submit` — Submit 10–30 private keys; marks block complete and awards credits. If a submitted key derives the puzzle address, the active puzzle is auto-marked solved.
+-   `POST /api/block/submit` — Submit 10–30 private keys; keys must cover all returned `checkwork_addresses`. Marks block complete and awards credits. If a submitted key derives the puzzle address, the active puzzle is auto-marked solved.
 -   `GET /api/pool/stats` — Get pool statistics
 -   `GET /api/user/stats` — Get user statistics (requires `pool-token`)
 -   `GET /api/user/history` — Get user block history (requires `pool-token`)
