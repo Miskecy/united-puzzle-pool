@@ -164,7 +164,7 @@ export default function SetupConfigPage() {
 	const [puzzleSearch, setPuzzleSearch] = useState('')
 	const [redeemStatusFilter, setRedeemStatusFilter] = useState<string>('')
 	const [redeemPuzzleFilter, setRedeemPuzzleFilter] = useState<string>('')
-	const [actionMenuId, setActionMenuId] = useState<string | null>(null)
+
 
 	const [dbStatus, setDbStatus] = useState<{ tables: number; tableNames: string[]; dbFile: string; envUrl: string; sizeBytes: number; envRaw?: string; envInPrisma?: boolean; pathMismatch?: boolean; suggestedEnvUrl?: string } | null>(null)
 	const [dbStatusLoading, setDbStatusLoading] = useState(false)
@@ -173,24 +173,7 @@ export default function SetupConfigPage() {
 	const [userGpuLoading, setUserGpuLoading] = useState(false)
 	const [userGpuMsg, setUserGpuMsg] = useState('')
 
-	// Close action menu on outside click or escape key
-	useEffect(() => {
-		function onDocClick(e: MouseEvent) {
-			const target = e.target as HTMLElement
-			if (!target.closest('.action-menu') && !target.closest('[aria-label="Actions"]')) {
-				setActionMenuId(null)
-			}
-		}
-		function onKey(e: KeyboardEvent) {
-			if (e.key === 'Escape') setActionMenuId(null)
-		}
-		document.addEventListener('click', onDocClick)
-		document.addEventListener('keydown', onKey)
-		return () => {
-			document.removeEventListener('click', onDocClick)
-			document.removeEventListener('keydown', onKey)
-		}
-	}, [])
+
 
 	const setupSecret = typeof window !== 'undefined' ? (localStorage.getItem('setup_secret') || '') : ''
 
@@ -257,10 +240,7 @@ export default function SetupConfigPage() {
 		})()
 	}, [])
 
-	useEffect(() => { fetchBlocks(1) }, [])
-	useEffect(() => { fetchUserGpusAdmin() }, [])
-
-	async function fetchUserGpusAdmin() {
+	const fetchUserGpusAdmin = useCallback(async () => {
 		setUserGpuLoading(true)
 		try {
 			const headers = setupSecret ? { 'x-setup-secret': setupSecret } : undefined
@@ -268,7 +248,12 @@ export default function SetupConfigPage() {
 			if (r.ok) { const j = await r.json(); setUserGpuItems(Array.isArray(j.items) ? j.items : []) }
 		} catch { }
 		finally { setUserGpuLoading(false) }
-	}
+	}, [setupSecret])
+
+	useEffect(() => { fetchBlocks(1) }, [])
+	useEffect(() => { fetchUserGpusAdmin() }, [fetchUserGpusAdmin])
+
+
 
 
 
@@ -1023,7 +1008,7 @@ export default function SetupConfigPage() {
 													</div>
 													<div className='md:col-span-2 p-3 bg-gray-50 border border-gray-200 rounded'>
 														<div className='text-xs text-gray-600 mb-1'>Table Names</div>
-														<code className='text-xs text-gray-800 break-words'>{dbStatus.tableNames && dbStatus.tableNames.length ? dbStatus.tableNames.join(', ') : '-'}</code>
+														<code className='text-xs text-gray-800 wrap-break-word'>{dbStatus.tableNames && dbStatus.tableNames.length ? dbStatus.tableNames.join(', ') : '-'}</code>
 													</div>
 												</div>
 											)}

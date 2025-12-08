@@ -277,11 +277,35 @@ export default function GPURankingPage() {
 		if (b && !a) return { best: 'B', item: b, reasons: ['Higher speed', 'Better efficiency'] }
 		if (!a || !b) return null
 		let sa = 0, sb = 0
-		if (a.approx_keys_per_second_mkeys !== b.approx_keys_per_second_mkeys) (a.approx_keys_per_second_mkeys > b.approx_keys_per_second_mkeys) ? sa += 2 : sb += 2
+		if (a.approx_keys_per_second_mkeys !== b.approx_keys_per_second_mkeys) {
+			if (a.approx_keys_per_second_mkeys > b.approx_keys_per_second_mkeys) {
+				sa += 2
+			} else {
+				sb += 2
+			}
+		}
 		const ea = computeEfficiency(a), eb = computeEfficiency(b)
-		if (ea !== eb) (ea > eb) ? sa += 2 : sb += 2
-		if (a.tdp_w !== b.tdp_w) (a.tdp_w < b.tdp_w) ? sa += 1 : sb += 1
-		if (a.cuda_cores !== b.cuda_cores) (a.cuda_cores > b.cuda_cores) ? sa += 1 : sb += 1
+		if (ea !== eb) {
+			if (ea > eb) {
+				sa += 2
+			} else {
+				sb += 2
+			}
+		}
+		if (a.tdp_w !== b.tdp_w) {
+			if (a.tdp_w < b.tdp_w) {
+				sa += 1
+			} else {
+				sb += 1
+			}
+		}
+		if (a.cuda_cores !== b.cuda_cores) {
+			if (a.cuda_cores > b.cuda_cores) {
+				sa += 1
+			} else {
+				sb += 1
+			}
+		}
 		const best = sa === sb ? (a.approx_keys_per_second_mkeys >= b.approx_keys_per_second_mkeys ? 'A' : 'B') : (sa > sb ? 'A' : 'B')
 		const item = best === 'A' ? a : b
 		const reasons: string[] = []
