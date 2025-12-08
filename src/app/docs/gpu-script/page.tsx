@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 // Componentes UI assumidos (Button, Link)
 // Assumindo que você tem um Button simples, vou usar classes Tailwind/HTML para consistência de estilo de botão.
-import { BookOpen, Code, Settings, Terminal, FileText, Github, Code2Icon } from 'lucide-react';
+import { Code, Settings, Terminal, FileText, Github, Code2Icon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import CodeSnippet from '@/components/CodeSnippet'
 
