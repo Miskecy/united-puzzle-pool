@@ -38,82 +38,90 @@ export default function HomePage() {
 	useEffect(() => {
 		const fetchAll = async () => {
 			try {
-				const [statsRes, overviewRes] = await Promise.all([
+				const [statsAllRes, stats24Res, overviewRes] = await Promise.all([
 					fetch('/api/pool/stats', { cache: 'no-store' }),
+					fetch('/api/pool/stats?days=1', { cache: 'no-store' }),
 					fetch('/api/pool/overview', { cache: 'no-store' }),
 				])
-				if (statsRes.ok) {
-					const stats = await statsRes.json()
-					setCompletedBlocks(stats?.overview?.completedBlocks ?? 0)
-					setTotalMiners(stats?.overview?.activeMiners ?? '—')
-					const recent = Array.isArray(stats?.recentBlocks) ? stats.recentBlocks : []
-					const active = Array.isArray(stats?.activeBlocks) ? stats.activeBlocks : []
-					setRecentBlocks(recent)
-					setActiveBlocks(active)
-					// Aggregate into 24 hourly bins for the last 24 hours (rolling window)
-					const hourMs = 60 * 60 * 1000
-					const endTs = Date.now()
-					const startTs = endTs - 24 * hourMs
-					const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
-					const currentHourIdx = 23
+				let chartRecent: TimelineBlock[] = []
+				if (statsAllRes.ok) {
+					const statsAll = await statsAllRes.json()
+					setCompletedBlocks(statsAll?.overview?.completedBlocks ?? 0)
+					setTotalMiners(statsAll?.overview?.activeMiners ?? '—')
+					const recentAll = Array.isArray(statsAll?.recentBlocks) ? statsAll.recentBlocks : []
+					const activeAll = Array.isArray(statsAll?.activeBlocks) ? statsAll.activeBlocks : []
+					setRecentBlocks(recentAll)
+					setActiveBlocks(activeAll)
+					chartRecent = recentAll
+				}
+				if (stats24Res.ok) {
+					const stats24 = await stats24Res.json()
+					const recent24 = Array.isArray(stats24?.recentBlocks) ? stats24.recentBlocks : []
+					chartRecent = recent24
+				}
+				// Aggregate into 24 hourly bins for the last 24 hours (rolling window)
+				const hourMs = 60 * 60 * 1000
+				const endTs = Date.now()
+				const startTs = endTs - 24 * hourMs
+				const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
+				const currentHourIdx = 23
 
-					const items = recent.filter((rb: { completedAt?: string; createdAt?: string }) => {
-						const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
-						return cm >= startTs && cm <= endTs
-					})
+				const items = chartRecent.filter((rb: { completedAt?: string; createdAt?: string }) => {
+					const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
+					return cm >= startTs && cm <= endTs
+				})
 
-					let totalLenBI = 0n
-					let totalSeconds = 0
-					for (const rb of items) {
-						if (!rb.hexRangeStartRaw || !rb.hexRangeEndRaw || !rb.completedAt || !rb.createdAt) continue
-						const s = BigInt(rb.hexRangeStartRaw)
-						const e = BigInt(rb.hexRangeEndRaw)
-						const lenBI = e >= s ? (e - s) : 0n
-						const startMs = new Date(rb.createdAt).getTime()
-						const endMs = new Date(rb.completedAt).getTime()
-						const secs = Math.max(1, Math.floor((endMs - startMs) / 1000))
-						totalLenBI += lenBI
-						totalSeconds += secs
-						const idx = Math.floor((endMs - startTs) / hourMs)
-						if (idx >= 0 && idx < 24) {
-							bins[idx].lenBI += lenBI
-							bins[idx].secs += secs
-							if (bins[idx].latestMs === null || endMs > (bins[idx].latestMs as number)) {
-								bins[idx].latestMs = endMs
-							}
+				let totalLenBI = 0n
+				let totalSeconds = 0
+				for (const rb of items) {
+					if (!rb.hexRangeStartRaw || !rb.hexRangeEndRaw || !rb.completedAt || !rb.createdAt) continue
+					const s = BigInt(rb.hexRangeStartRaw)
+					const e = BigInt(rb.hexRangeEndRaw)
+					const lenBI = e >= s ? (e - s) : 0n
+					const startMs = new Date(rb.createdAt).getTime()
+					const endMs = new Date(rb.completedAt).getTime()
+					const secs = Math.max(1, Math.floor((endMs - startMs) / 1000))
+					totalLenBI += lenBI
+					totalSeconds += secs
+					const idx = Math.floor((endMs - startTs) / hourMs)
+					if (idx >= 0 && idx < 24) {
+						bins[idx].lenBI += lenBI
+						bins[idx].secs += secs
+						if (bins[idx].latestMs === null || endMs > (bins[idx].latestMs as number)) {
+							bins[idx].latestMs = endMs
 						}
 					}
+				}
 
-					const points: Array<{ t: number; ts?: number; v: number }> = bins.map((b, i) => {
-						const hourStart = startTs + i * hourMs
-						const latest = b.latestMs ?? hourStart
-						const t = hourStart
-						if (b.secs <= 0) return { t, ts: latest, v: 0 }
-						const bkeys = Number(b.lenBI / 1_000_000_000n)
-						const speed = bkeys / b.secs
-						return { t, ts: latest, v: Number.isFinite(speed) ? speed : 0 }
-					})
-					setSpeedPoints(points)
-					if (totalSeconds > 0) {
-						const thresholds: Array<{ unit: string; divisor: bigint }> = [
-							{ unit: 'PKeys/s', divisor: 1_000_000_000_000_000n },
-							{ unit: 'TKeys/s', divisor: 1_000_000_000_000n },
-							{ unit: 'BKeys/s', divisor: 1_000_000_000n },
-							{ unit: 'MKeys/s', divisor: 1_000_000n },
-							{ unit: 'KKeys/s', divisor: 1_000n },
-						]
-						const kpsTimes100 = (totalLenBI * 100n) / BigInt(totalSeconds)
-						let unit = 'Keys/s'
-						let divisor = 1n
-						const kps = kpsTimes100 / 100n
-						for (const t of thresholds) { if (kps >= t.divisor) { unit = t.unit; divisor = t.divisor; break } }
-						const valTimes100 = kpsTimes100 / divisor
-						const intPart = valTimes100 / 100n
-						const frac = valTimes100 % 100n
-						setAvgSpeedLabel(`${intPart.toString()}.${frac.toString().padStart(2, '0')} ${unit}`)
-					} else {
-						setAvgSpeedLabel('—')
-					}
+				const points: Array<{ t: number; ts?: number; v: number }> = bins.map((b, i) => {
+					const hourStart = startTs + i * hourMs
+					const latest = b.latestMs ?? hourStart
+					const t = hourStart
+					if (b.secs <= 0) return { t, ts: latest, v: 0 }
+					const bkeys = Number(b.lenBI / 1_000_000_000n)
+					const speed = bkeys / b.secs
+					return { t, ts: latest, v: Number.isFinite(speed) ? speed : 0 }
+				})
+				setSpeedPoints(points)
+				if (totalSeconds > 0) {
+					const thresholds: Array<{ unit: string; divisor: bigint }> = [
+						{ unit: 'PKeys/s', divisor: 1_000_000_000_000_000n },
+						{ unit: 'TKeys/s', divisor: 1_000_000_000_000n },
+						{ unit: 'BKeys/s', divisor: 1_000_000_000n },
+						{ unit: 'MKeys/s', divisor: 1_000_000n },
+						{ unit: 'KKeys/s', divisor: 1_000n },
+					]
+					const kpsTimes100 = (totalLenBI * 100n) / BigInt(totalSeconds)
+					let unit = 'Keys/s'
+					let divisor = 1n
+					const kps = kpsTimes100 / 100n
+					for (const t of thresholds) { if (kps >= t.divisor) { unit = t.unit; divisor = t.divisor; break } }
+					const valTimes100 = kpsTimes100 / divisor
+					const intPart = valTimes100 / 100n
+					const frac = valTimes100 % 100n
+					setAvgSpeedLabel(`${intPart.toString()}.${frac.toString().padStart(2, '0')} ${unit}`)
+				} else {
+					setAvgSpeedLabel('—')
 				}
 				if (overviewRes.ok) {
 					const data = await overviewRes.json()
