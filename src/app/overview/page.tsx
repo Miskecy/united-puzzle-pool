@@ -489,6 +489,21 @@ export default function PoolOverviewPage() {
 										const bg = cell ? ((cell.completed ?? 0) > 0 ? heatColor(cell.percent, cell.completed, colorMode, maxAbsCompleted) : 'transparent') : 'transparent';
 										const isHovered = hoveredCell === i || hoveredBlockCells.includes(i);
 
+										const colorsLen = HEATMAP_COLORS.length;
+										let colorIdx = 0;
+										if (cell && (cell.completed ?? 0) > 0) {
+											if (colorMode === 'absolute') {
+												const max = maxAbsCompleted && isFinite(maxAbsCompleted) && maxAbsCompleted > 0 ? maxAbsCompleted : 1;
+												const c = cell.completed && isFinite(cell.completed) ? Math.max(0, cell.completed) : 0;
+												const ratio = Math.max(0, Math.min(1, c / max));
+												colorIdx = Math.round(ratio * (colorsLen - 1));
+											} else {
+												const p = isFinite(cell.percent) ? Math.max(0, Math.min(100, cell.percent)) : 0;
+												colorIdx = Math.round((p / 100) * (colorsLen - 1));
+											}
+										}
+										const textClass = colorIdx >= 35 ? 'text-white' : 'text-gray-700';
+
 										const style = cell
 											? {
 												backgroundColor: bg,
@@ -513,7 +528,7 @@ export default function PoolOverviewPage() {
 														onClick={() => setHoveredCell(prev => (prev === i ? null : i))}
 													>
 														{cell && (
-															<span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[10px] text-gray-700 font-medium pointer-events-none">
+															<span className={`absolute inset-0 flex items-center justify-center text-[9px] sm:text-[10px] ${textClass} font-semibold pointer-events-none`}>
 																{lenPow}
 															</span>
 														)}
