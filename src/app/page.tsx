@@ -64,10 +64,9 @@ export default function HomePage() {
 				const endTs = Date.now()
 				const startTs = endTs - 24 * hourMs
 				const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
-				const currentHourIdx = 23
 
-				const items = chartRecent.filter((rb: { completedAt?: string; createdAt?: string }) => {
-					const cm = new Date(rb.completedAt || rb.createdAt || 0).getTime()
+				const items = chartRecent.filter((rb) => {
+					const cm = new Date(rb.completedAt ?? rb.createdAt ?? 0).getTime()
 					return cm >= startTs && cm <= endTs
 				})
 
