@@ -39,7 +39,7 @@ export default function HomePage() {
 		const fetchAll = async () => {
 			try {
 				const [statsRes, overviewRes] = await Promise.all([
-					fetch('/api/pool/stats?days=1', { cache: 'no-store' }),
+					fetch('/api/pool/stats', { cache: 'no-store' }),
 					fetch('/api/pool/overview', { cache: 'no-store' }),
 				])
 				if (statsRes.ok) {
