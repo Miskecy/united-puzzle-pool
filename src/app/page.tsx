@@ -195,7 +195,7 @@ export default function HomePage() {
 							{/* Stat 2: Blocos Completos */}
 							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">
 								<Trophy className="w-5 h-5 text-blue-600 mx-auto mb-1" />
-								<div className="text-xl font-extrabold text-gray-900">{completedBlocks}</div>
+								<div className="text-xl font-extrabold text-gray-900">{Number(completedBlocks).toLocaleString('en-US')}</div>
 								<p className="text-xs text-gray-600">Blocks Completed</p>
 							</div>
 							{/* Stat 3: Total Miners */}
