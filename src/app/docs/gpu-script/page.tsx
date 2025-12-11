@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Code, Settings, Terminal, FileText, Github, Code2Icon } from 'lucide-react';
+import { Code, Settings, Terminal, Github, Code2Icon } from 'lucide-react';
 import CodeSnippet from '@/components/CodeSnippet'
 
 // Using shared CodeSnippet component for consistent blocks
@@ -131,12 +131,7 @@ export default function GPUScriptDocs() {
 							{/* VanitySearch */}
 							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
 								<h4 className="text-gray-900 font-semibold mb-2">Clone and build VanitySearch</h4>
-								<pre className="font-mono text-sm bg-gray-800 text-gray-100 p-3 rounded-md border border-gray-700 overflow-x-auto whitespace-pre-wrap">
-									<code className="language-bash">{`git clone https://github.com/JeanLucPons/VanitySearch
-cd VanitySearch
-# Windows: use Release build or prebuilt
-# Linux: make (refer to repo instructions)`}</code>
-								</pre>
+								<CodeSnippet code={`git clone https://github.com/JeanLucPons/VanitySearch\ncd VanitySearch\n# Windows: use Release build or prebuilt\n# Linux: make (refer to repo instructions)`} lang="bash" />
 								<a href="https://github.com/JeanLucPons/VanitySearch" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
 									<Github className="h-4 w-4 mr-1" /> VanitySearch Repository
 								</a>
@@ -145,14 +140,7 @@ cd VanitySearch
 							{/* VanitySearch-V3 */}
 							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
 								<h4 className="text-gray-900 font-semibold mb-2">Clone and build VanitySearch-V3 (keyspace support)</h4>
-								<pre className="font-mono text-sm bg-gray-800 text-gray-100 p-3 rounded-md border border-gray-700 overflow-x-auto whitespace-pre-wrap">
-									<code className="language-bash">{`git clone https://github.com/Miskecy/VanitySearch-V3
-cd VanitySearch-V3
-# Windows: Install CUDA SDK and open VanitySearch.sln in Visual Studio
-# Linux: edit Makefile to set CUDA paths (e.g., CUDA=/usr/local/cuda-11.8)
-# Build:
-make all`}</code>
-								</pre>
+								<CodeSnippet code={`git clone https://github.com/Miskecy/VanitySearch-V3\ncd VanitySearch-V3\n# Windows: Install CUDA SDK and open VanitySearch.sln in Visual Studio\n# Linux: edit Makefile to set CUDA paths (e.g., CUDA=/usr/local/cuda-11.8)\n# Build:\nmake all`} lang="bash" />
 								<p className="text-gray-700 text-sm mt-2">This variant supports <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">--keyspace</code> and multi-address scanning. Note: one GPU per instance; use separate instances for multi-GPU.</p>
 								<a href="https://github.com/Miskecy/VanitySearch-V3" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
 									<Github className="h-4 w-4 mr-1" /> VanitySearch-V3 Repository
@@ -162,12 +150,7 @@ make all`}</code>
 							{/* BitCrack */}
 							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
 								<h4 className="text-gray-900 font-semibold mb-2">Clone and build BitCrack</h4>
-								<pre className="font-mono text-sm bg-gray-800 text-gray-100 p-3 rounded-md border border-gray-700 overflow-x-auto whitespace-pre-wrap">
-									<code className="language-bash">{`git clone https://github.com/brichard19/BitCrack
-cd BitCrack
-# Windows: open solution in Visual Studio, build cuKeyFinder for CUDA
-# Linux: make BUILD_CUDA=1 (or BUILD_OPENCL=1)`}</code>
-								</pre>
+								<CodeSnippet code={`git clone https://github.com/brichard19/BitCrack\ncd BitCrack\n# Windows: open solution in Visual Studio, build cuKeyFinder for CUDA\n# Linux: make BUILD_CUDA=1 (or BUILD_OPENCL=1)`} lang="bash" />
 								<a href="https://github.com/brichard19/BitCrack" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
 									<Github className="h-4 w-4 mr-1" /> BitCrack Repository
 								</a>
