@@ -28,20 +28,25 @@ export default function Footer() {
 							<span>Open Source — United Puzzle Pool</span>
 						</div>
 						<p className="text-sm text-gray-600">Contributions welcome. Star the project and build together.</p>
-					<Link href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
-						<span>View on GitHub</span>
-						<Github className="h-4 w-4" />
-					</Link>
-
-					<div className="pt-3 border-t border-gray-200">
-						<div className="text-gray-900 font-semibold">Inspired by</div>
-						<p className="text-sm text-gray-600">Projects that inspired the creation of this pool.</p>
-						<Link href="https://bitcoinpuzzles.io/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
-							<span>BitcoinPuzzles</span>
-							<ExternalLink className="h-4 w-4" />
+						<Link href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
+							<span>View on GitHub</span>
+							<Github className="h-4 w-4" />
 						</Link>
+
+						<div className="pt-3 border-t border-gray-200">
+							<div className="text-gray-900 font-semibold">Inspired by</div>
+							<p className="text-sm text-gray-600">Projects that inspired the creation of this pool.</p>
+							<Link href="https://bitcoinpuzzles.io/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
+								<span>BitcoinPuzzles</span>
+								<ExternalLink className="h-4 w-4" />
+							</Link>
+							<Link href="https://btcpuzzle.info/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1 ml-4">
+								<span>BTCPuzzle</span>
+								<ExternalLink className="h-4 w-4" />
+							</Link>
+
+						</div>
 					</div>
-				</div>
 
 					<div className="space-y-2">
 						<div className="flex items-center gap-2 text-gray-900 font-semibold">
