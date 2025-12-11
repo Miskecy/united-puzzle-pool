@@ -6,7 +6,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire, Clock, Bitcoin, Key, PieChart, List as ListIcon, Grid3X3, UsersRound, Blocks, Pickaxe } from 'lucide-react';
+import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire, Clock, Bitcoin, Key, PieChart, List as ListIcon, Blocks, Pickaxe } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
 import PoolActivityTimelineStandalone from '@/components/PoolActivityTimelineStandalone';
@@ -391,7 +391,7 @@ export default function PoolOverviewPage() {
 
 				<Tabs defaultValue="overview" className="w-full">
 					<TabsList className="w-full overflow-x-auto bg-transparent">
-						<TabsTrigger value="overview" className="inline-flex items-center gap-2 data-[state=active]:text-blue-600"><Blocks className="h-4 w-4" /> Overview</TabsTrigger>
+						<TabsTrigger value="overview" className="inline-flex items-center gap-2 data-[state=active]:text-blue-600"><Blocks className="h-4 w-4" /> Blocks</TabsTrigger>
 						<TabsTrigger value="miners" className="inline-flex items-center gap-2 data-[state=active]:text-blue-600"><Pickaxe className="h-4 w-4" /> Miners</TabsTrigger>
 					</TabsList>
 
