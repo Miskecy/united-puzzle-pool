@@ -1,10 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-// Componentes UI assumidos (Button, Link)
-// Assumindo que você tem um Button simples, vou usar classes Tailwind/HTML para consistência de estilo de botão.
 import { Code, Settings, Terminal, FileText, Github, Code2Icon } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import CodeSnippet from '@/components/CodeSnippet'
 
 // Using shared CodeSnippet component for consistent blocks
@@ -12,34 +9,22 @@ import CodeSnippet from '@/components/CodeSnippet'
 
 // --- 2. COMPONENTE PRINCIPAL ---
 export default function GPUScriptDocs() {
-	const [scriptPyText, setScriptPyText] = useState<string>('');
-	const [settingsJsonText, setSettingsJsonText] = useState<string>('');
-	// Variáveis HTML/Highlighter removidas, o CodeBlock agora faz o highlight.
-
-
-	// Load script files
-	useEffect(() => {
-		const load = async () => {
-			try {
-				// Simulação de Fetch (ajuste os caminhos reais se necessário)
-				const [pyRes, jsonRes] = await Promise.all([
-					fetch('/docs/gpu-script/script.py'),
-					fetch('/docs/gpu-script/settings.json'),
-				]);
-				const py = await pyRes.text();
-				const js = await jsonRes.text();
-
-				setScriptPyText(py);
-				setSettingsJsonText(js);
-			} catch (e) {
-				console.error("Failed to fetch script files:", e);
-				setScriptPyText('Error loading script.py');
-				setSettingsJsonText('Error loading settings.json');
-			}
-		};
-		load();
-	}, []);
-
+	const exampleSettingsJson = `{
+	  "api_url": "http://localhost:3000/api/block",
+	  "additional_addresses": ["YOUR_TARGET_ADDRESS"],
+	  "user_token": "YOUR_POOL_TOKEN",
+	  "worker_name": "your_worker_name",
+	  "program_name": "VanitySearch | cuBitCrack | VanitySearch-V2",
+	  "program_path": "./VanitySearch | ./cuBitCrack | ./VanitySearch-V2",
+	  "program_arguments": "",
+	  "block_length": "1T",
+	  "oneshot": false,
+	  "post_block_delay_enabled": false,
+	  "post_block_delay_minutes": 1,
+	  "telegram_share": false,
+	  "telegram_accesstoken": "YOUR_TELEGRAM_BOT_TOKEN",
+	  "telegram_chatid": "YOUR_CHAT_ID"
+	}`;
 
 	return (
 		// PADRÃO 1: Fundo com degradê
@@ -86,31 +71,13 @@ export default function GPUScriptDocs() {
 						<CardDescription className="text-gray-600">Adjust <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">settings.json</code> to match your environment</CardDescription>
 					</CardHeader>
 					<CardContent className="pt-6">
-						<CodeSnippet code={settingsJsonText} lang="json" />
+						<CodeSnippet code={exampleSettingsJson} lang="json" />
 
-						<p className="text-gray-700 text-sm mt-3">Set <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">vanitysearch_path</code> or <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">bitcrack_path</code> and tune arguments as needed. Toggle <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">auto_switch</code> to enable auto-selection. Use <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">post_block_delay_minutes</code> to control the delay before the next fetch.</p>
+						<p className="text-gray-700 text-sm mt-3">Configure <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">api_url</code>, your <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">user_token</code>, and choose <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">program_name</code> with matching <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">program_path</code> and <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">program_arguments</code>. Use <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">post_block_delay_minutes</code> and Telegram fields if needed.</p>
 					</CardContent>
 				</Card>
 
-				{/* 3. Source Code Card (script.py) */}
-				<Card className="mb-8 shadow-sm hover:shadow-md transition-shadow border-gray-200">
-					<CardHeader className="border-b pb-4">
-						<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-							<FileText className="h-5 w-5 text-blue-600" />Source Code
-						</CardTitle>
-						<CardDescription className="text-gray-600">Full script for local use</CardDescription>
-					</CardHeader>
-					<CardContent className="pt-6">
-						<CodeSnippet code={scriptPyText} lang="python" />
 
-						<div className="mt-3 flex items-center gap-3">
-
-							<a href="https://github.com/Miskecy/united-pool-gpu-script" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 font-medium">
-								<Github className="h-4 w-4 mr-1" /> GitHub Repository
-							</a>
-						</div>
-					</CardContent>
-				</Card>
 
 				{/* 4. Usage Card */}
 				<Card className="mb-8 shadow-sm hover:shadow-md transition-shadow border-gray-200">
@@ -118,21 +85,33 @@ export default function GPUScriptDocs() {
 						<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
 							<Terminal className="h-5 w-5 text-blue-600" />Usage
 						</CardTitle>
-						<CardDescription className="text-gray-600">Run, edit config, and monitor</CardDescription>
+						<CardDescription className="text-gray-600">Download, install, run, and edit config</CardDescription>
 					</CardHeader>
 					<CardContent className="pt-6">
 						<div className="space-y-4">
-
-							{/* Run the script */}
 							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-								<h4 className="text-gray-900 font-semibold mb-2">Run the script</h4>
-								<CodeSnippet code={`python script.py`} lang="bash" />
+								<h4 className="text-gray-900 font-semibold mb-2">Download the script</h4>
+								<CodeSnippet code={`git clone https://github.com/Miskecy/united-pool-gpu-script\ncd united-pool-gpu-script`} lang="bash" />
+								<a href="https://github.com/Miskecy/united-pool-gpu-script" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
+									<Github className="h-4 w-4 mr-1" /> united-pool-gpu-script Repository
+								</a>
 							</div>
 
-							{/* Edit settings at runtime */}
 							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-								<h4 className="text-gray-900 font-semibold mb-2">Edit settings at runtime</h4>
-								<p className="text-gray-700 text-sm">Update <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">settings.json</code> while the script is running. Changes are applied automatically on the next loop iteration.</p>
+								<h4 className="text-gray-900 font-semibold mb-2">Install Python dependencies</h4>
+								<CodeSnippet code={`python -m venv .venv\n.venv\\Scripts\\activate\npip install requests colorama`} lang="bash" />
+								<p className="text-gray-700 text-sm mt-2">Create a virtual environment (optional) and install minimal dependencies required by the script.</p>
+							</div>
+
+							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+								<h4 className="text-gray-900 font-semibold mb-2">Configure settings.json</h4>
+								<p className="text-gray-700 text-sm">Create a <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">settings.json</code> file in the repository root using the template shown above. Set <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">api_url</code>, <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">user_token</code>, and program fields.</p>
+							</div>
+
+							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+								<h4 className="text-gray-900 font-semibold mb-2">Run</h4>
+								<CodeSnippet code={`python script.py`} lang="bash" />
+								<p className="text-gray-700 text-sm mt-2">Edit <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">settings.json</code> while running; changes apply on the next loop.</p>
 							</div>
 						</div>
 					</CardContent>
@@ -159,24 +138,24 @@ cd VanitySearch
 # Linux: make (refer to repo instructions)`}</code>
 								</pre>
 								<a href="https://github.com/JeanLucPons/VanitySearch" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
-									<Github className="h-4 w-4 mr-1" /> Official Repository
+									<Github className="h-4 w-4 mr-1" /> VanitySearch Repository
 								</a>
 							</div>
 
-							{/* VanitySearch-V2 */}
+							{/* VanitySearch-V3 */}
 							<div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-								<h4 className="text-gray-900 font-semibold mb-2">Clone and build VanitySearch-V2 (keyspace support)</h4>
+								<h4 className="text-gray-900 font-semibold mb-2">Clone and build VanitySearch-V3 (keyspace support)</h4>
 								<pre className="font-mono text-sm bg-gray-800 text-gray-100 p-3 rounded-md border border-gray-700 overflow-x-auto whitespace-pre-wrap">
-									<code className="language-bash">{`git clone https://github.com/ilkerccom/VanitySearch-V2
-cd VanitySearch-V2
-# Windows: Install CUDA SDK and open VanitySearch.sln in Visual C++ 2017
-# Linux: edit Makefile to set CUDA paths (e.g., CUDA=/usr/local/cuda-11.8, g++-9)
+									<code className="language-bash">{`git clone https://github.com/Miskecy/VanitySearch-V3
+cd VanitySearch-V3
+# Windows: Install CUDA SDK and open VanitySearch.sln in Visual Studio
+# Linux: edit Makefile to set CUDA paths (e.g., CUDA=/usr/local/cuda-11.8)
 # Build:
 make all`}</code>
 								</pre>
 								<p className="text-gray-700 text-sm mt-2">This variant supports <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">--keyspace</code> and multi-address scanning. Note: one GPU per instance; use separate instances for multi-GPU.</p>
-								<a href="https://github.com/ilkerccom/VanitySearch-V2" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
-									<Github className="h-4 w-4 mr-1" /> VanitySearch-V2 Repository
+								<a href="https://github.com/Miskecy/VanitySearch-V3" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
+									<Github className="h-4 w-4 mr-1" /> VanitySearch-V3 Repository
 								</a>
 							</div>
 
@@ -190,7 +169,7 @@ cd BitCrack
 # Linux: make BUILD_CUDA=1 (or BUILD_OPENCL=1)`}</code>
 								</pre>
 								<a href="https://github.com/brichard19/BitCrack" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 mt-2 font-medium">
-									<Github className="h-4 w-4 mr-1" /> Official Repository
+									<Github className="h-4 w-4 mr-1" /> BitCrack Repository
 								</a>
 							</div>
 						</div>

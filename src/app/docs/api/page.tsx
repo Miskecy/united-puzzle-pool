@@ -306,22 +306,22 @@ export default function DocsLandingPage() {
 								<CodeSnippet code={`./VanitySearch -gpu 1MyPrefix`} />
 							</li>
 
-							{/* VanitySearch-V2 */}
+							{/* VanitySearch-V3 */}
 							<li className="bg-gray-50 rounded-lg p-5 border border-gray-200">
 								<div className="flex justify-between items-start">
-									<h4 className="text-gray-900 font-bold mb-1">VanitySearch-V2</h4>
-									<a href={`https://github.com/ilkerccom/VanitySearch-V2`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 text-sm transition-colors">
+									<h4 className="text-gray-900 font-bold mb-1">VanitySearch-V3</h4>
+									<a href={`https://github.com/Miskecy/VanitySearch-V3`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-gray-600 hover:text-blue-600 text-sm transition-colors">
 										<Github className="h-4 w-4 mr-1" /> Repository
 									</a>
 								</div>
 								<p className="text-sm text-gray-700 mb-3">Optimized version for better performance.</p>
 
 								<h5 className="text-gray-900 font-semibold mb-2 text-sm">1. Installation</h5>
-								<CodeSnippet code={`git clone https://github.com/ilkerccom/VanitySearch-V2\ncd VanitySearch-V2\nmake all`} />
+								<CodeSnippet code={`git clone https://github.com/Miskecy/VanitySearch-V3\ncd VanitySearch-V3\nmake all`} />
 
 								<h5 className="text-gray-900 font-semibold mb-2 text-sm">2. Usage Example</h5>
 								<p className="text-sm text-gray-700 mb-2">Use <code className="px-1.5 py-0.5 bg-white rounded text-xs font-mono">--keyspace</code> with your assigned range and provide addresses via <code className="px-1.5 py-0.5 bg-white rounded text-xs font-mono">in.txt</code>:</p>
-								<CodeSnippet code={`./vanitysearch -gpu -i in.txt -o out.txt --keyspace [START_RANGE]:[END_RANGE]`} />
+								<CodeSnippet code={`./vanitysearch86-v3 -gpu -i in.txt -o out.txt --keyspace [START_RANGE]:[END_RANGE]`} />
 							</li>
 
 							{/* BitCrack */}
