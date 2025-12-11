@@ -456,24 +456,24 @@ export default function SetupConfigPage() {
 						</Badge>
 					</div>
 
-					<Tabs defaultValue="puzzles" className="w-full">
-						<TabsList className="grid w-full grid-cols-5 h-auto p-1 mb-6 bg-white shadow-md border border-gray-200">
-							<TabsTrigger value="puzzles" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-								<Key className="h-4 w-4 mr-2" /> Puzzles
-							</TabsTrigger>
-							<TabsTrigger value="blocks" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-								<List className="h-4 w-4 mr-2" /> Blocks
-							</TabsTrigger>
-							<TabsTrigger value="redeem" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-								<Coins className="h-4 w-4 mr-2" /> Redemptions
-							</TabsTrigger>
-							<TabsTrigger value="settings" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-								<Database className="h-4 w-4 mr-2" /> Admin Tools
-							</TabsTrigger>
-							<TabsTrigger value="user-gpus" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-								<Cpu className="h-4 w-4 mr-2" /> User GPUs
-							</TabsTrigger>
-						</TabsList>
+                    <Tabs defaultValue="puzzles" className="w-full">
+                        <TabsList className="w-full h-auto p-1 mb-6 bg-white shadow-md border border-gray-200 inline-flex gap-1 overflow-x-auto md:grid md:grid-cols-5 md:overflow-visible">
+                            <TabsTrigger value="puzzles" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+                                <Key className="h-4 w-4 mr-2" /> Puzzles
+                            </TabsTrigger>
+                            <TabsTrigger value="blocks" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+                                <List className="h-4 w-4 mr-2" /> Blocks
+                            </TabsTrigger>
+                            <TabsTrigger value="redeem" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+                                <Coins className="h-4 w-4 mr-2" /> Redemptions
+                            </TabsTrigger>
+                            <TabsTrigger value="settings" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+                                <Database className="h-4 w-4 mr-2" /> Admin Tools
+                            </TabsTrigger>
+                            <TabsTrigger value="user-gpus" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+                                <Cpu className="h-4 w-4 mr-2" /> User GPUs
+                            </TabsTrigger>
+                        </TabsList>
 
 						{/* --- Puzzles Tab --- */}
 						<TabsContent value="puzzles" className="space-y-6">

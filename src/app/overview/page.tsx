@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire, Clock } from 'lucide-react';
+import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire, Clock, Bitcoin, Key, PieChart, List as ListIcon, Grid3X3, UsersRound, Blocks, Pickaxe } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
 import PoolActivityTimelineStandalone from '@/components/PoolActivityTimelineStandalone';
@@ -190,6 +191,7 @@ export default function PoolOverviewPage() {
 	const [noPuzzle, setNoPuzzle] = useState(false);
 	const [recent, setRecent] = useState<RecentBlock[]>([]);
 	const [active, setActive] = useState<RecentBlock[]>([]);
+	const [miners, setMiners] = useState<Array<{ address: string; addressShort: string; tokenShort: string; avgSpeedLabel: string; validatedLabel: string; sharePercentLabel: string; totalBlocks: number }>>([]);
 	const [colorMode, setColorMode] = useState<'percent' | 'absolute'>('percent');
 	const [hoveredCell, setHoveredCell] = useState<number | null>(null);
 	const [hoveredBlockCells, setHoveredBlockCells] = useState<number[]>([]);
@@ -245,6 +247,11 @@ export default function PoolOverviewPage() {
 					const stats = await statsRes.json();
 					setRecent(stats.recentBlocks || []);
 					setActive(stats.activeBlocks || []);
+				}
+				const minersRes = await fetch('/api/pool/miners', { cache: 'no-store' });
+				if (minersRes.ok) {
+					const j = await minersRes.json();
+					setMiners(Array.isArray(j.miners) ? j.miners : []);
 				}
 				setLastUpdated(Date.now());
 			} catch (e) {
@@ -382,271 +389,318 @@ export default function PoolOverviewPage() {
 					</CardContent>
 				</Card>
 
-				{/* Métricas Principais (Pool Speed & Total Validation) */}
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-					{/* Pool Speed */}
-					<Card className="col-span-1 shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
-								<Gauge className="h-5 w-5 text-blue-600" /> Pool Speed
-							</h3>
-							<span className="text-xs text-gray-500">(last 10 blocks)</span>
-						</CardHeader>
-						<CardContent>
-							<div className="text-3xl font-bold text-blue-700">{computePoolSpeed(recent)}</div>
-							<div className="text-sm text-gray-600 mt-1">Average speed computed from the last 10 completions.</div>
-						</CardContent>
-					</Card>
+				<Tabs defaultValue="overview" className="w-full">
+					<TabsList className="w-full overflow-x-auto bg-transparent">
+						<TabsTrigger value="overview" className="inline-flex items-center gap-2 data-[state=active]:text-blue-600"><Blocks className="h-4 w-4" /> Overview</TabsTrigger>
+						<TabsTrigger value="miners" className="inline-flex items-center gap-2 data-[state=active]:text-blue-600"><Pickaxe className="h-4 w-4" /> Miners</TabsTrigger>
+					</TabsList>
 
-					{/* Total Validation */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
-								<CheckCircle2 className="h-5 w-5 text-green-600" /> Total Validation
-							</h3>
-						</CardHeader>
-						<CardContent>
-							{(() => {
-								const t = computeTotalsT(bins);
-								const cls = adaptiveTextClass(t);
-								return (
-									<div className={`text-gray-900 font-mono ${cls}`}>
-										<span className="px-2 py-1 bg-gray-100 rounded break-all block w-fit leading-tight">{t}</span>
-									</div>
-								);
-							})()}
-							<div className="text-sm text-gray-600 mt-1">Validated / Remaining (T-keys).</div>
-						</CardContent>
-					</Card>
-				</div>
+					<TabsContent value="overview">
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+							<Card className="col-span-1 shadow-sm border-gray-200">
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
+										<Gauge className="h-5 w-5 text-blue-600" /> Pool Speed
+									</h3>
+									<span className="text-xs text-gray-500">(last 10 blocks)</span>
+								</CardHeader>
+								<CardContent>
+									<div className="text-3xl font-bold text-blue-700">{computePoolSpeed(recent)}</div>
+									<div className="text-sm text-gray-600 mt-1">Average speed computed from the last 10 completions.</div>
+								</CardContent>
+							</Card>
 
-				{/* Split Panel: Active vs Validated */}
-				<div className='pb-8'>
-					<PoolActivityTimelineStandalone
-						active={active}
-						validated={recent}
-						animationsEnabled={true}
-						isLoading={loading || (!active.length && !recent.length)}
-						onHoverRange={(startHex: string, endHex: string) => {
-							if (!startHex || !endHex) { setHoveredBlockCells([]); return }
-							const start = parseHexBI(startHex);
-							const end = parseHexBI(endHex);
-							const indices: number[] = [];
-							for (let bi = 0; bi < bins.length; bi++) {
-								const bs = parseHexBI(bins[bi].startHex);
-								const be = parseHexBI(bins[bi].endHex);
-								if (start <= be && end >= bs) {
-									indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
-								}
-							}
-							setHoveredBlockCells(indices);
-						}}
-					/>
-				</div>
-
-				{/* Heatmap Section */}
-				<Card className="shadow-md border-gray-200 mb-8">
-					<CardHeader className="border-b pb-4">
-						<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-							<Flame className="h-5 w-5 text-orange-600" /> Validation Heatmap
-						</CardTitle>
-						<CardDescription className="text-gray-600">Visual intensity of validated key space across the puzzle.</CardDescription>
-					</CardHeader>
-					<CardContent className="pt-6">
-
-						{/* Controles de Modo de Cor */}
-						<div className="flex items-center justify-between mb-4">
-							<div className="flex items-center gap-2 text-sm text-gray-700">
-								<Gauge className="h-4 w-4 text-orange-600" />
-								<span className="font-semibold">Color Scale Mode</span>
-							</div>
-							<div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-								<button
-									type="button"
-									onClick={() => setColorMode('percent')}
-									className={`px-3 py-1 text-xs font-medium ${colorMode === 'percent' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-								>Percent</button>
-								<button
-									type="button"
-									onClick={() => setColorMode('absolute')}
-									className={`px-3 py-1 text-xs font-medium border-l border-gray-300 ${colorMode === 'absolute' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-								>Absolute (T-keys)</button>
-							</div>
+							<Card className="shadow-sm border-gray-200">
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
+										<CheckCircle2 className="h-5 w-5 text-green-600" /> Total Validation
+									</h3>
+								</CardHeader>
+								<CardContent>
+									{(() => {
+										const t = computeTotalsT(bins);
+										const cls = adaptiveTextClass(t);
+										return (
+											<div className={`text-gray-900 font-mono ${cls}`}>
+												<span className="px-2 py-1 bg-gray-100 rounded break-all block w-fit leading-tight">{t}</span>
+											</div>
+										);
+									})()}
+									<div className="text-sm text-gray-600 mt-1">Validated / Remaining (T-keys).</div>
+								</CardContent>
+							</Card>
 						</div>
 
-						<p className="text-xs text-gray-600 mb-4">Darker colors indicate higher validation either by <span className="font-semibold">percent</span> or <span className="font-semibold">absolute</span> mode. Cells outside the configured puzzle range appear transparent with a dashed border.</p>
+						<div className='pb-8'>
+							<PoolActivityTimelineStandalone
+								active={active}
+								validated={recent}
+								animationsEnabled={true}
+								isLoading={loading || (!active.length && !recent.length)}
+								onHoverRange={(startHex: string, endHex: string) => {
+									if (!startHex || !endHex) { setHoveredBlockCells([]); return }
+									const start = parseHexBI(startHex);
+									const end = parseHexBI(endHex);
+									const indices: number[] = [];
+									for (let bi = 0; bi < bins.length; bi++) {
+										const bs = parseHexBI(bins[bi].startHex);
+										const be = parseHexBI(bins[bi].endHex);
+										if (start <= be && end >= bs) {
+											indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
+										}
+									}
+									setHoveredBlockCells(indices);
+								}}
+							/>
+						</div>
 
-						{/* Heatmap Grid */}
-						<TooltipProvider delayDuration={0}>
-							<div className="heatmap-container bg-purple-100/10 border border-gray-100  rounded-lg p-3 sm:p-4">
-								<div className="inline-grid heatmap-grid">
-									{Array.from({ length: totalCells }, (_, i) => {
-										const cell = i >= offset ? (bins[i - offset] ?? null) : null;
-										const lenBI = cell ? binLength(cell.startHex, cell.endHex) : 0n;
-										const lenPow = cell ? pow2Label(lenBI) : '';
-										const completedT = cell ? formatTrillionsNum(cell.completed) : '';
-										const totalT = cell ? formatTrillionsBI(lenBI) : '';
-										const bg = cell ? ((cell.completed ?? 0) > 0 ? heatColor(cell.percent, cell.completed, colorMode, maxAbsCompleted) : 'transparent') : 'transparent';
-										const isHovered = hoveredCell === i || hoveredBlockCells.includes(i);
+						<Card className="shadow-md border-gray-200 mb-8">
+							<CardHeader className="border-b pb-4">
+								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
+									<Flame className="h-5 w-5 text-orange-600" /> Validation Heatmap
+								</CardTitle>
+								<CardDescription className="text-gray-600">Visual intensity of validated key space across the puzzle.</CardDescription>
+							</CardHeader>
+							<CardContent className="pt-6">
 
-										const colorsLen = HEATMAP_COLORS.length;
-										let colorIdx = 0;
-										if (cell && (cell.completed ?? 0) > 0) {
-											if (colorMode === 'absolute') {
-												const max = maxAbsCompleted && isFinite(maxAbsCompleted) && maxAbsCompleted > 0 ? maxAbsCompleted : 1;
-												const c = cell.completed && isFinite(cell.completed) ? Math.max(0, cell.completed) : 0;
-												const ratio = Math.max(0, Math.min(1, c / max));
-												colorIdx = Math.round(ratio * (colorsLen - 1));
-											} else {
-												const p = isFinite(cell.percent) ? Math.max(0, Math.min(100, cell.percent)) : 0;
-												colorIdx = Math.round((p / 100) * (colorsLen - 1));
+								{/* Controles de Modo de Cor */}
+								<div className="flex items-center justify-between mb-4">
+									<div className="flex items-center gap-2 text-sm text-gray-700">
+										<Gauge className="h-4 w-4 text-orange-600" />
+										<span className="font-semibold">Color Scale Mode</span>
+									</div>
+									<div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+										<button
+											type="button"
+											onClick={() => setColorMode('percent')}
+											className={`px-3 py-1 text-xs font-medium ${colorMode === 'percent' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+										>Percent</button>
+										<button
+											type="button"
+											onClick={() => setColorMode('absolute')}
+											className={`px-3 py-1 text-xs font-medium border-l border-gray-300 ${colorMode === 'absolute' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+										>Absolute (T-keys)</button>
+									</div>
+								</div>
+
+								<p className="text-xs text-gray-600 mb-4">Darker colors indicate higher validation either by <span className="font-semibold">percent</span> or <span className="font-semibold">absolute</span> mode. Cells outside the configured puzzle range appear transparent with a dashed border.</p>
+
+								{/* Heatmap Grid */}
+								<TooltipProvider delayDuration={0}>
+									<div className="heatmap-container bg-purple-100/10 border border-gray-100  rounded-lg p-3 sm:p-4">
+										<div className="inline-grid heatmap-grid">
+											{Array.from({ length: totalCells }, (_, i) => {
+												const cell = i >= offset ? (bins[i - offset] ?? null) : null;
+												const lenBI = cell ? binLength(cell.startHex, cell.endHex) : 0n;
+												const lenPow = cell ? pow2Label(lenBI) : '';
+												const completedT = cell ? formatTrillionsNum(cell.completed) : '';
+												const totalT = cell ? formatTrillionsBI(lenBI) : '';
+												const bg = cell ? ((cell.completed ?? 0) > 0 ? heatColor(cell.percent, cell.completed, colorMode, maxAbsCompleted) : 'transparent') : 'transparent';
+												const isHovered = hoveredCell === i || hoveredBlockCells.includes(i);
+
+												const colorsLen = HEATMAP_COLORS.length;
+												let colorIdx = 0;
+												if (cell && (cell.completed ?? 0) > 0) {
+													if (colorMode === 'absolute') {
+														const max = maxAbsCompleted && isFinite(maxAbsCompleted) && maxAbsCompleted > 0 ? maxAbsCompleted : 1;
+														const c = cell.completed && isFinite(cell.completed) ? Math.max(0, cell.completed) : 0;
+														const ratio = Math.max(0, Math.min(1, c / max));
+														colorIdx = Math.round(ratio * (colorsLen - 1));
+													} else {
+														const p = isFinite(cell.percent) ? Math.max(0, Math.min(100, cell.percent)) : 0;
+														colorIdx = Math.round((p / 100) * (colorsLen - 1));
+													}
+												}
+												const textClass = colorIdx >= 35 ? 'text-white' : 'text-gray-700';
+
+												const style = cell
+													? {
+														backgroundColor: bg,
+														border: isHovered ? '2px solid #3b82f6' : '1px solid rgba(0,0,0,0.1)',
+														transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+														zIndex: isHovered ? 10 : 1
+													}
+													: {
+														backgroundColor: bg,
+														border: '1px dashed #d1d5db',
+														opacity: 0.5
+													};
+
+												return (
+													<Tooltip key={i} open={hoveredCell === i}>
+														<TooltipTrigger asChild>
+															<div
+																style={style}
+																className="w-full rounded-md relative overflow-hidden cursor-pointer heatmap-cell transition-all duration-200"
+																onMouseEnter={() => setHoveredCell(i)}
+																onMouseLeave={() => setHoveredCell(null)}
+																onClick={() => setHoveredCell(prev => (prev === i ? null : i))}
+															>
+																{cell && (
+																	<span className={`absolute inset-0 flex items-center justify-center text-[9px] sm:text-[10px] ${textClass} font-semibold pointer-events-none`}>
+																		{lenPow}
+																	</span>
+																)}
+															</div>
+														</TooltipTrigger>
+														{cell && (
+															<TooltipContent side="top" align="center" sideOffset={8} className="bg-gray-900 border-gray-800 text-white max-w-xs">
+																<div className="space-y-3 p-2">
+																	<div className="flex items-center gap-2 font-semibold text-sm border-b border-gray-700 pb-2">
+																		<Hash className="h-4 w-4 text-blue-400" />
+																		<span className="font-mono text-blue-400">Bin {cell.index + 1} / {activeCells}</span>
+																	</div>
+																	<div className="flex items-start gap-2 text-xs">
+																		<Expand className="h-3 w-3 text-purple-400 mt-0.5 shrink-0" />
+																		<div className="font-mono text-gray-300 overflow-hidden">
+																			<div className="font-medium text-white mb-1">Range</div>
+																			<div className="text-[10px] break-all">{formatCompactHexRange(cell.startHex)}</div>
+																			<div className="text-[10px] break-all opacity-80">{formatCompactHexRange(cell.endHex)}</div>
+																		</div>
+																	</div>
+																	<div className="flex items-center gap-2 text-xs text-gray-300">
+																		<Gauge className="h-3 w-3 text-purple-400" />
+																		<span className="font-mono"><span className="font-medium text-white">Length:</span> {lenPow}</span>
+																	</div>
+																	<div className="flex items-center gap-2 text-xs text-gray-300">
+																		<CheckCircle2 className="h-3 w-3 text-green-400" />
+																		<span className="font-mono"><span className="font-medium text-white">Validated:</span> {formatPercentPrecise(cell.completed, lenBI)}</span>
+																	</div>
+																	<div className="text-xs font-mono text-gray-300">
+																		<span className="font-medium text-white">Progress:</span> {completedT} / {totalT}
+																	</div>
+																</div>
+																<TooltipPrimitive.Arrow className="fill-gray-900" width={10} height={6} />
+															</TooltipContent>
+														)}
+													</Tooltip>
+												);
+											})}
+										</div>
+									</div>
+								</TooltipProvider>
+
+								{/* Legenda de Escala */}
+								<div className="mt-4 text-sm text-gray-600 flex flex-col sm:flex-row sm:items-center gap-4">
+									<div className="flex items-center gap-2 scale-container">
+										<span className="font-semibold">Scale: 0%</span>
+										{HEATMAP_COLORS.map((c, i) => (
+											<span key={i} className="inline-block rounded-sm scale-swatch h-3 w-3" style={{ backgroundColor: c }}></span>
+										))}
+										<span className="font-semibold">100%</span>
+									</div>
+								</div>
+							</CardContent>
+						</Card>
+
+						<div className="mt-6">
+							<div className="flex items-center justify-between py-2">
+								<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-xl">
+									<div className=' bg-blue-100 p-3 rounded-full'>
+
+										<BrickWallFire className="w-5 h-5 text-blue-500" />
+									</div>
+									Last Completed Blocks
+								</h3>
+								<p className="text-sm text-gray-600">Polling: next in <span className='text-blue-600 font-semibold'>{nextPollInSec}s</span></p>
+							</div>
+							<BlocksTimeline
+								items={recent.slice(0, 10)}
+								pollUrl="/api/pool/stats?take=10&skip=0"
+								pollIntervalMs={30000}
+								direction="forward"
+								speedMs={60000}
+								gapPx={16}
+								animationsEnabled={true}
+								onHoverRange={(startHex: string, endHex: string) => {
+									if (!startHex || !endHex) { setHoveredBlockCells([]); return }
+									const start = parseHexBI(startHex);
+									const end = parseHexBI(endHex);
+									const indices: number[] = [];
+									for (let bi = 0; bi < bins.length; bi++) {
+										const bs = parseHexBI(bins[bi].startHex);
+										const be = parseHexBI(bins[bi].endHex);
+										if (start <= be && end >= bs) {
+											indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
+										}
+									}
+									setHoveredBlockCells(indices);
+								}}
+							/>
+
+							<div className="mt-0">
+								<BlocksTimeline
+									items={recent.slice(10, 20)}
+									pollUrl="/api/pool/stats?take=10&skip=10"
+									pollIntervalMs={30000}
+									direction="reverse"
+									speedMs={60000}
+									gapPx={16}
+									animationsEnabled={true}
+									onHoverRange={(startHex: string, endHex: string) => {
+										if (!startHex || !endHex) { setHoveredBlockCells([]); return }
+										const start = parseHexBI(startHex);
+										const end = parseHexBI(endHex);
+										const indices: number[] = [];
+										for (let bi = 0; bi < bins.length; bi++) {
+											const bs = parseHexBI(bins[bi].startHex);
+											const be = parseHexBI(bins[bi].endHex);
+											if (start <= be && end >= bs) {
+												indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
 											}
 										}
-										const textClass = colorIdx >= 35 ? 'text-white' : 'text-gray-700';
-
-										const style = cell
-											? {
-												backgroundColor: bg,
-												border: isHovered ? '2px solid #3b82f6' : '1px solid rgba(0,0,0,0.1)',
-												transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-												zIndex: isHovered ? 10 : 1
-											}
-											: {
-												backgroundColor: bg,
-												border: '1px dashed #d1d5db',
-												opacity: 0.5
-											};
-
-										return (
-											<Tooltip key={i} open={hoveredCell === i}>
-												<TooltipTrigger asChild>
-													<div
-														style={style}
-														className="w-full rounded-md relative overflow-hidden cursor-pointer heatmap-cell transition-all duration-200"
-														onMouseEnter={() => setHoveredCell(i)}
-														onMouseLeave={() => setHoveredCell(null)}
-														onClick={() => setHoveredCell(prev => (prev === i ? null : i))}
-													>
-														{cell && (
-															<span className={`absolute inset-0 flex items-center justify-center text-[9px] sm:text-[10px] ${textClass} font-semibold pointer-events-none`}>
-																{lenPow}
-															</span>
-														)}
-													</div>
-												</TooltipTrigger>
-												{cell && (
-													<TooltipContent side="top" align="center" sideOffset={8} className="bg-gray-900 border-gray-800 text-white max-w-xs">
-														<div className="space-y-3 p-2">
-															<div className="flex items-center gap-2 font-semibold text-sm border-b border-gray-700 pb-2">
-																<Hash className="h-4 w-4 text-blue-400" />
-																<span className="font-mono text-blue-400">Bin {cell.index + 1} / {activeCells}</span>
-															</div>
-															<div className="flex items-start gap-2 text-xs">
-																<Expand className="h-3 w-3 text-purple-400 mt-0.5 shrink-0" />
-																<div className="font-mono text-gray-300 overflow-hidden">
-																	<div className="font-medium text-white mb-1">Range</div>
-																	<div className="text-[10px] break-all">{formatCompactHexRange(cell.startHex)}</div>
-																	<div className="text-[10px] break-all opacity-80">{formatCompactHexRange(cell.endHex)}</div>
-																</div>
-															</div>
-															<div className="flex items-center gap-2 text-xs text-gray-300">
-																<Gauge className="h-3 w-3 text-purple-400" />
-																<span className="font-mono"><span className="font-medium text-white">Length:</span> {lenPow}</span>
-															</div>
-															<div className="flex items-center gap-2 text-xs text-gray-300">
-																<CheckCircle2 className="h-3 w-3 text-green-400" />
-																<span className="font-mono"><span className="font-medium text-white">Validated:</span> {formatPercentPrecise(cell.completed, lenBI)}</span>
-															</div>
-															<div className="text-xs font-mono text-gray-300">
-																<span className="font-medium text-white">Progress:</span> {completedT} / {totalT}
-															</div>
-														</div>
-														<TooltipPrimitive.Arrow className="fill-gray-900" width={10} height={6} />
-													</TooltipContent>
-												)}
-											</Tooltip>
-										);
-									})}
-								</div>
-							</div>
-						</TooltipProvider>
-
-						{/* Legenda de Escala */}
-						<div className="mt-4 text-sm text-gray-600 flex flex-col sm:flex-row sm:items-center gap-4">
-							<div className="flex items-center gap-2 scale-container">
-								<span className="font-semibold">Scale: 0%</span>
-								{HEATMAP_COLORS.map((c, i) => (
-									<span key={i} className="inline-block rounded-sm scale-swatch h-3 w-3" style={{ backgroundColor: c }}></span>
-								))}
-								<span className="font-semibold">100%</span>
+										setHoveredBlockCells(indices);
+									}}
+								/>
 							</div>
 						</div>
-					</CardContent>
-				</Card>
 
-				{/* Bloco Timeline (Assumindo BlocksTimeline é um componente externo) */}
-				<div className="mt-6">
-					<div className="flex items-center justify-between py-2">
-						<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-xl">
-							<div className=' bg-blue-100 p-3 rounded-full'>
+					</TabsContent>
 
-								<BrickWallFire className="w-5 h-5 text-blue-500" />
-							</div>
-							Last Completed Blocks
-						</h3>
-						<p className="text-sm text-gray-600">Polling: next in <span className='text-blue-600 font-semibold'>{nextPollInSec}s</span></p>
-					</div>
-					<BlocksTimeline
-						items={recent.slice(0, 10)}
-						pollUrl="/api/pool/stats?take=10&skip=0"
-						pollIntervalMs={30000}
-						direction="forward"
-						speedMs={60000}
-						gapPx={16}
-						animationsEnabled={true}
-						onHoverRange={(startHex: string, endHex: string) => {
-							if (!startHex || !endHex) { setHoveredBlockCells([]); return }
-							const start = parseHexBI(startHex);
-							const end = parseHexBI(endHex);
-							const indices: number[] = [];
-							for (let bi = 0; bi < bins.length; bi++) {
-								const bs = parseHexBI(bins[bi].startHex);
-								const be = parseHexBI(bins[bi].endHex);
-								if (start <= be && end >= bs) {
-									indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
-								}
-							}
-							setHoveredBlockCells(indices);
-						}}
-					/>
-
-					<div className="mt-0">
-						<BlocksTimeline
-							items={recent.slice(10, 20)}
-							pollUrl="/api/pool/stats?take=10&skip=10"
-							pollIntervalMs={30000}
-							direction="reverse"
-							speedMs={60000}
-							gapPx={16}
-							animationsEnabled={true}
-							onHoverRange={(startHex: string, endHex: string) => {
-								if (!startHex || !endHex) { setHoveredBlockCells([]); return }
-								const start = parseHexBI(startHex);
-								const end = parseHexBI(endHex);
-								const indices: number[] = [];
-								for (let bi = 0; bi < bins.length; bi++) {
-									const bs = parseHexBI(bins[bi].startHex);
-									const be = parseHexBI(bins[bi].endHex);
-									if (start <= be && end >= bs) {
-										indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
-									}
-								}
-								setHoveredBlockCells(indices);
-							}}
-						/>
-					</div>
-				</div>
-
+					<TabsContent value="miners">
+						<Card className="shadow-sm border-gray-200">
+							<CardHeader className="border-b pb-4">
+								<CardTitle className="text-xl font-bold text-gray-900 flex gap-2 items-center justify-start"><Pickaxe className='h-6 w-6 text-blue-500 ' />Active Miners</CardTitle>
+								<CardDescription className="text-gray-600">Address, token, speed, validated keys, share and blocks.</CardDescription>
+							</CardHeader>
+							<CardContent className="pt-6">
+								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+									{miners.map((m, idx) => (
+										<div key={idx} className="border rounded-lg p-4 bg-white shadow-sm">
+											<div className="flex items-center gap-2 text-sm text-gray-500">
+												<Bitcoin className="h-4 w-4 text-blue-600" /> Address
+											</div>
+											<div className="font-mono text-gray-900 font-semibold mb-2">{m.addressShort}</div>
+											<div className="flex items-center gap-2 text-sm text-gray-500">
+												<Key className="h-4 w-4 text-gray-700" /> Token
+											</div>
+											<div className="font-mono text-gray-900 mb-2">{m.tokenShort}</div>
+											<div className="flex justify-between items-center text-sm mt-2">
+												<span className="flex items-center gap-1 text-gray-500"><Gauge className="h-4 w-4 text-blue-600" /> Average Speed</span>
+												<span className="font-semibold text-blue-700">{m.avgSpeedLabel}</span>
+											</div>
+											<div className="flex justify-between items-center text-sm mt-1">
+												<span className="flex items-center gap-1 text-gray-500"><CheckCircle2 className="h-4 w-4 text-green-600" /> Total Validated</span>
+												<span className="font-semibold text-gray-900">{m.validatedLabel}</span>
+											</div>
+											<div className="flex justify-between items-center text-sm mt-1">
+												<span className="flex items-center gap-1 text-gray-500"><PieChart className="h-4 w-4 text-emerald-600" /> Share</span>
+												<span className="font-semibold text-green-700">{m.sharePercentLabel}</span>
+											</div>
+											<div className="flex justify-between items-center text-sm mt-1">
+												<span className="flex items-center gap-1 text-gray-500"><ListIcon className="h-4 w-4 text-gray-700" /> Total Blocks</span>
+												<span className="font-semibold">{m.totalBlocks}</span>
+											</div>
+										</div>
+									))}
+									{miners.length === 0 && (
+										<div className="text-sm text-gray-600">No miners found.</div>
+									)}
+								</div>
+							</CardContent>
+						</Card>
+					</TabsContent>
+				</Tabs>
 			</div>
 
 
