@@ -56,12 +56,39 @@ function pow2LenLabel(startHex: string, endHex: string): string {
 	}
 }
 
-function formatScaled(len: bigint, factor: bigint, unit: string): string {
-	if (len <= 0n) return `0.00${unit}`
-	const intPart = len / factor
-	const rem = len % factor
-	const twoDec = (rem * 100n) / factor
-	return `${intPart.toString()}.${twoDec.toString().padStart(2, '0')}${unit}`
+function scaledKeys(len: bigint): string {
+	const UNITS: Array<{ label: string; factor: bigint }> = [
+		{ label: 'E', factor: 1_000_000_000_000_000_000n }, // Exa (10^18)
+		{ label: 'P', factor: 1_000_000_000_000_000n },     // Peta (10^15)
+		{ label: 'T', factor: 1_000_000_000_000n },         // Trillion (10^12)
+		{ label: 'B', factor: 1_000_000_000n },             // Billion (10^9)
+		{ label: 'M', factor: 1_000_000n },                 // Million (10^6)
+		{ label: 'K', factor: 1_000n },                     // Thousand (10^3)
+		{ label: '', factor: 1n },                          // Keys
+	]
+	let idx = UNITS.findIndex(u => len >= u.factor)
+	if (idx < 0) idx = UNITS.length - 1
+	// Promote to larger unit while value is >= 1000
+	while (idx > 0) {
+		const u = UNITS[idx]
+		const scaledInt = len / u.factor
+		if (scaledInt >= 1000n) idx -= 1
+		else break
+	}
+	const u = UNITS[idx]
+	const intPart = len / u.factor
+	const rem = len % u.factor
+	const twoDec = (rem * 100n) / u.factor
+	let out: string
+	if (intPart >= 100n) {
+		out = `${intPart.toString()}${u.label}Keys`
+	} else if (intPart >= 10n) {
+		const oneDec = twoDec / 10n
+		out = `${intPart.toString()}.${oneDec.toString().padStart(1, '0')}${u.label}Keys`
+	} else {
+		out = `${intPart.toString()}.${twoDec.toString().padStart(2, '0')}${u.label}Keys`
+	}
+	return out
 }
 
 function lengthCompositeLabel(startHex: string, endHex: string): string {
@@ -70,11 +97,10 @@ function lengthCompositeLabel(startHex: string, endHex: string): string {
 		const e = parseHexBI(endHex)
 		const len = e >= s ? (e - s) : 0n
 		const pow = len > 0n ? pow2LenLabel(startHex, endHex) : '2^0.00'
-		const t = formatScaled(len, 1_000_000_000_000n, 'T')
-		const b = formatScaled(len, 1_000_000_000n, 'B')
-		return `${pow} • ${t}Keys/${b}Keys`
+		const scaled = scaledKeys(len)
+		return `${pow} • ${scaled}`
 	} catch {
-		return '2^0.00 • 0.00TKeys/0.00BKeys'
+		return '2^0.00 • 0Keys'
 	}
 }
 
