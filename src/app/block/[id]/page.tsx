@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import BlockSolutionSubmit from '@/components/BlockSolutionSubmit'
+import CopyButton from '@/components/CopyButton'
 
 function formatSpeed(n?: number | null): string {
 	if (!n || !isFinite(n) || n <= 0) return '—'
@@ -181,7 +182,7 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 										<div>
 											{block.hexRangeStart} <ArrowRight className="inline h-3 w-3 mx-1 text-gray-500" /> {block.hexRangeEnd}
 										</div>
-										<button type="button" className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-300" onClick={async () => { try { await navigator.clipboard.writeText(`${block.hexRangeStart}:${block.hexRangeEnd}`) } catch { } }}>Copy Range</button>
+										<CopyButton text={`${block.hexRangeStart}:${block.hexRangeEnd}`} className="text-xs">Copy Range</CopyButton>
 									</div>
 
 
@@ -192,28 +193,7 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 											<div className="text-sm font-mono text-gray-800">{mask(block.bitcoinAddress)}</div>
 										</div>
 
-										<Card className="bg-white border-gray-200 shadow-md">
-											<CardHeader className="border-b pb-4">
-												<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-													<Hash className="h-5 w-5 text-blue-600" /> Command Line
-												</CardTitle>
-												<CardDescription className="text-gray-600">Copy parameters for GPU tools with this block range.</CardDescription>
-											</CardHeader>
-											<CardContent className="pt-4">
-												<div className="flex items-center justify-between gap-2">
-													<div className="font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200 break-all w-full">-t 0 -gpu -gpuId 0 -keyspace {block.hexRangeStart}:{block.hexRangeEnd} -i in.txt -o out.txt</div>
-													<button type="button" className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 border border-blue-300 shrink-0" onClick={async () => { try { await navigator.clipboard.writeText(`-t 0 -gpu -gpuId 0 -keyspace ${block.hexRangeStart}:${block.hexRangeEnd} -i in.txt -o out.txt`) } catch { } }}>Copy</button>
-												</div>
-											</CardContent>
-										</Card>
 
-										{!block.completedAt && (
-											<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-												<div className="md:col-span-3">
-													<BlockSolutionSubmit blockId={block.id} rangeStart={block.hexRangeStart} rangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} />
-												</div>
-											</div>
-										)}
 										<div>
 											<div className="text-xs font-medium text-gray-600">Token Mask</div>
 											<div className="text-sm font-mono text-gray-800">{block.tokenMasked}</div>
@@ -254,6 +234,30 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							</Card>
 						</div>
 
+						{/* Command Line Helper */}
+						<Card className="bg-white border-gray-200 shadow-md">
+							<CardHeader className="border-b pb-4">
+								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
+									<Hash className="h-5 w-5 text-blue-600" /> Command Line
+								</CardTitle>
+								<CardDescription className="text-gray-600">Copy parameters for GPU tools with this block range.</CardDescription>
+							</CardHeader>
+							<CardContent className="pt-4">
+								<div className="flex items-center justify-between gap-2">
+									<div className="font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200 break-all w-full">-t 0 -gpu -gpuId 0 -keyspace {block.hexRangeStart}:{block.hexRangeEnd} -i in.txt -o out.txt</div>
+									<CopyButton text={`-t 0 -gpu -gpuId 0 -keyspace ${block.hexRangeStart}:${block.hexRangeEnd} -i in.txt -o out.txt`} className="text-xs">Copy</CopyButton>
+								</div>
+							</CardContent>
+						</Card>
+
+						{!block.completedAt && (
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+								<div className="md:col-span-3">
+									<BlockSolutionSubmit blockId={block.id} rangeStart={block.hexRangeStart} rangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} />
+								</div>
+							</div>
+						)}
+
 						{/* Checkwork & Private Keys (Matched and Unmatched) */}
 						<Card className="bg-white border-gray-200 shadow-md">
 							<CardHeader className="border-b pb-4">
@@ -286,9 +290,9 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 																{isMatched ? 'MATCHED' : 'PENDING'}
 															</span>
 														</div>
-														{matchedForAddr.map((m: { privateKey?: string }, j: number) => (
+														{matchedForAddr.map((m: { privateKey?: string; address: string }, j: number) => (
 															<div key={`cwpk-${i}-${j}`} className="mt-1 text-[11px] font-mono text-green-700 break-all">
-																{m.privateKey ?? '[Private Key Hidden]'}
+																{m.address}
 															</div>
 														))}
 													</div>
