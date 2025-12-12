@@ -168,8 +168,16 @@ export default function UserDashboard() {
 	};
 
 	const handleExtractHexKeys = () => {
-		const matches = keysText.match(/0x[0-9a-fA-F]{64}/g) || [];
-		setKeysText(matches.join('\n'));
+		const text = keysText || '';
+		const out = new Set<string>();
+		for (const m of text.matchAll(/(?:0x)?([0-9a-fA-F]{64})/g)) {
+			out.add(`0x${m[1]}`);
+		}
+		for (const m of text.matchAll(/(?:0x)?(?:[0-9a-fA-F]{2}[ \t:\-]?){32}/g)) {
+			const clean = m[0].replace(/^0x/i, '').replace(/[^0-9a-fA-F]/g, '');
+			if (clean.length === 64) out.add(`0x${clean}`);
+		}
+		setKeysText(Array.from(out).join('\n'));
 	};
 
 	const generateToken = async () => {
