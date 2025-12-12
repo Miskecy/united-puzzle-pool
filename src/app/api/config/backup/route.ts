@@ -56,32 +56,28 @@ async function handler(req: NextRequest) {
 					tables = tableNames.length
 				} catch { }
 				try { const st = await fs.stat(dbFile); sizeBytes = st.size } catch { }
-        const envUrl = (process.env.DATABASE_URL || '').trim()
-        let envRaw = ''
-        if (envUrl.startsWith('file:')) { envRaw = envUrl.slice(5) }
-        const prismaDir = path.join(process.cwd(), 'prisma')
-        const rel = path.relative(prismaDir, dbFile)
-        const dbFileInPrisma = !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
-        const envInPrisma = dbFileInPrisma
-        const suggestedEnvUrl = `file:./prisma/${path.basename(dbFile) || 'dev.db'}`
-        const pathMismatch = !dbFileInPrisma
-        return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl, sizeBytes, envRaw, envInPrisma, pathMismatch, suggestedEnvUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+				const envUrl = (process.env.DATABASE_URL || '').trim()
+				let envRaw = ''
+				if (envUrl.startsWith('file:')) { envRaw = envUrl.slice(5) }
+				const prismaDir = path.join(process.cwd(), 'prisma')
+				const rel = path.relative(prismaDir, dbFile)
+				const dbFileInPrisma = !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
+				const envInPrisma = dbFileInPrisma
+				const suggestedEnvUrl = `file:./prisma/${path.basename(dbFile) || 'dev.db'}`
+				const pathMismatch = !dbFileInPrisma
+				return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl, sizeBytes, envRaw, envInPrisma, pathMismatch, suggestedEnvUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 			} catch {
 				return new Response(JSON.stringify({ error: 'Status failed' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 			}
 		}
 		try {
-			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
 			const now = new Date()
 			const pad = (n: number) => n.toString().padStart(2, '0')
 			const fname = `dev-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.db`
 			const tmp = path.join(path.dirname(dbFile), `backup-${Date.now()}.db`)
 			try {
-				withDb(db => {
-					db.pragma('wal_checkpoint(FULL)')
-					const target = tmp.replace(/'/g, "''")
-					db.exec(`VACUUM INTO '${target}'`)
-				})
+				const db = new DatabaseCtor(dbFile, { fileMustExist: true, timeout: 5000 })
+				try { await (db as unknown as { backup: (dest: string) => Promise<void> }).backup(tmp) } finally { try { db.close() } catch { } }
 				const buf = await fs.readFile(tmp)
 				await fs.unlink(tmp)
 				return new Response(buf, {
