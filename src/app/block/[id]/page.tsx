@@ -1,7 +1,8 @@
 import { Gauge, Hash, Clock, ArrowRight, ArrowLeft } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card' // Importação adicionada
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import BlockSolutionSubmit from '@/components/BlockSolutionSubmit'
 
 function formatSpeed(n?: number | null): string {
 	if (!n || !isFinite(n) || n <= 0) return '—'
@@ -158,7 +159,7 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							</span>
 						</div>
 
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
 							{/* Block Information (Assignment) */}
 							<Card className="col-span-1 md:col-span-2 bg-white border-gray-200 shadow-md">
@@ -172,7 +173,13 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 
 									<div className="bg-gray-50 border border-gray-200 p-3 rounded-md font-mono text-gray-800 break-all">
 										{block.hexRangeStart} <ArrowRight className="inline h-3 w-3 mx-1 text-gray-500" /> {block.hexRangeEnd}
-									</div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="md:col-span-1">
+                                <BlockSolutionSubmit blockId={block.id} rangeStart={block.hexRangeStart} rangeEnd={block.hexRangeEnd} />
+                            </div>
+                        </div>
 
 									<div className="grid grid-cols-2 gap-4">
 										<div>
