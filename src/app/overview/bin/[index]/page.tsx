@@ -149,14 +149,14 @@ export default function BinDetailPage() {
 	return (
 		<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
 			<div className="max-w-5xl mx-auto px-4 py-8">
-				<div className="mb-6 flex items-center justify-between">
+				<div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 					<div className='flex items-center gap-3'>
 						<Button variant="ghost" onClick={() => router.push('/overview')} className="inline-flex hover:bg-transparent hover:shadow-none cursor-pointer items-center gap-2 text-gray-700 hover:text-blue-600"><ArrowLeft className='w-4 h-4' /> Back</Button>
 						<div className="p-3 bg-blue-100 rounded-full"><Hash className="h-5 w-5 text-blue-600" /></div>
 						<div>
 							<h1 className="text-2xl font-bold text-gray-900">Bin {meta ? meta.index + 1 : index}</h1>
 							{meta && (
-								<p className="text-gray-600 text-sm font-mono"><span className="font-semibold">Range:</span> {meta.startHex} <span className="italic text-blue-600">to</span> {meta.endHex}</p>
+								<p className="text-gray-600 text-sm font-mono break-all"><span className="font-semibold">Range:</span> {meta.startHex} <span className="italic text-blue-600">to</span> {meta.endHex}</p>
 							)}
 						</div>
 					</div>
@@ -185,12 +185,12 @@ export default function BinDetailPage() {
 							<div className="space-y-3">
 								{items.map((b) => (
 									<div key={b.id} className="border rounded-lg p-4 bg-white shadow-sm">
-										<div className="flex items-center justify-between mb-2">
-											<div className="flex items-center gap-2">
+										<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+											<div className="flex flex-wrap items-center gap-1 sm:gap-2">
 												<Badge className="bg-blue-50 text-blue-600 border-blue-600 text-[10px]">ID</Badge>
-												<span className="font-mono font-semibold text-gray-900">{b.id}</span>
+												<span className="font-mono font-semibold text-gray-900 break-all">{b.id}</span>
 											</div>
-											<div className="inline-flex items-center gap-2">
+											<div className="flex flex-wrap items-center gap-2">
 												{(() => {
 													const idx = items.findIndex(it => it.id === b.id)
 													const prev = idx > 0 ? items[idx - 1] : null
@@ -211,12 +211,12 @@ export default function BinDetailPage() {
 										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Expand className='w-3 h-3' /> Range</div>
-												<div className="font-mono text-gray-900 font-semibold"><span>{b.hexRangeStart}</span> <span className="italic text-blue-600">to</span> <span>{b.hexRangeEnd}</span></div>
+												<div className="font-mono text-gray-900 font-semibold break-all"><span>{b.hexRangeStart}</span> <span className="italic text-blue-600">to</span> <span>{b.hexRangeEnd}</span></div>
 												<div className="text-xs text-gray-600 italic mt-1 inline-flex items-center gap-1"><Gauge className='w-3 h-3' /> Length <span className="font-semibold">{lengthCompositeLabel(b.hexRangeStart, b.hexRangeEnd)}</span></div>
 											</div>
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Bitcoin className='w-3 h-3' /> Address</div>
-												<div className="font-mono text-gray-900">{b.bitcoinAddress}</div>
+												<div className="font-mono text-gray-900 break-all">{b.bitcoinAddress}</div>
 											</div>
 										</div>
 										<div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-700">
@@ -229,7 +229,7 @@ export default function BinDetailPage() {
 								))}
 							</div>
 						)}
-						<div className="mt-6 flex items-center justify-between">
+						<div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
 							<Button variant="outline" disabled={page <= 1} onClick={() => router.push(`/overview/bin/${index}?page=${page - 1}`)} className="inline-flex items-center gap-2"><ArrowLeft className='w-4 h-4' /> Prev</Button>
 							<span className="text-sm text-gray-700">Page <span className="font-semibold">{page}</span> of <span className="font-semibold">{totalPages}</span></span>
 							<Button variant="outline" disabled={page >= totalPages} onClick={() => router.push(`/overview/bin/${index}?page=${page + 1}`)} className="inline-flex items-center gap-2">Next <ArrowRight className='w-4 h-4' /></Button>
