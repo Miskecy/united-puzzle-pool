@@ -242,8 +242,8 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 								</AccordionTrigger>
 								<AccordionContent className="px-6">
 									<div className="flex items-center justify-between gap-2">
-										<div className="font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200 break-all w-full">./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 -keyspace {block.hexRangeStart}:{block.hexRangeEnd} -i in.txt -o out.txt</div>
-										<CopyButton text={`./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 -keyspace ${block.hexRangeStart}:${block.hexRangeEnd} -i in.txt -o out.txt`} className="text-xs h-12">Copy</CopyButton>
+										<div className="font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200 break-all w-full">./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace {block.hexRangeStart}:{block.hexRangeEnd} -i in.txt -o out.txt</div>
+										<CopyButton text={`./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace ${block.hexRangeStart}:${block.hexRangeEnd} -i in.txt -o out.txt`} className="text-xs h-12">Copy</CopyButton>
 									</div>
 								</AccordionContent>
 							</AccordionItem>
