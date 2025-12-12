@@ -5,7 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Hash, Expand, Clock, Target, CheckCircle2, XCircle, ArrowLeft, ArrowRight, Bitcoin, Key, Gauge } from 'lucide-react'
+import { Hash, Expand, Clock, Target, CheckCircle2, XCircle, ArrowLeft, ArrowRight, Bitcoin, Key, Gauge, ArrowDownZA } from 'lucide-react'
 
 type BlockItem = {
 	id: string
@@ -164,7 +164,7 @@ export default function BinDetailPage() {
 						</div>
 					</div>
 					<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200">
-						<Clock className="h-4 w-4 text-blue-600" />
+						<ArrowDownZA className="h-4 w-4 text-blue-600" />
 						<span className="text-xs font-semibold text-blue-700">Latest First</span>
 					</div>
 				</div>
