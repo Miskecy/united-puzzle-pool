@@ -1,10 +1,9 @@
-import { Gauge, Hash, Clock, ArrowRight, ArrowLeft, Key, Code2, Code, Terminal } from 'lucide-react'
+import { Gauge, Hash, Clock, ArrowRight, ArrowLeft } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card'
-import BlockSolutionSubmit from '@/components/BlockSolutionSubmit'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import BlockLiveClient from '@/components/BlockLiveClient'
 import CopyButton from '@/components/CopyButton'
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 function formatSpeed(n?: number | null): string {
 	if (!n || !isFinite(n) || n <= 0) return '—'
@@ -100,16 +99,11 @@ interface BlockData {
 
 export default async function BlockDetailsPage({ params }: { params: Promise<{ id: string }> }) {
 	const { id } = await params
-	const base = process.env.APP_URL || ''
-	let res: Response
-	if (base) {
-		res = await fetch(`${base}/api/block/${id}`, { cache: 'no-store' })
-	} else {
-		const h = await headers()
-		const host = h.get('host') || 'localhost:3000'
-		const proto = h.get('x-forwarded-proto') || 'http'
-		res = await fetch(`${proto}://${host}/api/block/${id}`, { cache: 'no-store' })
-	}
+	const h = await headers()
+	const host = h.get('host') || 'localhost:3000'
+	const proto = h.get('x-forwarded-proto') || 'http'
+	const url = `${proto}://${host}/api/block/${id}`
+	const res = await fetch(url, { cache: 'no-store' })
 	const ok = res.ok
 	let block: BlockData | null = null
 	let dataError: { error?: string } | null = null
@@ -183,7 +177,9 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 										<div>
 											{block.hexRangeStart} <ArrowRight className="inline h-3 w-3 mx-1 text-gray-500" /> {block.hexRangeEnd}
 										</div>
-										<CopyButton text={`${block.hexRangeStart}:${block.hexRangeEnd}`} className="text-xs">Copy Range</CopyButton>
+										{!block.completedAt && (
+											<CopyButton text={`${block.hexRangeStart}:${block.hexRangeEnd}`} className="text-xs">Copy Range</CopyButton>
+										)}
 									</div>
 
 
@@ -235,102 +231,9 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							</Card>
 						</div>
 
-						<Accordion type="multiple" className="bg-white rounded-xl border border-gray-200 shadow-sm">
-							<AccordionItem value="cmd">
-								<AccordionTrigger className="px-6">
-									<span className="flex items-center gap-2 text-lg text-gray-900"><Terminal className="h-5 w-5 text-blue-600" /> Command Line</span>
-								</AccordionTrigger>
-								<AccordionContent className="px-6">
-									<div className="flex items-center justify-between gap-2">
-										<div className="font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200 break-all w-full">./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace {block.hexRangeStart}:{block.hexRangeEnd} -i in.txt -o out.txt</div>
-										<CopyButton text={`./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace ${block.hexRangeStart}:${block.hexRangeEnd} -i in.txt -o out.txt`} className="text-xs h-12">Copy</CopyButton>
-									</div>
-								</AccordionContent>
-							</AccordionItem>
+						<BlockLiveClient id={block.id} hexRangeStart={block.hexRangeStart} hexRangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} initialAddressMap={block.addressMap} completedAt={block.completedAt} bitcoinAddress={block.bitcoinAddress} />
 
-							{!block.completedAt && (
-								<AccordionItem value="submit">
-									<AccordionTrigger className="px-6">
-										<span className="flex items-center gap-2 text-lg text-gray-900"><Key className="h-5 w-5 text-rose-600" /> Solution Submission</span>
-									</AccordionTrigger>
-									<AccordionContent className="px-6">
-										<BlockSolutionSubmit blockId={block.id} rangeStart={block.hexRangeStart} rangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} />
-									</AccordionContent>
-								</AccordionItem>
-							)}
-						</Accordion>
 
-						{/* Checkwork & Private Keys (Matched and Unmatched) */}
-						<Card className="bg-white border-gray-200 shadow-md">
-							<CardHeader className="border-b pb-4">
-								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-									<Clock className="h-5 w-5 text-purple-600" /> Solution Submission Status
-								</CardTitle>
-								<CardDescription className="text-gray-600">Validation status of submitted checkwork and private keys.</CardDescription>
-								{block.checkworkAddresses && block.checkworkAddresses.length > 0 && (
-									<CardAction>
-										<CopyButton
-											text={block.checkworkAddresses.join('\n')}
-											className="text-xs"
-										>Copy Addresses</CopyButton>
-									</CardAction>
-								)}
-							</CardHeader>
-							<CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-
-								{/* Checkwork Addresses (Matched / Pending) */}
-								<div>
-									<div className="text-sm font-semibold text-gray-800 mb-2">Checkwork Addresses ({block.checkworkAddresses?.length ?? 0})</div>
-									<div className="flex flex-wrap gap-2 text-xs mb-3">
-										<span className="px-2 py-0.5 bg-green-100 text-green-700 rounded">Matched {block.matchedCount ?? 0}</span>
-										<span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded">Missing {block.missingAddresses?.length ?? 0}</span>
-										<span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded">Total Keys {block.privateKeys?.length ?? 0}</span>
-									</div>
-									<div className="space-y-3 h-fit overflow-y-auto pr-2">
-										{block.checkworkAddresses && block.checkworkAddresses.length > 0 ? (
-											block.checkworkAddresses.map((addr: string, i: number) => {
-												const matchedForAddr = (block.addressMap || []).filter((m: { address: string; isValid: boolean }) => m.address === addr && m.isValid)
-												const isMatched = matchedForAddr.length > 0
-
-												return (
-													<div key={`cw-${i}`} className={`p-2 rounded ${isMatched ? 'bg-green-50 border border-green-300' : 'bg-white border border-gray-200'}`}>
-														<div className="flex items-center justify-between">
-															<div className="text-xs font-mono text-gray-800 break-all pr-2">{addr}</div>
-															<span className={`px-2 py-0.5 rounded text-xs font-medium shrink-0 ${isMatched ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-																{isMatched ? 'MATCHED' : 'PENDING'}
-															</span>
-														</div>
-														{matchedForAddr.map((m: { privateKey?: string; address: string }, j: number) => (
-															<div key={`cwpk-${i}-${j}`} className="mt-1 text-[11px] font-mono text-green-700 break-all">
-																{m.address}
-															</div>
-														))}
-													</div>
-												);
-											})
-										) : (
-											<div className="text-sm text-gray-600">No checkwork addresses submitted for this block.</div>
-										)}
-									</div>
-								</div>
-
-								{/* Unmatched Private Keys */}
-								<div>
-									<div className="text-sm font-semibold text-gray-800 mb-2">Unmatched Private Keys ({block.privateKeys?.length ?? 0})</div>
-									<div className="text-xs text-gray-600 mb-2">Keys that did not match any checkwork address upon submission.</div>
-									<div className="space-y-1 max-h-60 overflow-y-auto pr-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
-										{(block.addressMap || []).filter((m: { isValid: boolean }) => !m.isValid).map((m: { privateKey?: string; address: string }, i: number) => (
-											<div key={`u2-${i}`} className="text-xs font-mono text-gray-800 break-all border-b border-gray-100 pb-1 last:border-b-0">
-												{m.privateKey}
-											</div>
-										))}
-										{block.addressMap && block.addressMap.filter((m: { isValid: boolean }) => !m.isValid).length === 0 && (
-											<div className="text-xs text-gray-600 text-center py-4">All submitted keys were matched or deemed valid.</div>
-										)}
-									</div>
-								</div>
-							</CardContent>
-						</Card>
 					</div>
 				)}
 			</div>
