@@ -56,13 +56,16 @@ async function handler(req: NextRequest) {
 					tables = tableNames.length
 				} catch { }
 				try { const st = await fs.stat(dbFile); sizeBytes = st.size } catch { }
-				const envUrl = (process.env.DATABASE_URL || '').trim()
-				let envRaw = ''
-				if (envUrl.startsWith('file:')) { envRaw = envUrl.slice(5) }
-				const envInPrisma = !!envRaw && (/^(?:\.\/|\.\\)?prisma[\/\\]/.test(envRaw) || envRaw.startsWith('prisma/'))
-				const suggestedEnvUrl = envUrl.startsWith('file:') ? `file:./prisma/${path.basename(envRaw || 'dev.db') || 'dev.db'}` : ''
-				const pathMismatch = !envInPrisma
-				return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl, sizeBytes, envRaw, envInPrisma, pathMismatch, suggestedEnvUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        const envUrl = (process.env.DATABASE_URL || '').trim()
+        let envRaw = ''
+        if (envUrl.startsWith('file:')) { envRaw = envUrl.slice(5) }
+        const prismaDir = path.join(process.cwd(), 'prisma')
+        const rel = path.relative(prismaDir, dbFile)
+        const dbFileInPrisma = !!rel && !rel.startsWith('..') && !path.isAbsolute(rel)
+        const envInPrisma = dbFileInPrisma
+        const suggestedEnvUrl = `file:./prisma/${path.basename(dbFile) || 'dev.db'}`
+        const pathMismatch = !dbFileInPrisma
+        return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl, sizeBytes, envRaw, envInPrisma, pathMismatch, suggestedEnvUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 			} catch {
 				return new Response(JSON.stringify({ error: 'Status failed' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 			}

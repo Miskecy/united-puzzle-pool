@@ -1021,7 +1021,7 @@ export default function SetupConfigPage() {
 											</Button>
 											{dbStatus && (
 												<div className='flex-1 grid grid-cols-1 md:grid-cols-2 gap-3'>
-													{(dbStatus.pathMismatch || !(dbStatus.envUrl || '').toLowerCase().includes('prisma/')) && (
+													{dbStatus.pathMismatch && (
 														<div className='md:col-span-2 p-3 bg-red-50 border border-red-300 rounded'>
 															<div className='text-xs text-red-700 font-semibold mb-1'>Warning: DATABASE_URL points outside prisma/</div>
 															<div className='text-xs text-red-700'>Current: <code className='text-[11px]'>{dbStatus.envUrl || '-'}</code></div>
