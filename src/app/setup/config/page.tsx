@@ -56,6 +56,42 @@ function bitRangeLabel(start: string, end: string): string {
 	return 'Key Range (Bits): -'
 }
 
+
+function formatScaledKeysPerSecond(mkeysPerSec: number): string {
+	const UNITS: Array<{ label: string; factor: bigint }> = [
+		{ label: 'E', factor: 1_000_000_000_000_000_000n },
+		{ label: 'P', factor: 1_000_000_000_000_000n },
+		{ label: 'T', factor: 1_000_000_000_000n },
+		{ label: 'B', factor: 1_000_000_000n },
+		{ label: 'M', factor: 1_000_000n },
+		{ label: 'K', factor: 1_000n },
+		{ label: '', factor: 1n },
+	]
+	const kps = BigInt(Math.max(0, Math.round(Number(mkeysPerSec) * 1_000_000)))
+	let idx = UNITS.findIndex(u => kps >= u.factor)
+	if (idx < 0) idx = UNITS.length - 1
+	while (idx > 0) {
+		const u = UNITS[idx]
+		const scaledInt = kps / u.factor
+		if (scaledInt >= 1000n) idx -= 1
+		else break
+	}
+	const u = UNITS[idx]
+	const intPart = kps / u.factor
+	const rem = kps % u.factor
+	const twoDec = (rem * 100n) / u.factor
+	let out: string
+	if (intPart >= 100n) out = `${intPart.toString()}${u.label}Keys/s`
+	else if (intPart >= 10n) out = `${intPart.toString()}.${(twoDec / 10n).toString().padStart(1, '0')}${u.label}Keys/s`
+	else out = `${intPart.toString()}.${twoDec.toString().padStart(2, '0')}${u.label}Keys/s`
+	const exp = Number(kps) > 0 ? Math.log2(Number(kps)) : 0
+	return `${out} • 2^${exp.toFixed(2)}`
+}
+
+function SpeedCell({ m }: { m: number }) {
+	return <div className="font-mono text-right text-blue-700">{formatScaledKeysPerSecond(m)}</div>
+}
+
 // --- Block Card Component (Enhanced) ---
 const BlockCard: React.FC<{ block: Block }> = ({ block }) => {
 	// Determine the color for the Position % badge
@@ -252,6 +288,9 @@ export default function SetupConfigPage() {
 
 	useEffect(() => { fetchBlocks(1) }, [])
 	useEffect(() => { fetchUserGpusAdmin() }, [fetchUserGpusAdmin])
+
+	const approvedGpuItems = useMemo(() => userGpuItems.filter(i => i.status === 'APPROVED'), [userGpuItems])
+	const pendingGpuItems = useMemo(() => userGpuItems.filter(i => i.status === 'PENDING'), [userGpuItems])
 
 
 
@@ -456,24 +495,24 @@ export default function SetupConfigPage() {
 						</Badge>
 					</div>
 
-                    <Tabs defaultValue="puzzles" className="w-full">
-                        <TabsList className="w-full h-auto p-1 mb-6 bg-white shadow-md border border-gray-200 inline-flex gap-1 overflow-x-auto md:grid md:grid-cols-5 md:overflow-visible">
-                            <TabsTrigger value="puzzles" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-                                <Key className="h-4 w-4 mr-2" /> Puzzles
-                            </TabsTrigger>
-                            <TabsTrigger value="blocks" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-                                <List className="h-4 w-4 mr-2" /> Blocks
-                            </TabsTrigger>
-                            <TabsTrigger value="redeem" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-                                <Coins className="h-4 w-4 mr-2" /> Redemptions
-                            </TabsTrigger>
-                            <TabsTrigger value="settings" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-                                <Database className="h-4 w-4 mr-2" /> Admin Tools
-                            </TabsTrigger>
-                            <TabsTrigger value="user-gpus" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
-                                <Cpu className="h-4 w-4 mr-2" /> User GPUs
-                            </TabsTrigger>
-                        </TabsList>
+					<Tabs defaultValue="puzzles" className="w-full">
+						<TabsList className="w-full h-auto p-1 mb-6 bg-white shadow-md border border-gray-200 inline-flex gap-1 overflow-x-auto md:grid md:grid-cols-5 md:overflow-visible">
+							<TabsTrigger value="puzzles" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Key className="h-4 w-4 mr-2" /> Puzzles
+							</TabsTrigger>
+							<TabsTrigger value="blocks" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<List className="h-4 w-4 mr-2" /> Blocks
+							</TabsTrigger>
+							<TabsTrigger value="redeem" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Coins className="h-4 w-4 mr-2" /> Redemptions
+							</TabsTrigger>
+							<TabsTrigger value="settings" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Database className="h-4 w-4 mr-2" /> Admin Tools
+							</TabsTrigger>
+							<TabsTrigger value="user-gpus" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">
+								<Cpu className="h-4 w-4 mr-2" /> User GPUs
+							</TabsTrigger>
+						</TabsList>
 
 						{/* --- Puzzles Tab --- */}
 						<TabsContent value="puzzles" className="space-y-6">
@@ -1083,45 +1122,94 @@ export default function SetupConfigPage() {
 										</div>
 									</div>
 									{userGpuMsg && <div className={`text-sm mb-4 font-medium ${userGpuMsg.includes('success') ? 'text-green-600' : 'text-red-600'}`}>{userGpuMsg}</div>}
-									<div className="overflow-x-auto rounded-lg border border-gray-200">
-										<Table className="min-w-full divide-y divide-gray-200">
-											<TableHeader className="bg-gray-50">
-												<TableRow>
-													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Model</TableHead>
-													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600 text-right">Speed (MKeys/s)</TableHead>
-													<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Status</TableHead>
-													<TableHead className="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Actions</TableHead>
-												</TableRow>
-											</TableHeader>
-											<TableBody className='divide-y divide-gray-200'>
-												{userGpuItems.map(it => (
-													<TableRow key={it.id} className="hover:bg-blue-50/50 text-xs">
-														<TableCell className="py-3 px-3 font-medium text-gray-900">{it.model}</TableCell>
-														<TableCell className="py-3 px-3 font-mono break-all text-blue-700 text-right">{Number(it.approx_keys_per_second_mkeys).toFixed(0)}</TableCell>
-														<TableCell className="py-3 px-3">
-															{it.status === 'APPROVED' ? <Badge className="bg-green-600 text-white">Approved</Badge> : it.status === 'DENIED' ? <Badge className="bg-red-500 text-white">Denied</Badge> : <Badge className="bg-yellow-500 text-white">Pending</Badge>}
-														</TableCell>
-														<TableCell className="py-3 px-3 text-right">
-															<div className="flex items-center justify-end gap-2">
-																<Button variant="outline" size="sm" disabled={it.status !== 'PENDING'} onClick={async () => { setUserGpuMsg(''); try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'approve' }) }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to approve')); return } setUserGpuItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'APPROVED' } : x)); setUserGpuMsg('Submission approved successfully!'); } catch { setUserGpuMsg('Failed to approve') } }}>
-																	<CheckCircle2 className="h-4 w-4 mr-1" /> Approve
-																</Button>
-																<Button variant="destructive" size="sm" disabled={it.status !== 'PENDING'} onClick={async () => { setUserGpuMsg(''); try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'deny' }) }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to deny')); return } setUserGpuItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'DENIED' } : x)); setUserGpuMsg('Submission denied'); } catch { setUserGpuMsg('Failed to deny') } }}>
-																	<XCircle className="h-4 w-4 mr-1" /> Deny
-																</Button>
-																<Button variant="outline" size="sm" onClick={async () => { setUserGpuMsg(''); const ok = typeof window !== 'undefined' ? window.confirm('Remove this submission?') : true; if (!ok) return; try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'DELETE', headers: { ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) } }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to remove')); return } setUserGpuItems(prev => prev.filter(x => x.id !== it.id)); setUserGpuMsg('Submission removed'); } catch { setUserGpuMsg('Failed to remove') } }}>
-																	<Trash2 className="h-4 w-4 mr-1" /> Remove
-																</Button>
-															</div>
-														</TableCell>
-													</TableRow>
-												))}
-												{userGpuItems.length === 0 && !userGpuLoading && (
-													<TableRow><TableCell className="py-4 px-3 text-gray-600 text-center" colSpan={4}>No submissions found.</TableCell></TableRow>
-												)}
-											</TableBody>
-										</Table>
-									</div>
+									<Tabs defaultValue="approved" className="w-full">
+										<TabsList className="w-full h-auto p-1 mb-4 bg-white shadow-sm border border-gray-200 inline-flex gap-1">
+											<TabsTrigger value="approved" className="text-xs py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Approved ({approvedGpuItems.length})</TabsTrigger>
+											<TabsTrigger value="pending" className="text-xs py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white">Pending ({pendingGpuItems.length})</TabsTrigger>
+										</TabsList>
+										<TabsContent value="approved">
+											<div className="overflow-x-auto rounded-lg border border-gray-200">
+												<Table className="min-w-full divide-y divide-gray-200">
+													<TableHeader className="bg-gray-50">
+														<TableRow>
+															<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Model</TableHead>
+															<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600 text-right">Speed</TableHead>
+															<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Status</TableHead>
+															<TableHead className="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Actions</TableHead>
+														</TableRow>
+													</TableHeader>
+													<TableBody className='divide-y divide-gray-200'>
+														{approvedGpuItems.map(it => (
+															<TableRow key={it.id} className="hover:bg-blue-50/50 text-xs">
+																<TableCell className="py-3 px-3 font-medium text-gray-900">{it.model}</TableCell>
+																<TableCell className="py-3 px-3 break-all text-right"><SpeedCell m={Number(it.approx_keys_per_second_mkeys)} /></TableCell>
+																<TableCell className="py-3 px-3">
+																	<Badge className="bg-green-600 text-white">Approved</Badge>
+																</TableCell>
+																<TableCell className="py-3 px-3 text-right">
+																	<div className="flex items-center justify-end gap-2">
+																		<Button variant="outline" size="sm" disabled>
+																			<CheckCircle2 className="h-4 w-4 mr-1" /> Approve
+																		</Button>
+																		<Button variant="destructive" size="sm" disabled>
+																			<XCircle className="h-4 w-4 mr-1" /> Deny
+																		</Button>
+																		<Button variant="outline" size="sm" onClick={async () => { setUserGpuMsg(''); const ok = typeof window !== 'undefined' ? window.confirm('Remove this submission?') : true; if (!ok) return; try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'DELETE', headers: { ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) } }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to remove')); return } setUserGpuItems(prev => prev.filter(x => x.id !== it.id)); setUserGpuMsg('Submission removed'); } catch { setUserGpuMsg('Failed to remove') } }}>
+																			<Trash2 className="h-4 w-4 mr-1" /> Remove
+																		</Button>
+																	</div>
+																</TableCell>
+															</TableRow>
+														))}
+														{approvedGpuItems.length === 0 && !userGpuLoading && (
+															<TableRow><TableCell className="py-4 px-3 text-gray-600 text-center" colSpan={4}>No approved submissions.</TableCell></TableRow>
+														)}
+													</TableBody>
+												</Table>
+											</div>
+										</TabsContent>
+										<TabsContent value="pending">
+											<div className="overflow-x-auto rounded-lg border border-gray-200">
+												<Table className="min-w-full divide-y divide-gray-200">
+													<TableHeader className="bg-gray-50">
+														<TableRow>
+															<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Model</TableHead>
+															<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600 text-right">Speed</TableHead>
+															<TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-gray-600">Status</TableHead>
+															<TableHead className="py-3 px-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Actions</TableHead>
+														</TableRow>
+													</TableHeader>
+													<TableBody className='divide-y divide-gray-200'>
+														{pendingGpuItems.map(it => (
+															<TableRow key={it.id} className="hover:bg-blue-50/50 text-xs">
+																<TableCell className="py-3 px-3 font-medium text-gray-900">{it.model}</TableCell>
+																<TableCell className="py-3 px-3 break-all text-right"><SpeedCell m={Number(it.approx_keys_per_second_mkeys)} /></TableCell>
+																<TableCell className="py-3 px-3">
+																	<Badge className="bg-yellow-500 text-white">Pending</Badge>
+																</TableCell>
+																<TableCell className="py-3 px-3 text-right">
+																	<div className="flex items-center justify-end gap-2">
+																		<Button variant="outline" size="sm" disabled={it.status !== 'PENDING'} onClick={async () => { setUserGpuMsg(''); try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'approve' }) }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to approve')); return } setUserGpuItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'APPROVED' } : x)); setUserGpuMsg('Submission approved successfully!'); } catch { setUserGpuMsg('Failed to approve') } }}>
+																			<CheckCircle2 className="h-4 w-4 mr-1" /> Approve
+																		</Button>
+																		<Button variant="destructive" size="sm" disabled={it.status !== 'PENDING'} onClick={async () => { setUserGpuMsg(''); try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) }, body: JSON.stringify({ action: 'deny' }) }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to deny')); return } setUserGpuItems(prev => prev.map(x => x.id === it.id ? { ...x, status: 'DENIED' } : x)); setUserGpuMsg('Submission denied'); } catch { setUserGpuMsg('Failed to deny') } }}>
+																			<XCircle className="h-4 w-4 mr-1" /> Deny
+																		</Button>
+																		<Button variant="outline" size="sm" onClick={async () => { setUserGpuMsg(''); const ok = typeof window !== 'undefined' ? window.confirm('Remove this submission?') : true; if (!ok) return; try { const r = await fetch(`/api/user-gpus/${encodeURIComponent(it.id)}`, { method: 'DELETE', headers: { ...(setupSecret ? { 'x-setup-secret': setupSecret } : {}) } }); const j = await r.json().catch(() => ({})); if (!r.ok) { setUserGpuMsg(String(j?.error || 'Failed to remove')); return } setUserGpuItems(prev => prev.filter(x => x.id !== it.id)); setUserGpuMsg('Submission removed'); } catch { setUserGpuMsg('Failed to remove') } }}>
+																			<Trash2 className="h-4 w-4 mr-1" /> Remove
+																		</Button>
+																	</div>
+																</TableCell>
+															</TableRow>
+														))}
+														{pendingGpuItems.length === 0 && !userGpuLoading && (
+															<TableRow><TableCell className="py-4 px-3 text-gray-600 text-center" colSpan={4}>No pending submissions.</TableCell></TableRow>
+														)}
+													</TableBody>
+												</Table>
+											</div>
+										</TabsContent>
+									</Tabs>
 								</CardContent>
 							</Card>
 						</TabsContent>
