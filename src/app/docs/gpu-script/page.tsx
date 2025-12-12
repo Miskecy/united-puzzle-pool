@@ -10,21 +10,22 @@ import CodeSnippet from '@/components/CodeSnippet'
 // --- 2. COMPONENTE PRINCIPAL ---
 export default function GPUScriptDocs() {
 	const exampleSettingsJson = `{
-	  "api_url": "http://localhost:3000/api/block",
-	  "additional_addresses": ["YOUR_TARGET_ADDRESS"],
-	  "user_token": "YOUR_POOL_TOKEN",
-	  "worker_name": "your_worker_name",
-	  "program_name": "VanitySearch | cuBitCrack | VanitySearch-V2",
-	  "program_path": "./VanitySearch | ./cuBitCrack | ./VanitySearch-V2",
-	  "program_arguments": "",
-	  "block_length": "1T",
-	  "oneshot": false,
-	  "post_block_delay_enabled": false,
-	  "post_block_delay_minutes": 1,
-	  "telegram_share": false,
-	  "telegram_accesstoken": "YOUR_TELEGRAM_BOT_TOKEN",
-	  "telegram_chatid": "YOUR_CHAT_ID"
-	}`;
+    "api_url": "http://localhost:3000/api/block",
+    "additional_addresses": ["YOUR_TARGET_ADDRESS"],
+    "user_token": "YOUR_POOL_TOKEN",
+    "worker_name": "your_worker_name",
+    "program_name": "VanitySearch | cuBitCrack | VanitySearch-V3",
+    "program_path": "./VanitySearch | ./cuBitCrack | ./VanitySearch-V3",
+    "program_arguments": "",
+    "block_length": "1T",
+    "oneshot": false,
+    "post_block_delay_enabled": false,
+    "post_block_delay_minutes": 1,
+    "send_additional_keys_to_api": false,
+    "telegram_share": false,
+    "telegram_accesstoken": "YOUR_TELEGRAM_BOT_TOKEN",
+    "telegram_chatid": "YOUR_CHAT_ID"
+}`;
 
 	return (
 		// PADRÃO 1: Fundo com degradê
