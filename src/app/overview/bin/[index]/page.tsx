@@ -117,7 +117,7 @@ export default function BinDetailPage() {
 									<div key={b.id} className="border rounded-lg p-4 bg-white shadow-sm">
 										<div className="flex items-center justify-between mb-2">
 											<div className="flex items-center gap-2">
-												<Badge className="bg-gray-100 text-gray-800 border-gray-300 text-[10px]">ID</Badge>
+												<Badge className="bg-blue-50 text-blue-600 border-blue-600 text-[10px]">ID</Badge>
 												<span className="font-mono font-semibold text-gray-900">{b.id}</span>
 											</div>
 											<div className="inline-flex items-center gap-2">
@@ -141,7 +141,7 @@ export default function BinDetailPage() {
 										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Expand className='w-3 h-3' /> Range</div>
-												<div className="font-mono text-gray-900 font-semibold"><span>{b.hexRangeStart}</span> <span className="italic text-gray-600">to</span> <span>{b.hexRangeEnd}</span></div>
+												<div className="font-mono text-gray-900 font-semibold"><span>{b.hexRangeStart}</span> <span className="italic text-blue-600">to</span> <span>{b.hexRangeEnd}</span></div>
 											</div>
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Bitcoin className='w-3 h-3' /> Address</div>
