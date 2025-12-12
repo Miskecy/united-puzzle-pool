@@ -14,8 +14,13 @@ type UserGpuSubmission = {
 	status: 'PENDING' | 'APPROVED' | 'DENIED'
 }
 
+function dataDir(): string {
+    const env = (process.env.DATA_DIR || '').trim()
+    return env ? env : path.join(process.cwd(), 'src', 'data')
+}
+
 function dataFile(): string {
-	return path.join(process.cwd(), 'src', 'data', 'user-gpus.json')
+    return path.join(dataDir(), 'user-gpus.json')
 }
 
 async function readAll(): Promise<UserGpuSubmission[]> {
