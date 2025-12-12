@@ -59,6 +59,16 @@ export default function BlockLiveClient({
 		tpl = tpl.replaceAll('${hexRangeEnd}', hexRangeEnd)
 		tpl = tpl.replaceAll('{hexRangeStart}', hexRangeStart)
 		tpl = tpl.replaceAll('{hexRangeEnd}', hexRangeEnd)
+		function applyRangeToKeyspace(s: string, start: string, end: string): string {
+			let out = s
+			const val = `${start}:${end}`
+			out = out.replace(/--keyspace\s*=\s*\"[^\"]*\"/i, `--keyspace="${val}"`)
+			out = out.replace(/--keyspace\s*=\s*\'[^\']*\'/i, `--keyspace='${val}'`)
+			out = out.replace(/--keyspace\s*=\s*[^\s\"']+/i, `--keyspace=${val}`)
+			out = out.replace(/--keyspace\s+[^\s\"']+/i, `--keyspace ${val}`)
+			return out
+		}
+		tpl = applyRangeToKeyspace(tpl, hexRangeStart, hexRangeEnd)
 		return tpl
 	}, [customTemplate, hexRangeStart, hexRangeEnd])
 
