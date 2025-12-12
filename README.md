@@ -48,6 +48,52 @@ If you use Dockge to manage Compose stacks:
 2. Set environment variables (`SETUP_SECRET`, `APP_URL`, `REDIS_URL`).
 3. Deploy the stack and access `http://localhost:3000/setup` to complete configuration.
 
+#### Compose.yaml for Dockge (Sanitized)
+
+-   Copy the example below into Dockge as a new stack.
+-   Replace placeholders with your values (uppercase placeholders indicate required edits).
+
+Build and publish your Docker image first:
+
+```bash
+docker build -t YOUR_DOCKERHUB_USERNAME/REPOSITORY_NAME:TAG .
+docker push YOUR_DOCKERHUB_USERNAME/REPOSITORY_NAME:TAG
+```
+
+```yaml
+services:
+    app:
+        image: YOUR_DOCKERHUB_USERNAME/REPOSITORY_NAME:TAG
+        pull_policy: always
+        restart: unless-stopped
+        command: >-
+            sh -c "npx prisma generate && npx prisma migrate deploy && npm run start -- -p 3000"
+        environment:
+            SETUP_SECRET: YOUR_SETUP_SECRET
+            DATABASE_URL: file:/data/PROD.DB
+            REDIS_URL: redis://REDIS_HOST:REDIS_PORT
+            # Optional env-based puzzle bootstrap
+            BITCOIN_PUZZLE_ADDRESS: YOUR_PUZZLE_ADDRESS
+            PUZZLE_START_RANGE: '0'
+            PUZZLE_END_RANGE: 07FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+            # Internal base URL for server-side fetches
+            APP_URL: http://APP_HOST:APP_PORT
+        ports:
+            - '3000:3000'
+        depends_on:
+            - redis
+        volumes:
+            - app-data:/data
+    redis:
+        image: redis:7-alpine
+        restart: unless-stopped
+volumes:
+    app-data: null
+networks: {}
+```
+
+-   After the stack starts, open `http://APP_HOST:APP_PORT/setup` and log in with `SETUP_SECRET` to configure puzzles.
+
 ### Docker (direct)
 
 Alternatively, build and run the image directly:
@@ -80,6 +126,7 @@ SETUP_SECRET="change-me"
 APP_URL="http://localhost:3000"
 # Exposed to client-side pages for code snippets
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+DATABASE_URL="file:./DB_NAME.db"
 ```
 
 ### Setup Access
