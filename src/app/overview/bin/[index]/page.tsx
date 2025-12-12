@@ -34,6 +34,28 @@ function formatDeltaScientific(delta: bigint): string {
 	return `≈ ${sign} ${mantissa} x 10^${exp}`
 }
 
+function pow2LenLabel(startHex: string, endHex: string): string {
+	try {
+		const s = parseHexBI(startHex)
+		const e = parseHexBI(endHex)
+		const len = e >= s ? (e - s) : 0n
+		if (len <= 0n) return '2^0.00'
+		const bin = len.toString(2)
+		const bitlen = bin.length
+		const K = Math.max(0, Math.min(24, bitlen - 1))
+		let frac = 0
+		if (K > 0) {
+			const top = bin.slice(0, K + 1) // includes leading 1
+			const val = parseInt(top, 2) / Math.pow(2, K)
+			frac = Math.log2(val)
+		}
+		const exp = (bitlen - 1) + frac
+		return `2^${exp.toFixed(2)}`
+	} catch {
+		return '2^0.00'
+	}
+}
+
 export default function BinDetailPage() {
 	const params = useParams()
 	const router = useRouter()
@@ -142,6 +164,7 @@ export default function BinDetailPage() {
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Expand className='w-3 h-3' /> Range</div>
 												<div className="font-mono text-gray-900 font-semibold"><span>{b.hexRangeStart}</span> <span className="italic text-blue-600">to</span> <span>{b.hexRangeEnd}</span></div>
+												<div className="text-xs text-gray-600 italic mt-1 inline-flex items-center gap-1"><Gauge className='w-3 h-3' /> Length <span className="font-semibold">{pow2LenLabel(b.hexRangeStart, b.hexRangeEnd)}</span></div>
 											</div>
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Bitcoin className='w-3 h-3' /> Address</div>
