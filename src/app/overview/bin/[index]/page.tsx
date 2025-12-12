@@ -81,12 +81,12 @@ export default function BinDetailPage() {
 			<div className="max-w-5xl mx-auto px-4 py-8">
 				<div className="mb-6 flex items-center justify-between">
 					<div className='flex items-center gap-3'>
-						<Button variant="ghost" onClick={() => router.push('/overview')} className="inline-flex items-center gap-2 text-gray-700 hover:text-blue-600"><ArrowLeft className='w-4 h-4' /> Back</Button>
+						<Button variant="ghost" onClick={() => router.push('/overview')} className="inline-flex hover:bg-transparent hover:shadow-none cursor-pointer items-center gap-2 text-gray-700 hover:text-blue-600"><ArrowLeft className='w-4 h-4' /> Back</Button>
 						<div className="p-3 bg-blue-100 rounded-full"><Hash className="h-5 w-5 text-blue-600" /></div>
 						<div>
 							<h1 className="text-2xl font-bold text-gray-900">Bin {meta ? meta.index + 1 : index}</h1>
 							{meta && (
-								<p className="text-gray-600 text-sm font-mono"><span className="font-semibold">Range:</span> {meta.startHex} <span className="italic text-gray-500">to</span> {meta.endHex}</p>
+								<p className="text-gray-600 text-sm font-mono"><span className="font-semibold">Range:</span> {meta.startHex} <span className="italic text-blue-600">to</span> {meta.endHex}</p>
 							)}
 						</div>
 					</div>
