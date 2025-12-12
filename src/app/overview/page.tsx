@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -197,6 +198,7 @@ export default function PoolOverviewPage() {
 	const [hoveredBlockCells, setHoveredBlockCells] = useState<number[]>([]);
 	const [nextPollInSec, setNextPollInSec] = useState<number>(30);
 	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+    const router = useRouter();
 
 	function formatLastUpdated(ts: number | null): string {
 		if (!ts) return '—';
@@ -529,13 +531,13 @@ export default function PoolOverviewPage() {
 												return (
 													<Tooltip key={i} open={hoveredCell === i}>
 														<TooltipTrigger asChild>
-															<div
-																style={style}
-																className="w-full rounded-md relative overflow-hidden cursor-pointer heatmap-cell transition-all duration-200"
-																onMouseEnter={() => setHoveredCell(i)}
-																onMouseLeave={() => setHoveredCell(null)}
-																onClick={() => setHoveredCell(prev => (prev === i ? null : i))}
-															>
+                                                            <div
+                                                                style={style}
+                                                                className="w-full rounded-md relative overflow-hidden cursor-pointer heatmap-cell transition-all duration-200"
+                                                                onMouseEnter={() => setHoveredCell(i)}
+                                                                onMouseLeave={() => setHoveredCell(null)}
+                                                                onClick={() => { if (cell) { router.push(`/overview/bin/${cell.index}`) } }}
+                                                            >
 																{cell && (
 																	<span className={`absolute inset-0 flex items-center justify-center text-[9px] sm:text-[10px] ${textClass} font-semibold pointer-events-none`}>
 																		{lenPow}
