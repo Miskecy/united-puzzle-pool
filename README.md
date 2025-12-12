@@ -1,7 +1,7 @@
 # United Puzzle Pool
 
 <p align="center">
-  <img  src="/pool-desafio-71/src/assets/index.jpg">
+  <img  src="/src/assets/index.jpg">
 </p>
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
