@@ -19,6 +19,21 @@ type BlockItem = {
 	creditsAwarded: number
 }
 
+function parseHexBI(hex: string): bigint {
+	const clean = hex.replace(/^0x/, '')
+	return BigInt(`0x${clean}`)
+}
+
+function formatDeltaScientific(delta: bigint): string {
+	if (delta === 0n) return '~ 0'
+	const sign = delta < 0n ? '-' : '+'
+	const abs = delta < 0n ? -delta : delta
+	const digits = abs.toString() // base-10
+	const exp = Math.max(0, digits.length - 1)
+	const mantissa = digits.length >= 2 ? `${digits[0]}.${digits.slice(1, 3)}` : `${digits[0]}`
+	return `~ ${sign} ${mantissa} x 10^${exp}`
+}
+
 export default function BinDetailPage() {
 	const params = useParams()
 	const router = useRouter()
@@ -106,6 +121,14 @@ export default function BinDetailPage() {
 												<span className="font-mono font-semibold text-gray-900">{b.id}</span>
 											</div>
 											<div className="inline-flex items-center gap-2">
+												{(() => {
+													const idx = items.findIndex(it => it.id === b.id)
+													const prev = idx > 0 ? items[idx - 1] : null
+													const label = prev ? formatDeltaScientific(parseHexBI(b.hexRangeEnd) - parseHexBI(prev.hexRangeEnd)) : '—'
+													return (
+														<Badge className="bg-purple-50 text-purple-700 border-purple-300 text-[10px]">{label}</Badge>
+													)
+												})()}
 												{b.status === 'COMPLETED' ? (
 													<span className="inline-flex items-center gap-1 text-green-700 bg-green-50 px-2 py-1 rounded"><CheckCircle2 className='w-4 h-4' /> Completed</span>
 												) : b.status === 'ACTIVE' ? (
