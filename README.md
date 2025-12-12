@@ -1,5 +1,9 @@
 # United Puzzle Pool
 
+<p align="center">
+  <img  src="/pool-desafio-71/src/assets/index.jpg">
+</p>
+
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![React](https://img.shields.io/badge/React-v19.2.0-61DAFB)](https://react.dev/)
 [![Runtime Build and Test](<https://img.shields.io/badge/(Runtime)%20Build%20and%20Test-passing-brightgreen>)](#getting-started)
