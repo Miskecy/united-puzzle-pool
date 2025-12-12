@@ -1,9 +1,10 @@
-import { Gauge, Hash, Clock, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Gauge, Hash, Clock, ArrowRight, ArrowLeft, Key, Code2, Code, Terminal } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import BlockSolutionSubmit from '@/components/BlockSolutionSubmit'
 import CopyButton from '@/components/CopyButton'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 function formatSpeed(n?: number | null): string {
 	if (!n || !isFinite(n) || n <= 0) return '—'
@@ -234,29 +235,30 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							</Card>
 						</div>
 
-						{/* Command Line Helper */}
-						<Card className="bg-white border-gray-200 shadow-md">
-							<CardHeader className="border-b pb-4">
-								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-									<Hash className="h-5 w-5 text-blue-600" /> Command Line
-								</CardTitle>
-								<CardDescription className="text-gray-600">Copy parameters for GPU tools with this block range.</CardDescription>
-							</CardHeader>
-							<CardContent className="pt-4">
-								<div className="flex items-center justify-between gap-2">
-									<div className="font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200 break-all w-full">-t 0 -gpu -gpuId 0 -keyspace {block.hexRangeStart}:{block.hexRangeEnd} -i in.txt -o out.txt</div>
-									<CopyButton text={`-t 0 -gpu -gpuId 0 -keyspace ${block.hexRangeStart}:${block.hexRangeEnd} -i in.txt -o out.txt`} className="text-xs">Copy</CopyButton>
-								</div>
-							</CardContent>
-						</Card>
+						<Accordion type="multiple" className="bg-white rounded-xl border border-gray-200 shadow-sm">
+							<AccordionItem value="cmd">
+								<AccordionTrigger className="px-6">
+									<span className="flex items-center gap-2 text-lg text-gray-900"><Terminal className="h-5 w-5 text-blue-600" /> Command Line</span>
+								</AccordionTrigger>
+								<AccordionContent className="px-6">
+									<div className="flex items-center justify-between gap-2">
+										<div className="font-mono text-sm bg-gray-50 p-3 rounded border border-gray-200 break-all w-full">./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 -keyspace {block.hexRangeStart}:{block.hexRangeEnd} -i in.txt -o out.txt</div>
+										<CopyButton text={`./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 -keyspace ${block.hexRangeStart}:${block.hexRangeEnd} -i in.txt -o out.txt`} className="text-xs h-12">Copy</CopyButton>
+									</div>
+								</AccordionContent>
+							</AccordionItem>
 
-						{!block.completedAt && (
-							<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-								<div className="md:col-span-3">
-									<BlockSolutionSubmit blockId={block.id} rangeStart={block.hexRangeStart} rangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} />
-								</div>
-							</div>
-						)}
+							{!block.completedAt && (
+								<AccordionItem value="submit">
+									<AccordionTrigger className="px-6">
+										<span className="flex items-center gap-2 text-lg text-gray-900"><Key className="h-5 w-5 text-rose-600" /> Solution Submission</span>
+									</AccordionTrigger>
+									<AccordionContent className="px-6">
+										<BlockSolutionSubmit blockId={block.id} rangeStart={block.hexRangeStart} rangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} />
+									</AccordionContent>
+								</AccordionItem>
+							)}
+						</Accordion>
 
 						{/* Checkwork & Private Keys (Matched and Unmatched) */}
 						<Card className="bg-white border-gray-200 shadow-md">
