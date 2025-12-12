@@ -56,6 +56,28 @@ function pow2LenLabel(startHex: string, endHex: string): string {
 	}
 }
 
+function formatScaled(len: bigint, factor: bigint, unit: string): string {
+	if (len <= 0n) return `0.00${unit}`
+	const intPart = len / factor
+	const rem = len % factor
+	const twoDec = (rem * 100n) / factor
+	return `${intPart.toString()}.${twoDec.toString().padStart(2, '0')}${unit}`
+}
+
+function lengthCompositeLabel(startHex: string, endHex: string): string {
+	try {
+		const s = parseHexBI(startHex)
+		const e = parseHexBI(endHex)
+		const len = e >= s ? (e - s) : 0n
+		const pow = len > 0n ? pow2LenLabel(startHex, endHex) : '2^0.00'
+		const t = formatScaled(len, 1_000_000_000_000n, 'T')
+		const b = formatScaled(len, 1_000_000_000n, 'B')
+		return `${pow} • ${t}Keys/${b}Keys`
+	} catch {
+		return '2^0.00 • 0.00TKeys/0.00BKeys'
+	}
+}
+
 export default function BinDetailPage() {
 	const params = useParams()
 	const router = useRouter()
@@ -164,7 +186,7 @@ export default function BinDetailPage() {
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Expand className='w-3 h-3' /> Range</div>
 												<div className="font-mono text-gray-900 font-semibold"><span>{b.hexRangeStart}</span> <span className="italic text-blue-600">to</span> <span>{b.hexRangeEnd}</span></div>
-												<div className="text-xs text-gray-600 italic mt-1 inline-flex items-center gap-1"><Gauge className='w-3 h-3' /> Length <span className="font-semibold">{pow2LenLabel(b.hexRangeStart, b.hexRangeEnd)}</span></div>
+												<div className="text-xs text-gray-600 italic mt-1 inline-flex items-center gap-1"><Gauge className='w-3 h-3' /> Length <span className="font-semibold">{lengthCompositeLabel(b.hexRangeStart, b.hexRangeEnd)}</span></div>
 											</div>
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Bitcoin className='w-3 h-3' /> Address</div>
