@@ -1,7 +1,7 @@
 import { Gauge, Hash, Clock, ArrowRight, ArrowLeft, Key, Code2, Code, Terminal } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card'
 import BlockSolutionSubmit from '@/components/BlockSolutionSubmit'
 import CopyButton from '@/components/CopyButton'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
@@ -267,6 +267,14 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 									<Clock className="h-5 w-5 text-purple-600" /> Solution Submission Status
 								</CardTitle>
 								<CardDescription className="text-gray-600">Validation status of submitted checkwork and private keys.</CardDescription>
+								{block.checkworkAddresses && block.checkworkAddresses.length > 0 && (
+									<CardAction>
+										<CopyButton
+											text={block.checkworkAddresses.join('\n')}
+											className="text-xs"
+										>Copy Addresses</CopyButton>
+									</CardAction>
+								)}
 							</CardHeader>
 							<CardContent className="pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
 
