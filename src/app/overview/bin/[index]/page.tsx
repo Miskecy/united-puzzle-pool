@@ -156,7 +156,10 @@ export default function BinDetailPage() {
 						<div>
 							<h1 className="text-2xl font-bold text-gray-900">Bin {meta ? meta.index + 1 : index}</h1>
 							{meta && (
-								<p className="text-gray-600 text-sm font-mono break-all"><span className="font-semibold">Range:</span> {meta.startHex} <span className="italic text-blue-600">to</span> {meta.endHex}</p>
+								<p className="text-gray-600 text-sm font-mono break-all flex items-center gap-2">
+									<span className="font-semibold">Range:</span> {meta.startHex} <span className="font-semibold text-blue-600">to</span> {meta.endHex}
+									<Badge className="ml-2 bg-blue-100 text-blue-600 text-[12px] border-blue-500 pt-1">{lengthCompositeLabel(meta.startHex, meta.endHex)}</Badge>
+								</p>
 							)}
 						</div>
 					</div>
