@@ -20,11 +20,48 @@ const NF_1DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 })
 const NF_2DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
 const NF_4DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 })
 function computeEfficiency(item: GPUItem) { const w = Number(item.tdp_w); if (!isFinite(w) || w <= 0) return 0; return item.approx_keys_per_second_mkeys / w }
-type Unit = 'M' | 'G'
-function toSpeed(mkeys: number, unit: Unit) { return unit === 'G' ? mkeys / 1000 : mkeys }
-function toEff(mkeysPerW: number, unit: Unit) { return unit === 'G' ? mkeysPerW / 1000 : mkeysPerW }
-function fmtSpeed(val: number, unit: Unit) { return (unit === 'G' ? NF_2DP : NF_1DP).format(toSpeed(val, unit)) }
-function fmtEff(val: number, unit: Unit) { const v = toEff(val, unit); if (unit === 'G' && v < 0.1) return NF_4DP.format(v); return (unit === 'G' ? NF_2DP : NF_1DP).format(v) }
+type Unit = '' | 'K' | 'M' | 'B' | 'T' | 'P' | 'E'
+const UNITS: Array<{ label: Unit; factor: bigint }> = [
+	{ label: 'E', factor: 1_000_000_000_000_000_000n },
+	{ label: 'P', factor: 1_000_000_000_000_000n },
+	{ label: 'T', factor: 1_000_000_000_000n },
+	{ label: 'B', factor: 1_000_000_000n },
+	{ label: 'M', factor: 1_000_000n },
+	{ label: 'K', factor: 1_000n },
+	{ label: '', factor: 1n },
+]
+function scaleFromMKeys(mkeys: number, unit: Unit): { intPart: bigint; twoDec: bigint; value: number } {
+	const u = UNITS.find(x => x.label === unit) ?? UNITS[UNITS.length - 1]
+	const keys = BigInt(Math.round(mkeys)) * 1_000_000n
+	const intPart = keys / u.factor
+	const rem = keys % u.factor
+	const twoDec = (rem * 100n) / u.factor
+	const value = Number(intPart) + Number(twoDec) / 100
+	return { intPart, twoDec, value }
+}
+function fmtScaled(intPart: bigint, twoDec: bigint): string {
+	if (intPart >= 100n) return NF_INT.format(Number(intPart))
+	if (intPart >= 10n) return `${NF_INT.format(Number(intPart))}.${Number(twoDec / 10n).toString().padStart(1, '0')}`
+	return `${NF_INT.format(Number(intPart))}.${Number(twoDec).toString().padStart(2, '0')}`
+}
+function toSpeed(mkeys: number, unit: Unit) { return scaleFromMKeys(mkeys, unit).value }
+function toEff(mkeysPerW: number, unit: Unit) { return scaleFromMKeys(mkeysPerW, unit).value }
+function fmtSpeed(valMKeys: number, unit: Unit) { const { intPart, twoDec } = scaleFromMKeys(valMKeys, unit); return fmtScaled(intPart, twoDec) }
+function fmtEff(valMKeysPerW: number, unit: Unit) { const v = toEff(valMKeysPerW, unit); const decs = v >= 100 ? 0 : v >= 10 ? 1 : 2; return v.toFixed(decs) }
+function pickUnitForKeys(mkeysPerW: number): Unit {
+	const keys = BigInt(Math.round(mkeysPerW)) * 1_000_000n
+	for (const u of UNITS) {
+		const intPart = keys / u.factor
+		if (intPart >= 1n && intPart < 1000n) return u.label
+	}
+	return ''
+}
+function fmtEffAuto(mkeysPerW: number): { text: string; label: string; unit: Unit } {
+	const u = pickUnitForKeys(mkeysPerW)
+	const v = toEff(mkeysPerW, u)
+	const decs = v >= 100 ? 0 : v >= 10 ? 1 : 2
+	return { text: v.toFixed(decs), label: `${u ? u : ''}Keys/W`, unit: u }
+}
 function estimateSpeedMKeys(spec: { architecture: string; cuda_cores: number }) { const a = (spec.architecture || '').toLowerCase(); let f = 0.12; if (a.includes('ada')) f = 0.16; else if (a.includes('ampere')) f = 0.12; else if (a.includes('turing')) f = 0.30; else if (a.includes('rdna 4')) f = 0.14; else if (a.includes('rdna 3')) f = 0.12; else if (a.includes('rdna 2')) f = 0.10; else if (a.includes('rdna')) f = 0.09; else if (a.includes('vega')) f = 0.08; else if (a.includes('blackwell')) f = 0.18; const c = Number(spec.cuda_cores || 0); return c * f }
 function SortButton({ label, keySel, sortKey, sortDir, onClick }: { label: string; keySel: SortKey; sortKey: SortKey; sortDir: 'asc' | 'desc'; onClick: () => void }) { const isActive = sortKey === keySel; return (<Button variant={isActive ? 'default' : 'outline'} size="sm" onClick={onClick} className={`${isActive ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md' : 'border-gray-300 text-gray-700 hover:bg-gray-100'} transition-all font-medium`}>{label}{isActive && (sortDir === 'desc' ? <ChevronDown className="ml-1 w-4 h-4" /> : <ChevronUp className="ml-1 w-4 h-4" />)}</Button>) }
 
@@ -36,20 +73,20 @@ export default function GPURankingPage() {
 	const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 	const [cmpA, setCmpA] = useState<string>('')
 	const [cmpB, setCmpB] = useState<string>('')
-	const [unit, setUnit] = useState<Unit>('G')
-	const speedUnitLabel = unit === 'G' ? 'GKeys/s' : 'MKeys/s'
-	const effUnitLabel = unit === 'G' ? 'GKeys/W' : 'MKeys/W'
+	const [unit, setUnit] = useState<Unit>('B')
+	const speedUnitLabel = `${unit ? unit : ''}Keys/s`
+	const effUnitLabel = `${unit ? unit : ''}Keys/W`
 	const [userModel, setUserModel] = useState('')
 	const [userSpeed, setUserSpeed] = useState<string>('')
 	const [userSpeedUnit, setUserSpeedUnit] = useState<Unit>('M')
 	const [userMsg, setUserMsg] = useState('')
 	const [userLoading, setUserLoading] = useState(false)
 	const [userItems, setUserItems] = useState<{ id: string; model: string; approx_keys_per_second_mkeys: number; tdp_w?: number; brand?: string; architecture?: string; series?: string; status: 'PENDING' | 'APPROVED' | 'DENIED' }[]>([])
-	const gpuSpecs = useMemo(() => { type SpecRow = { Brand: string; Model: string; Architecture: string; Series: string; CoreUnits: number; TDP_W: number | null }; const rows: SpecRow[] = Array.isArray(specsData) ? (specsData as SpecRow[]) : []; const map = new Map<string, { brand: string; model: string; architecture: string; series: string; cuda_cores: number; tdp_w: number }>(); for (const s of rows) { map.set(s.Model, { brand: s.Brand, model: s.Model, architecture: s.Architecture, series: s.Series, cuda_cores: Number(s.CoreUnits || 0), tdp_w: Number.isFinite(Number(s.TDP_W)) ? Number(s.TDP_W) : 0, }) } return map }, [])
+	const gpuSpecs = useMemo(() => { type SpecRow = { Brand: string; Model: string; Architecture: string; Series: string; CoreUnits: number; TDP_W: number | null; approx_keys_per_second_mkeys?: number }; const rows: SpecRow[] = Array.isArray(specsData) ? (specsData as SpecRow[]) : []; const map = new Map<string, { brand: string; model: string; architecture: string; series: string; cuda_cores: number; tdp_w: number; approx_keys_per_second_mkeys: number }>(); for (const s of rows) { map.set(s.Model, { brand: s.Brand, model: s.Model, architecture: s.Architecture, series: s.Series, cuda_cores: Number(s.CoreUnits || 0), tdp_w: Number.isFinite(Number(s.TDP_W)) ? Number(s.TDP_W) : 0, approx_keys_per_second_mkeys: Number(s.approx_keys_per_second_mkeys || 0), }) } return map }, [])
 	const userAggregated = useMemo(() => { const byModel = new Map<string, { model: string; speeds: number[]; brand?: string; architecture?: string; series?: string; tdp_w?: number }>(); for (const it of userItems.filter(i => i.status === 'APPROVED')) { const cur = byModel.get(it.model) || { model: it.model, speeds: [], brand: it.brand, architecture: it.architecture, series: it.series, tdp_w: it.tdp_w }; cur.speeds.push(it.approx_keys_per_second_mkeys); byModel.set(it.model, cur) } const rows = Array.from(byModel.values()).map(v => { const avg = v.speeds.length ? (v.speeds.reduce((a, b) => a + b, 0) / v.speeds.length) : 0; const spec = gpuSpecs.get(v.model); return { model: v.model, approx_keys_per_second_mkeys: avg, architecture: spec?.architecture ?? v.architecture ?? '-', series: spec?.series ?? v.series ?? '-', cuda_cores: spec?.cuda_cores ?? 0, tdp_w: spec?.tdp_w ?? v.tdp_w ?? 0, brand: spec?.brand ?? v.brand ?? '-', } }); return rows.sort((a, b) => b.approx_keys_per_second_mkeys - a.approx_keys_per_second_mkeys) }, [userItems, gpuSpecs])
 	const userSpeedMax = useMemo(() => { return userAggregated.length ? Math.max(...userAggregated.map(d => d.approx_keys_per_second_mkeys)) : 0 }, [userAggregated])
 	const userEffMax = useMemo(() => { return userAggregated.length ? Math.max(...userAggregated.map(d => computeEfficiency({ model: d.model, cuda_cores: d.cuda_cores, architecture: d.architecture, series: d.series, tdp_w: d.tdp_w ?? 0, approx_keys_per_second_mkeys: d.approx_keys_per_second_mkeys }))) : 0 }, [userAggregated])
-	const data = useMemo(() => { const list = Array.from(gpuSpecs.values()).map(s => { const agg = userAggregated.find(u => u.model === s.model); const speed = agg && agg.approx_keys_per_second_mkeys > 0 ? agg.approx_keys_per_second_mkeys : estimateSpeedMKeys({ architecture: s.architecture, cuda_cores: s.cuda_cores }); return { model: s.model, cuda_cores: s.cuda_cores, architecture: s.architecture, series: s.series, tdp_w: s.tdp_w, approx_keys_per_second_mkeys: speed } }); const ranked = list.slice().sort((a, b) => b.approx_keys_per_second_mkeys - a.approx_keys_per_second_mkeys).map((it, idx) => ({ ...it, rank: idx + 1 })); return ranked }, [gpuSpecs, userAggregated])
+	const data = useMemo(() => { const list = Array.from(gpuSpecs.values()).map(s => { return { model: s.model, cuda_cores: s.cuda_cores, architecture: s.architecture, series: s.series, tdp_w: s.tdp_w, approx_keys_per_second_mkeys: s.approx_keys_per_second_mkeys } }); const ranked = list.slice().sort((a, b) => b.approx_keys_per_second_mkeys - a.approx_keys_per_second_mkeys).map((it, idx) => ({ ...it, rank: idx + 1 })); return ranked }, [gpuSpecs])
 	async function fetchUserGpus() { try { const r = await fetch('/api/user-gpus'); if (r.ok) { const j = await r.json(); setUserItems(Array.isArray(j.items) ? j.items : []) } } catch { } }
 	useEffect(() => { fetchUserGpus() }, [])
 	const architectures = useMemo(() => { const set = new Set<string>(); for (const d of data) set.add(d.architecture); return ['All', ...Array.from(set)] }, [data])
@@ -82,7 +119,7 @@ export default function GPURankingPage() {
 				</div>
 				<Tabs defaultValue="official" className="w-full">
 					<TabsList className="grid w-full grid-cols-2 h-auto p-1 mb-6 bg-white shadow-md border border-gray-200">
-						<TabsTrigger value="official" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">GPU Ranking (AI Generated)</TabsTrigger>
+						<TabsTrigger value="official" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg text-wrap">GPU Ranking</TabsTrigger>
 						<TabsTrigger value="user" className="text-sm py-2 px-3 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-lg">User GPU Table</TabsTrigger>
 					</TabsList>
 					<TabsContent value="official" className="space-y-6">
@@ -197,9 +234,14 @@ export default function GPURankingPage() {
 							<CardHeader className="border-b px-6 py-4 ">
 								<CardTitle className="text-xl font-semibold text-gray-800 flex items-center gap-2"><Filter className="w-5 h-5 text-blue-600" />Filters & Sorting</CardTitle>
 								<CardAction>
-									<select value={unit} onChange={e => setUnit((e.target.value as Unit) ?? 'G')} className="h-9 px-3 rounded-md border border-gray-300 bg-white text-sm font-medium">
-										<option value="G">GKeys/s</option>
+									<select value={unit} onChange={e => setUnit((e.target.value as Unit) ?? 'B')} className="h-9 px-3 rounded-md border border-gray-300 bg-white text-sm font-medium">
+										<option value="E">EKeys/s</option>
+										<option value="P">PKeys/s</option>
+										<option value="T">TKeys/s</option>
+										<option value="B">BKeys/s</option>
 										<option value="M">MKeys/s</option>
+										<option value="K">KKeys/s</option>
+										<option value="">Keys/s</option>
 									</select>
 								</CardAction>
 								<CardDescription className="text-gray-600">Search, filter by architecture or series, and change sorting order.</CardDescription>
@@ -317,7 +359,11 @@ export default function GPURankingPage() {
 										<BarChart data={top10Speed.map(d => ({ ...d, u: toSpeed(d.approx_keys_per_second_mkeys, unit) }))} margin={{ left: 20, right: 20, top: 10, bottom: 50 }}>
 											<CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
 											<XAxis dataKey="model" tick={{ fontSize: 12, fill: '#475569' }} interval={0} angle={-25} dy={15} />
-											<YAxis tick={{ fontSize: 12, fill: '#475569' }} tickFormatter={(v: number) => (unit === 'G' ? NF_2DP : NF_1DP).format(v)} label={{ value: speedUnitLabel, position: 'insideLeft', angle: -90, fill: '#475569' }} />
+											<YAxis tick={{ fontSize: 12, fill: '#475569' }} tickFormatter={(v: number) => {
+												if (v >= 100) return NF_INT.format(Math.round(v))
+												if (v >= 10) return NF_1DP.format(v)
+												return NF_2DP.format(v)
+											}} label={{ value: speedUnitLabel, position: 'insideLeft', angle: -90, fill: '#475569' }} />
 											<ChartTooltip content={<ChartTooltipContent />} />
 											<Bar dataKey="u" fill="#2563eb" radius={[6, 6, 0, 0]} />
 										</BarChart>
@@ -342,12 +388,17 @@ export default function GPURankingPage() {
 										</select>
 									</div>
 									<div>
-										<label className="text-sm font-medium text-gray-700">Speed ({userSpeedUnit === 'G' ? 'GKeys/s' : 'MKeys/s'})</label>
+										<label className="text-sm font-medium text-gray-700">Speed ({userSpeedUnit ? userSpeedUnit : ''}Keys/s)</label>
 										<div className="mt-1 flex gap-2">
-											<Input placeholder={userSpeedUnit === 'G' ? 'e.g. 2.5' : 'e.g. 250000'} value={userSpeed} onChange={e => setUserSpeed(e.target.value)} className="flex-1" />
+											<Input placeholder={(userSpeedUnit === 'M' || userSpeedUnit === '') ? 'e.g. 250000' : 'e.g. 2.5'} value={userSpeed} onChange={e => setUserSpeed(e.target.value)} className="flex-1" />
 											<select value={userSpeedUnit} onChange={e => setUserSpeedUnit((e.target.value as Unit) ?? 'M')} className="h-10 px-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 bg-white text-sm font-medium">
+												<option value="E">EKeys/s</option>
+												<option value="P">PKeys/s</option>
+												<option value="T">TKeys/s</option>
+												<option value="B">BKeys/s</option>
 												<option value="M">MKeys/s</option>
-												<option value="G">GKeys/s</option>
+												<option value="K">KKeys/s</option>
+												<option value="">Keys/s</option>
 											</select>
 										</div>
 									</div>
@@ -358,7 +409,8 @@ export default function GPURankingPage() {
 											try {
 												const spec = gpuSpecs.get(userModel.trim())
 												const raw = Number(userSpeed)
-												const approxMKeys = userSpeedUnit === 'G' ? (raw * 1000) : raw
+												const FACTORS_NUM: Record<Unit, number> = { '': 1, K: 1_000, M: 1_000_000, B: 1_000_000_000, T: 1_000_000_000_000, P: 1_000_000_000_000_000, E: 1_000_000_000_000_000_000 }
+												const approxMKeys = raw * (FACTORS_NUM[userSpeedUnit] ?? 1_000_000) / 1_000_000
 												const r = await fetch('/api/user-gpus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: userModel.trim(), approx_keys_per_second_mkeys: approxMKeys, brand: spec?.brand, architecture: spec?.architecture, series: spec?.series, tdp_w: spec?.tdp_w }) })
 												const j = await r.json().catch(() => ({}))
 												if (!r.ok) { setUserMsg(String(j?.error || 'Failed to submit')); return }
