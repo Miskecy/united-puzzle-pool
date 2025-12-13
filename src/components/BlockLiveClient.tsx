@@ -53,7 +53,7 @@ export default function BlockLiveClient({
 	}, [])
 
 	const cmdText = React.useMemo(() => {
-		const def = `./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace ${hexRangeStart}:${hexRangeEnd} -i in.txt -o out.txt`
+		const def = `./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace ${hexRangeStart.replace('0x', '')}:${hexRangeEnd.replace('0x', '')} -i in.txt -o out.txt`
 		let tpl = customTemplate || def
 		tpl = tpl.replaceAll('${hexRangeStart}', hexRangeStart)
 		tpl = tpl.replaceAll('${hexRangeEnd}', hexRangeEnd)
@@ -68,12 +68,12 @@ export default function BlockLiveClient({
 			out = out.replace(/--keyspace\s+[^\s\"']+/i, `--keyspace ${val}`)
 			return out
 		}
-		tpl = applyRangeToKeyspace(tpl, hexRangeStart, hexRangeEnd)
+		tpl = applyRangeToKeyspace(tpl, hexRangeStart.replace('0x', ''), hexRangeEnd.replace('0x', ''))
 		return tpl
 	}, [customTemplate, hexRangeStart, hexRangeEnd])
 
 	function handleSetCustom() {
-		const def = `./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace ${hexRangeStart}:${hexRangeEnd} -i in.txt -o out.txt`
+		const def = `./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace ${hexRangeStart.replace('0x', '')}:${hexRangeEnd.replace('0x', '')} -i in.txt -o out.txt`
 		const current = customTemplate || def
 		const input = typeof window !== 'undefined' ? window.prompt('Enter custom command template', current) : null
 		if (input && input.trim().length > 0) {
