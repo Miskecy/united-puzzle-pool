@@ -286,6 +286,8 @@ export function deriveBitcoinAddressFromPrivateKeyHex(hex: string): string {
 
 		// Create wallet from private key hex string
 		const wallet = new CoinKey(Buffer.from(paddedHex, 'hex'));
+		// Ensure compressed public key mode for compressed P2PKH address
+		(wallet as unknown as { compressed?: boolean }).compressed = true;
 		console.log('Bitcoin address gerada:', wallet.publicAddress);
 
 		// Return the P2PKH base58 address
@@ -299,6 +301,7 @@ export function deriveBitcoinAddressFromPrivateKeyHex(hex: string): string {
 
 			// Criar instância CoinKey manualmente
 			const ck = new CoinKey(privateKeyBuffer);
+			(ck as unknown as { compressed?: boolean }).compressed = true;
 			console.log('Bitcoin address gerada (método alternativo):', ck.publicAddress);
 			return ck.publicAddress;
 		} catch (error2) {

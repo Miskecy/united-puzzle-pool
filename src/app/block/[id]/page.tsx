@@ -79,6 +79,7 @@ function formatDifficultyPrecise(lenHexStart: string, lenHexEnd: string): string
 interface BlockData {
 	id: string;
 	bitcoinAddress: string;
+	puzzleAddress?: string | null;
 	tokenMasked: string;
 	hexRangeStart: string;
 	hexRangeEnd: string;
@@ -231,7 +232,7 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							</Card>
 						</div>
 
-						<BlockLiveClient id={block.id} hexRangeStart={block.hexRangeStart} hexRangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} initialAddressMap={block.addressMap} completedAt={block.completedAt} bitcoinAddress={block.bitcoinAddress} />
+					<BlockLiveClient id={block.id} hexRangeStart={block.hexRangeStart} hexRangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} initialAddressMap={block.addressMap} completedAt={block.completedAt} bitcoinAddress={block.bitcoinAddress} puzzleAddress={block.puzzleAddress ?? undefined} />
 
 
 					</div>

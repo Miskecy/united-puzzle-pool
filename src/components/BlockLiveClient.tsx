@@ -3,7 +3,7 @@
 import React from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardAction } from '@/components/ui/card'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
-import { Hash, Clock, Key, SquareMousePointer } from 'lucide-react'
+import { Hash, Clock, Key, SquareMousePointer, ArrowLeftRight } from 'lucide-react'
 import BlockSolutionSubmit from '@/components/BlockSolutionSubmit'
 import CopyButton from '@/components/CopyButton'
 import { deriveBitcoinAddressFromPrivateKeyHex } from '@/lib/utils'
@@ -19,6 +19,7 @@ export default function BlockLiveClient({
 	initialAddressMap,
 	completedAt,
 	bitcoinAddress,
+	puzzleAddress,
 }: {
 	id: string
 	hexRangeStart: string
@@ -27,9 +28,11 @@ export default function BlockLiveClient({
 	initialAddressMap: AddressMapItem[]
 	completedAt?: string | null
 	bitcoinAddress?: string
+	puzzleAddress?: string
 }) {
 	const [liveKeys, setLiveKeys] = React.useState<string[]>([])
 	const [customTemplate, setCustomTemplate] = React.useState<string>('')
+	const [showAddrMap, setShowAddrMap] = React.useState<Record<string, boolean>>({})
 
 	const cwSet = React.useMemo(() => new Set(checkworkAddresses || []), [checkworkAddresses])
 	const liveDerived = React.useMemo(() => {
@@ -41,9 +44,15 @@ export default function BlockLiveClient({
 		return out
 	}, [liveKeys])
 
-	const unmatchedLive = React.useMemo(() => {
-		return liveDerived.filter(d => !cwSet.has(d.address)).map(d => d.key)
+	const puzzleAddrSet = React.useMemo(() => new Set([puzzleAddress].filter(a => typeof a === 'string').map(a => String(a).trim()).filter(a => a.length > 0)), [puzzleAddress])
+
+	const unmatchedDerived = React.useMemo(() => {
+		return liveDerived.filter(d => !cwSet.has(d.address))
 	}, [liveDerived, cwSet])
+
+	function toggleShow(key: string) {
+		setShowAddrMap(prev => ({ ...prev, [key]: !prev[key] }))
+	}
 
 	React.useEffect(() => {
 		try {
@@ -51,6 +60,8 @@ export default function BlockLiveClient({
 			if (saved) setCustomTemplate(saved)
 		} catch { }
 	}, [])
+
+	// Puzzle address is provided via props; no need to fetch
 
 	const cmdText = React.useMemo(() => {
 		const def = `./vanitysearchXX-v3 -t 0 -gpu -gpuId 0 --keyspace ${hexRangeStart.replace('0x', '')}:${hexRangeEnd.replace('0x', '')} -i in.txt -o out.txt`
@@ -157,13 +168,22 @@ export default function BlockLiveClient({
 						</div>
 					</div>
 					<div>
-						<div className="text-sm font-semibold text-gray-800 mb-2">Unmatched Private Keys ({unmatchedLive.length})</div>
+						<div className="text-sm font-semibold text-gray-800 mb-2">Unmatched Private Keys ({unmatchedDerived.length})</div>
 						<div className="text-xs text-gray-600 mb-2">Keys that did not match any checkwork address upon submission.</div>
-						<div className="space-y-1 max-h-60 overflow-y-auto pr-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
-							{unmatchedLive.map((k, i) => (
-								<div key={`u2-${i}`} className="text-xs font-mono text-gray-800 break-all border-b border-gray-100 pb-1 last:border-b-0">{k}</div>
-							))}
-							{unmatchedLive.length === 0 && (
+						<div className="space-y-1 max-h-[500px] overflow-y-auto pr-2  flex-1 p-2 rounded-lg ">
+							{unmatchedDerived.map((d, i) => {
+								const isPuzzle = puzzleAddrSet.has(d.address)
+								const showAddr = !!showAddrMap[d.key]
+								return (
+									<div key={`u2-${i}`} className={`flex items-center justify-between gap-2 text-xs font-mono break-all border p-2 rounded-md border-gray-200 ${isPuzzle ? 'text-green-700' : 'text-gray-800'}`}>
+										<span className="break-all">{showAddr ? d.address : d.key}</span>
+										<button type="button" onClick={() => toggleShow(d.key)} className="shrink-0 text-gray-500 hover:text-gray-700">
+											<ArrowLeftRight className="h-4 w-4" />
+										</button>
+									</div>
+								)
+							})}
+							{unmatchedDerived.length === 0 && (
 								<div className="text-xs text-gray-600 text-center py-4">All submitted keys were matched or deemed valid.</div>
 							)}
 						</div>

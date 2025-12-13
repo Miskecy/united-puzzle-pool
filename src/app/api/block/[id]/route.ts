@@ -61,6 +61,7 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 		const data = {
 			id: block.id,
 			bitcoinAddress: block.userToken?.bitcoinAddress || '',
+			puzzleAddress: block.puzzleAddressSnapshot || null,
 			tokenMasked,
 			hexRangeStart: startHex,
 			hexRangeEnd: endHex,
