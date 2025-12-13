@@ -131,9 +131,10 @@ export default function HomePage() {
 						validated += Number(b.completed || 0)
 						total += Number(b.total || 0)
 					}
-					const T = 1_000_000_000_000
-					const t = validated / T
-					setValidatedLabel(`${t.toFixed(2)}T`)
+                    const T = 1_000_000_000_000
+                    const t = validated / T
+                    const formatted = new Intl.NumberFormat('en-US', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(t)
+                    setValidatedLabel(`${formatted}T`)
 					const remaining = Math.max(0, total - validated)
 					setRemainingBKeys(remaining / 1_000_000_000)
 				}
