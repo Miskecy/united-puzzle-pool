@@ -149,23 +149,39 @@ export default function BinDetailPage() {
 	return (
 		<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
 			<div className="max-w-5xl mx-auto px-4 py-8">
-				<div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-					<div className='flex items-center gap-3'>
-						<Button variant="ghost" onClick={() => router.push('/overview')} className="inline-flex hover:bg-transparent hover:shadow-none cursor-pointer items-center gap-2 text-gray-700 hover:text-blue-600"><ArrowLeft className='w-4 h-4' /> Back</Button>
-						<div className="p-3 bg-blue-100 rounded-full"><Hash className="h-5 w-5 text-blue-600" /></div>
-						<div>
-							<h1 className="text-2xl font-bold text-gray-900">Bin {meta ? meta.index + 1 : index}</h1>
-							{meta && (
-								<p className="text-gray-600 text-sm font-mono break-all flex items-center gap-2">
-									<span className="font-semibold">Range:</span> {meta.startHex} <span className="font-semibold text-blue-600">to</span> {meta.endHex}
-									<Badge className="ml-2 bg-blue-100 text-blue-600 text-[12px] border-blue-500 pt-1">{lengthCompositeLabel(meta.startHex, meta.endHex)}</Badge>
-								</p>
-							)}
+				<div className="mb-4 flex flex-col gap-3 px-4 sm:px-0">
+
+					<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+						<div className='flex items-center gap-3'>
+							<Button variant="ghost" onClick={() => router.push('/overview')} className="inline-flex hover:bg-transparent hover:shadow-none cursor-pointer items-center gap-2 text-gray-700 hover:text-blue-600">
+								<ArrowLeft className='w-4 h-4' /> Back
+							</Button>
+
+
+							<div className='flex items-center gap-3'>
+								<div className="p-3 bg-blue-100 rounded-full"><Hash className="h-5 w-5 text-blue-600" /></div>
+								<div>
+									<h1 className="text-xl sm:text-2xl font-bold text-gray-900">Bin {meta ? meta.index + 1 : index}</h1>
+									{meta && (
+										<p className="text-gray-600 text-xs sm:text-sm font-mono break-all flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mt-1">
+											<span className="font-semibold mr-1">Range:</span>
+											<span className='flex items-center gap-1'>
+												{meta.startHex} <span className="font-semibold text-blue-600">to</span> {meta.endHex}
+												<Badge className="bg-blue-100 text-blue-600 text-[11px] sm:text-xs border-blue-500 pt-1">
+													{lengthCompositeLabel(meta.startHex, meta.endHex)}
+												</Badge>
+											</span>
+										</p>
+									)}
+								</div>
+							</div>
 						</div>
-					</div>
-					<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200">
-						<ArrowDownZA className="h-4 w-4 text-blue-600" />
-						<span className="text-xs font-semibold text-blue-700">Latest First</span>
+
+
+						<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 self-start mt-2 sm:mt-0">
+							<ArrowDownZA className="h-4 w-4 text-blue-600" />
+							<span className="text-xs font-semibold text-blue-700">Latest First</span>
+						</div>
 					</div>
 				</div>
 
@@ -187,42 +203,47 @@ export default function BinDetailPage() {
 						) : (
 							<div className="space-y-3">
 								{items.map((b) => (
-									<div key={b.id} className="border rounded-lg p-4 bg-white shadow-sm">
+									<div key={b.id} className="border rounded-lg p-3 sm:p-4 bg-white shadow-sm">
 										<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
 											<div className="flex flex-wrap items-center gap-1 sm:gap-2">
 												<Badge className="bg-blue-50 text-blue-600 border-blue-600 text-[10px]">ID</Badge>
-												<span className="font-mono font-semibold text-gray-900 break-all">{b.id}</span>
+												<span className="font-mono font-semibold text-gray-900 break-all text-xs sm:text-sm">{b.id}</span>
 											</div>
-											<div className="flex flex-wrap items-center gap-2">
+											<div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 mt-2 sm:mt-0">
 												{(() => {
 													const idx = items.findIndex(it => it.id === b.id)
 													const prev = idx > 0 ? items[idx - 1] : null
 													const label = prev ? formatDeltaScientific(parseHexBI(b.hexRangeEnd) - parseHexBI(prev.hexRangeEnd)) : '—'
 													return (
-														<span className="inline-flex items-center gap-1 text-purple-700 bg-purple-50 px-2 py-1 rounded">{label}</span>
+														<span className="inline-flex items-center gap-1 text-purple-700 bg-purple-50 px-2 py-1 rounded text-xs sm:text-sm">{label}</span>
 													)
 												})()}
 												{b.status === 'COMPLETED' ? (
-													<span className="inline-flex items-center gap-1 text-green-700 bg-green-50 px-2 py-1 rounded"><CheckCircle2 className='w-4 h-4' /> Completed</span>
+													<span className="inline-flex items-center gap-1 text-green-700 bg-green-50 px-2 py-1 rounded text-xs sm:text-sm"><CheckCircle2 className='w-4 h-4' /> Completed</span>
 												) : b.status === 'ACTIVE' ? (
-													<span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded"><Gauge className='w-4 h-4' /> Active</span>
+													<span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-1 rounded text-xs sm:text-sm"><Gauge className='w-4 h-4' /> Active</span>
 												) : (
-													<span className="inline-flex items-center gap-1 text-gray-700 bg-gray-100 px-2 py-1 rounded">{b.status}</span>
+													<span className="inline-flex items-center gap-1 text-gray-700 bg-gray-100 px-2 py-1 rounded text-xs sm:text-sm">{b.status}</span>
 												)}
 											</div>
 										</div>
-										<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+										<div className="flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:gap-3">
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Expand className='w-3 h-3' /> Range</div>
-												<div className="font-mono text-gray-900 font-semibold break-all"><span>{b.hexRangeStart}</span> <span className="italic text-blue-600">to</span> <span>{b.hexRangeEnd}</span></div>
+												<div className="space-y-2">
+													<div className="text-[11px] text-gray-500">Start</div>
+													<div className="font-mono text-gray-900 font-semibold break-all text-xs sm:text-sm">{b.hexRangeStart}</div>
+													<div className="text-[11px] text-gray-500 mt-2">End</div>
+													<div className="font-mono text-gray-900 font-semibold break-all text-xs sm:text-sm">{b.hexRangeEnd}</div>
+												</div>
 												<div className="text-xs text-gray-600 italic mt-1 inline-flex items-center gap-1"><Gauge className='w-3 h-3' /> Length <span className="font-semibold">{lengthCompositeLabel(b.hexRangeStart, b.hexRangeEnd)}</span></div>
 											</div>
 											<div className="bg-gray-50 rounded p-3 border border-gray-200">
 												<div className="text-xs text-gray-500 inline-flex items-center gap-1"><Bitcoin className='w-3 h-3' /> Address</div>
-												<div className="font-mono text-gray-900 break-all">{b.bitcoinAddress}</div>
+												<div className="font-mono text-gray-900 break-all text-xs sm:text-sm">{b.bitcoinAddress}</div>
 											</div>
 										</div>
-										<div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-700">
+										<div className="mt-3 flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-3 text-xs text-gray-700">
 											<div className="inline-flex items-center gap-1"><Clock className='w-3 h-3' /> Created <span className="font-semibold">{b.createdAt ? new Date(b.createdAt).toLocaleString() : '—'}</span></div>
 											{b.expiresAt && <div className="inline-flex items-center gap-1">Expires <span className="font-semibold">{new Date(b.expiresAt).toLocaleString()}</span></div>}
 											{b.completedAt && <div className="inline-flex items-center gap-1">Completed <span className="font-semibold">{new Date(b.completedAt).toLocaleString()}</span></div>}
