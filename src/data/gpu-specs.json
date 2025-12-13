@@ -5,7 +5,8 @@
         "Architecture": "Blackwell",
         "Series": "RTX 50",
         "CoreUnits": 21760,
-        "TDP_W": 575
+        "TDP_W": 575,
+        "approx_keys_per_second_mkeys": 8060000
     },
     {
         "Brand": "NVIDIA",
@@ -13,7 +14,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 16384,
-        "TDP_W": 450
+        "TDP_W": 450,
+        "approx_keys_per_second_mkeys": 5960000
     },
     {
         "Brand": "NVIDIA",
@@ -21,7 +23,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 14592,
-        "TDP_W": 425
+        "TDP_W": 425,
+        "approx_keys_per_second_mkeys": 4640000
     },
     {
         "Brand": "NVIDIA",
@@ -29,7 +32,8 @@
         "Architecture": "Blackwell",
         "Series": "RTX 50",
         "CoreUnits": 18432,
-        "TDP_W": 360
+        "TDP_W": 360,
+        "approx_keys_per_second_mkeys": 4520000
     },
     {
         "Brand": "NVIDIA",
@@ -37,7 +41,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 10240,
-        "TDP_W": 320
+        "TDP_W": 320,
+        "approx_keys_per_second_mkeys": 3690000
     },
     {
         "Brand": "NVIDIA",
@@ -45,7 +50,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 9728,
-        "TDP_W": 320
+        "TDP_W": 320,
+        "approx_keys_per_second_mkeys": 3490000
     },
     {
         "Brand": "NVIDIA",
@@ -53,7 +59,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 8448,
-        "TDP_W": 285
+        "TDP_W": 285,
+        "approx_keys_per_second_mkeys": 3240000
     },
     {
         "Brand": "NVIDIA",
@@ -61,7 +68,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 10752,
-        "TDP_W": 450
+        "TDP_W": 450,
+        "approx_keys_per_second_mkeys": 2820000
     },
     {
         "Brand": "NVIDIA",
@@ -69,7 +77,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 7680,
-        "TDP_W": 285
+        "TDP_W": 285,
+        "approx_keys_per_second_mkeys": 2680000
     },
     {
         "Brand": "NVIDIA",
@@ -77,7 +86,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 10496,
-        "TDP_W": 350
+        "TDP_W": 350,
+        "approx_keys_per_second_mkeys": 2570000
     },
     {
         "Brand": "NVIDIA",
@@ -85,7 +95,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 7168,
-        "TDP_W": 220
+        "TDP_W": 220,
+        "approx_keys_per_second_mkeys": 2530000
     },
     {
         "Brand": "NVIDIA",
@@ -93,7 +104,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 10240,
-        "TDP_W": 350
+        "TDP_W": 350,
+        "approx_keys_per_second_mkeys": 2480000
     },
     {
         "Brand": "NVIDIA",
@@ -101,7 +113,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 8704,
-        "TDP_W": 320
+        "TDP_W": 320,
+        "approx_keys_per_second_mkeys": 2310000
     },
     {
         "Brand": "NVIDIA",
@@ -109,7 +122,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 5888,
-        "TDP_W": 200
+        "TDP_W": 200,
+        "approx_keys_per_second_mkeys": 2150000
     },
     {
         "Brand": "NVIDIA",
@@ -117,7 +131,8 @@
         "Architecture": "Ampere",
         "Series": "RTX A",
         "CoreUnits": 8192,
-        "TDP_W": 230
+        "TDP_W": 230,
+        "approx_keys_per_second_mkeys": 1810000
     },
     {
         "Brand": "NVIDIA",
@@ -125,7 +140,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 6144,
-        "TDP_W": 290
+        "TDP_W": 290,
+        "approx_keys_per_second_mkeys": 1760000
     },
     {
         "Brand": "NVIDIA",
@@ -133,7 +149,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 5888,
-        "TDP_W": 220
+        "TDP_W": 220,
+        "approx_keys_per_second_mkeys": 1580000
     },
     {
         "Brand": "AMD",
@@ -141,7 +158,8 @@
         "Architecture": "RDNA 3",
         "Series": "RX 7000",
         "CoreUnits": 5376,
-        "TDP_W": 300
+        "TDP_W": 300,
+        "approx_keys_per_second_mkeys": 1570000
     },
     {
         "Brand": "NVIDIA",
@@ -149,7 +167,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 4352,
-        "TDP_W": 165
+        "TDP_W": 165,
+        "approx_keys_per_second_mkeys": 1540000
     },
     {
         "Brand": "NVIDIA",
@@ -157,7 +176,8 @@
         "Architecture": "Turing",
         "Series": "RTX 20",
         "CoreUnits": 4352,
-        "TDP_W": 250
+        "TDP_W": 250,
+        "approx_keys_per_second_mkeys": 1400000
     },
     {
         "Brand": "NVIDIA",
@@ -165,7 +185,8 @@
         "Architecture": "Turing",
         "Series": "RTX 20",
         "CoreUnits": 3072,
-        "TDP_W": 250
+        "TDP_W": 250,
+        "approx_keys_per_second_mkeys": 1340000
     },
     {
         "Brand": "NVIDIA",
@@ -173,7 +194,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 4864,
-        "TDP_W": 200
+        "TDP_W": 200,
+        "approx_keys_per_second_mkeys": 1340000
     },
     {
         "Brand": "NVIDIA",
@@ -181,7 +203,8 @@
         "Architecture": "Ampere",
         "Series": "RTX A",
         "CoreUnits": 6144,
-        "TDP_W": 140
+        "TDP_W": 140,
+        "approx_keys_per_second_mkeys": 1330000
     },
     {
         "Brand": "NVIDIA",
@@ -189,7 +212,8 @@
         "Architecture": "Ada Lovelace",
         "Series": "RTX 40",
         "CoreUnits": 3072,
-        "TDP_W": 115
+        "TDP_W": 115,
+        "approx_keys_per_second_mkeys": 1260000
     },
     {
         "Brand": "NVIDIA",
@@ -197,7 +221,8 @@
         "Architecture": "Turing",
         "Series": "RTX 20",
         "CoreUnits": 2560,
-        "TDP_W": 215
+        "TDP_W": 215,
+        "approx_keys_per_second_mkeys": 1120000
     },
     {
         "Brand": "NVIDIA",
@@ -205,7 +230,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 3584,
-        "TDP_W": 170
+        "TDP_W": 170,
+        "approx_keys_per_second_mkeys": 982.44
     },
     {
         "Brand": "NVIDIA",
@@ -213,7 +239,8 @@
         "Architecture": "Turing",
         "Series": "RTX 20",
         "CoreUnits": 2304,
-        "TDP_W": 175
+        "TDP_W": 175,
+        "approx_keys_per_second_mkeys": 968.44
     },
     {
         "Brand": "NVIDIA",
@@ -221,7 +248,8 @@
         "Architecture": "Turing",
         "Series": "RTX 20",
         "CoreUnits": 2176,
-        "TDP_W": 175
+        "TDP_W": 175,
+        "approx_keys_per_second_mkeys": 918.44
     },
     {
         "Brand": "AMD",
@@ -229,7 +257,8 @@
         "Architecture": "RDNA 2",
         "Series": "RX 6000",
         "CoreUnits": 3840,
-        "TDP_W": 250
+        "TDP_W": 250,
+        "approx_keys_per_second_mkeys": 820.44
     },
     {
         "Brand": "NVIDIA",
@@ -237,7 +266,8 @@
         "Architecture": "Turing",
         "Series": "RTX 20",
         "CoreUnits": 1920,
-        "TDP_W": 160
+        "TDP_W": 160,
+        "approx_keys_per_second_mkeys": 813.33
     },
     {
         "Brand": "NVIDIA",
@@ -245,7 +275,8 @@
         "Architecture": "Turing",
         "Series": "CMP",
         "CoreUnits": 2304,
-        "TDP_W": 185
+        "TDP_W": 185,
+        "approx_keys_per_second_mkeys": 718.44
     },
     {
         "Brand": "NVIDIA",
@@ -253,7 +284,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 30",
         "CoreUnits": 2560,
-        "TDP_W": 130
+        "TDP_W": 130,
+        "approx_keys_per_second_mkeys": 708.44
     },
     {
         "Brand": "NVIDIA",
@@ -261,7 +293,8 @@
         "Architecture": "Turing",
         "Series": "GTX 16",
         "CoreUnits": 1408,
-        "TDP_W": 125
+        "TDP_W": 125,
+        "approx_keys_per_second_mkeys": 655.44
     },
     {
         "Brand": "NVIDIA",
@@ -269,7 +302,8 @@
         "Architecture": "Pascal",
         "Series": "GTX 10",
         "CoreUnits": 3584,
-        "TDP_W": 250
+        "TDP_W": 250,
+        "approx_keys_per_second_mkeys": 652.44
     },
     {
         "Brand": "NVIDIA",
@@ -277,7 +311,8 @@
         "Architecture": "Ampere",
         "Series": "RTX A",
         "CoreUnits": 3328,
-        "TDP_W": 70
+        "TDP_W": 70,
+        "approx_keys_per_second_mkeys": 648.44
     },
     {
         "Brand": "NVIDIA",
@@ -285,7 +320,8 @@
         "Architecture": "Turing",
         "Series": "CMP",
         "CoreUnits": 1664,
-        "TDP_W": 125
+        "TDP_W": 125,
+        "approx_keys_per_second_mkeys": 614.44
     },
     {
         "Brand": "NVIDIA",
@@ -293,7 +329,8 @@
         "Architecture": "Turing",
         "Series": "GTX 16",
         "CoreUnits": 1536,
-        "TDP_W": 120
+        "TDP_W": 120,
+        "approx_keys_per_second_mkeys": 558.44
     },
     {
         "Brand": "NVIDIA",
@@ -301,7 +338,8 @@
         "Architecture": "Turing",
         "Series": "GTX 16",
         "CoreUnits": 1408,
-        "TDP_W": 120
+        "TDP_W": 120,
+        "approx_keys_per_second_mkeys": 511.44
     },
     {
         "Brand": "AMD",
@@ -309,7 +347,8 @@
         "Architecture": "RDNA 2",
         "Series": "RX 6000",
         "CoreUnits": 2304,
-        "TDP_W": 175
+        "TDP_W": 175,
+        "approx_keys_per_second_mkeys": 501.44
     },
     {
         "Brand": "AMD",
@@ -317,7 +356,8 @@
         "Architecture": "RDNA 1",
         "Series": "RX 5000",
         "CoreUnits": 2560,
-        "TDP_W": 225
+        "TDP_W": 225,
+        "approx_keys_per_second_mkeys": 475.44
     },
     {
         "Brand": "NVIDIA",
@@ -325,7 +365,8 @@
         "Architecture": "Pascal",
         "Series": "Tesla P",
         "CoreUnits": 3584,
-        "TDP_W": 250
+        "TDP_W": 250,
+        "approx_keys_per_second_mkeys": 447.44
     },
     {
         "Brand": "NVIDIA",
@@ -333,7 +374,8 @@
         "Architecture": "Turing",
         "Series": "GTX 16",
         "CoreUnits": 1280,
-        "TDP_W": 100
+        "TDP_W": 100,
+        "approx_keys_per_second_mkeys": 434.44
     },
     {
         "Brand": "AMD",
@@ -341,7 +383,8 @@
         "Architecture": "RDNA 2",
         "Series": "RX 6000",
         "CoreUnits": 1792,
-        "TDP_W": 132
+        "TDP_W": 132,
+        "approx_keys_per_second_mkeys": 431.44
     },
     {
         "Brand": "NVIDIA",
@@ -349,7 +392,8 @@
         "Architecture": "Turing",
         "Series": "GTX 16",
         "CoreUnits": 896,
-        "TDP_W": 75
+        "TDP_W": 75,
+        "approx_keys_per_second_mkeys": 358.44
     },
     {
         "Brand": "NVIDIA",
@@ -357,7 +401,8 @@
         "Architecture": "Ampere",
         "Series": "RTX 20",
         "CoreUnits": 2048,
-        "TDP_W": 30
+        "TDP_W": 30,
+        "approx_keys_per_second_mkeys": 341.44
     },
     {
         "Brand": "NVIDIA",
@@ -365,7 +410,8 @@
         "Architecture": "Pascal",
         "Series": "GTX 10",
         "CoreUnits": 2560,
-        "TDP_W": 180
+        "TDP_W": 180,
+        "approx_keys_per_second_mkeys": 337.44
     },
     {
         "Brand": "NVIDIA",
@@ -373,7 +419,8 @@
         "Architecture": "Pascal",
         "Series": "GTX 10",
         "CoreUnits": 2432,
-        "TDP_W": 180
+        "TDP_W": 180,
+        "approx_keys_per_second_mkeys": 298.44
     },
     {
         "Brand": "NVIDIA",
@@ -381,7 +428,8 @@
         "Architecture": "Pascal",
         "Series": "P100",
         "CoreUnits": 3584,
-        "TDP_W": 250
+        "TDP_W": 250,
+        "approx_keys_per_second_mkeys": 298.44
     },
     {
         "Brand": "NVIDIA",
@@ -389,7 +437,8 @@
         "Architecture": "Pascal",
         "Series": "Quadro P",
         "CoreUnits": 2560,
-        "TDP_W": 150
+        "TDP_W": 150,
+        "approx_keys_per_second_mkeys": 293.44
     },
     {
         "Brand": "NVIDIA",
@@ -397,7 +446,8 @@
         "Architecture": "Ampere",
         "Series": "MX",
         "CoreUnits": 2048,
-        "TDP_W": 35
+        "TDP_W": 35,
+        "approx_keys_per_second_mkeys": 271.44
     },
     {
         "Brand": "NVIDIA",
@@ -405,7 +455,8 @@
         "Architecture": "Pascal",
         "Series": "GTX 10",
         "CoreUnits": 1920,
-        "TDP_W": 150
+        "TDP_W": 150,
+        "approx_keys_per_second_mkeys": 268.44
     },
     {
         "Brand": "NVIDIA",
@@ -413,7 +464,8 @@
         "Architecture": "Pascal",
         "Series": "GTX 10",
         "CoreUnits": 1280,
-        "TDP_W": 120
+        "TDP_W": 120,
+        "approx_keys_per_second_mkeys": 187.44
     },
     {
         "Brand": "NVIDIA",
@@ -421,7 +473,8 @@
         "Architecture": "Maxwell 2.0",
         "Series": "GTX 900",
         "CoreUnits": 1664,
-        "TDP_W": 145
+        "TDP_W": 145,
+        "approx_keys_per_second_mkeys": 167.44
     },
     {
         "Brand": "NVIDIA",
@@ -429,7 +482,8 @@
         "Architecture": "Kepler",
         "Series": "Quadro K",
         "CoreUnits": 2880,
-        "TDP_W": 225
+        "TDP_W": 225,
+        "approx_keys_per_second_mkeys": 167.44
     },
     {
         "Brand": "NVIDIA",
@@ -437,7 +491,8 @@
         "Architecture": "Maxwell 2.0",
         "Series": "GTX 900",
         "CoreUnits": 2048,
-        "TDP_W": 165
+        "TDP_W": 165,
+        "approx_keys_per_second_mkeys": 131.44
     },
     {
         "Brand": "NVIDIA",
@@ -445,7 +500,8 @@
         "Architecture": "Pascal",
         "Series": "GTX 10",
         "CoreUnits": 768,
-        "TDP_W": 75
+        "TDP_W": 75,
+        "approx_keys_per_second_mkeys": 108.44
     },
     {
         "Brand": "NVIDIA",
@@ -453,7 +509,8 @@
         "Architecture": "Pascal",
         "Series": "Quadro P",
         "CoreUnits": 1024,
-        "TDP_W": 75
+        "TDP_W": 75,
+        "approx_keys_per_second_mkeys": 94.44
     },
     {
         "Brand": "NVIDIA",
@@ -461,7 +518,8 @@
         "Architecture": "Pascal",
         "Series": "GTX 10",
         "CoreUnits": 640,
-        "TDP_W": 75
+        "TDP_W": 75,
+        "approx_keys_per_second_mkeys": 88.44
     },
     {
         "Brand": "NVIDIA",
@@ -469,7 +527,8 @@
         "Architecture": "Maxwell 2.0",
         "Series": "GTX 900",
         "CoreUnits": 768,
-        "TDP_W": 90
+        "TDP_W": 90,
+        "approx_keys_per_second_mkeys": 85.44
     },
     {
         "Brand": "NVIDIA",
@@ -477,7 +536,8 @@
         "Architecture": "Maxwell 1.0",
         "Series": "GTX 700",
         "CoreUnits": 640,
-        "TDP_W": 60
+        "TDP_W": 60,
+        "approx_keys_per_second_mkeys": 76.44
     },
     {
         "Brand": "NVIDIA",
@@ -485,7 +545,8 @@
         "Architecture": "Pascal",
         "Series": "GT 10",
         "CoreUnits": 384,
-        "TDP_W": 30
+        "TDP_W": 30,
+        "approx_keys_per_second_mkeys": 51.44
     },
     {
         "Brand": "NVIDIA",
@@ -493,6 +554,7 @@
         "Architecture": "Kepler",
         "Series": "GT 700M",
         "CoreUnits": 384,
-        "TDP_W": 30
+        "TDP_W": 30,
+        "approx_keys_per_second_mkeys": 19.44
     }
 ]
