@@ -242,6 +242,8 @@ export default function BinDetailPage() {
 						focusCellIndex={focusedCell}
 						onClearFocus={() => setFocusedCell(null)}
 						onNavigateBin={() => { }}
+						activeRanges={items.filter(it => it.status === 'ACTIVE').map(it => ({ startHex: it.hexRangeStart, endHex: it.hexRangeEnd }))}
+						completedRanges={items.filter(it => it.status === 'COMPLETED').map(it => ({ startHex: it.hexRangeStart, endHex: it.hexRangeEnd }))}
 					/>
 				)}
 

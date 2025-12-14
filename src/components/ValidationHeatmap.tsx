@@ -1,11 +1,15 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Hash, Expand, Gauge, CheckCircle2, Flame } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
+import { Hash, Expand, Gauge, CheckCircle2, Flame, PackageSearch } from 'lucide-react'
 
 type BinStat = {
 	index: number
@@ -24,6 +28,8 @@ type Props = {
 	focusCellIndex?: number | null
 	onClearFocus?: () => void
 	onNavigateBin?: (index: number) => void
+	activeRanges?: { startHex: string, endHex: string }[]
+	completedRanges?: { startHex: string, endHex: string }[]
 }
 
 const HEATMAP_COLORS = Array.from({ length: 50 }, (_, i) => {
@@ -113,10 +119,17 @@ function heatColor(percent: number, completed?: number, mode: 'percent' | 'absol
 	}
 }
 
-export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = [], highlightBinIndex = null, focusCellIndex = null, onClearFocus, onNavigateBin }: Props) {
+export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = [], highlightBinIndex = null, focusCellIndex = null, onClearFocus, onNavigateBin, activeRanges = [], completedRanges = [] }: Props) {
 	const router = useRouter()
 	const [colorMode, setColorMode] = useState<'percent' | 'absolute'>('percent')
 	const [hoveredCell, setHoveredCell] = useState<number | null>(null)
+	const [localFocusCell, setLocalFocusCell] = useState<number | null>(null)
+	const [rangeInput, setRangeInput] = useState<string>('')
+	const [rangeStatus, setRangeStatus] = useState<'VALIDATED' | 'ACTIVE' | 'PARTIAL' | 'NOT_FOUND' | 'OUT_OF_RANGE' | null>(null)
+	const [rangeMsg, setRangeMsg] = useState<string>('')
+	const [coveredCells, setCoveredCells] = useState<number[]>([])
+	const [rangeDetail, setRangeDetail] = useState<string>('')
+	const [suppressTooltip, setSuppressTooltip] = useState<boolean>(false)
 
 	const activeCells = binCount ?? bins.length
 	const totalCells = 256
@@ -126,6 +139,121 @@ export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = 
 	const highlightedCells: number[] = useMemo(() => {
 		return highlightBinIndex !== null && highlightBinIndex >= 0 ? [offset + highlightBinIndex] : []
 	}, [highlightBinIndex, offset])
+
+	useEffect(() => {
+		if (focusCellIndex !== null) {
+			setCoveredCells([])
+			setRangeStatus(null)
+			setRangeMsg('')
+			setRangeDetail('')
+			setSuppressTooltip(false)
+		}
+	}, [focusCellIndex])
+
+	async function checkRangeAndFocus() {
+		try {
+			setSuppressTooltip(true)
+			const parts = rangeInput.trim().split(':')
+			if (parts.length !== 2) { setRangeStatus(null); setRangeMsg('Type as start:end'); return }
+			const sRaw = parts[0].trim()
+			const eRaw = parts[1].trim()
+			const normHex = (h: string) => {
+				let t = h.replace(/^0x/, '').toLowerCase()
+				if (!/^[0-9a-f]+$/.test(t)) return null
+				if (t.length === 0 || t.length > 64) return null
+				if (t.length < 64) t = t.padStart(64, '0')
+				return '0x' + t
+			}
+			const sHex = normHex(sRaw)
+			const eHex = normHex(eRaw)
+			if (!sHex || !eHex) { setRangeStatus(null); setRangeMsg('Invalid hex range'); return }
+			const sBI = parseHexBI(sHex)
+			const eBI = parseHexBI(eHex)
+			if (eBI < sBI) { setRangeStatus(null); setRangeMsg('End must be >= start'); return }
+			let status: 'VALIDATED' | 'ACTIVE' | 'PARTIAL' | 'NOT_FOUND' | 'OUT_OF_RANGE' = 'NOT_FOUND'
+
+			const puzzleStart = bins.length > 0 ? parseHexBI(bins[0].startHex) : 0n
+			const puzzleEnd = bins.length > 0 ? parseHexBI(bins[bins.length - 1].endHex) : 0n
+			if (eBI < puzzleStart || sBI > puzzleEnd) {
+				status = 'OUT_OF_RANGE'
+			} else {
+				const exactActive = activeRanges.find(ar => parseHexBI(ar.startHex) === sBI && parseHexBI(ar.endHex) === eBI)
+				const exactCompleted = completedRanges.find(cr => parseHexBI(cr.startHex) === sBI && parseHexBI(cr.endHex) === eBI)
+				if (exactCompleted) {
+					status = 'VALIDATED'
+					const cellsInRange: number[] = []
+					for (let i = 0; i < totalCells; i++) {
+						const cell = i >= offset ? (bins[i - offset] ?? null) : null
+						if (!cell) continue
+						const bs = parseHexBI(cell.startHex)
+						const be = parseHexBI(cell.endHex)
+						if (sBI <= be && eBI >= bs) cellsInRange.push(i)
+					}
+					setCoveredCells(cellsInRange)
+				}
+				else if (exactActive) {
+					status = 'ACTIVE'
+					const cellsInRange: number[] = []
+					for (let i = 0; i < totalCells; i++) {
+						const cell = i >= offset ? (bins[i - offset] ?? null) : null
+						if (!cell) continue
+						const bs = parseHexBI(cell.startHex)
+						const be = parseHexBI(cell.endHex)
+						if (sBI <= be && eBI >= bs) cellsInRange.push(i)
+					}
+					setCoveredCells(cellsInRange)
+				}
+				else {
+					const cellsInRange: number[] = []
+					for (let i = 0; i < totalCells; i++) {
+						const cell = i >= offset ? (bins[i - offset] ?? null) : null
+						if (!cell) continue
+						const bs = parseHexBI(cell.startHex)
+						const be = parseHexBI(cell.endHex)
+						if (sBI <= be && eBI >= bs) cellsInRange.push(i)
+					}
+					setCoveredCells(cellsInRange)
+					if (cellsInRange.length > 0) {
+						const anyProgress = cellsInRange.some(i => {
+							const cell = bins[i - offset]
+							if (!cell) return false
+							return (cell.completed ?? 0) > 0 || (cell.percent ?? 0) > 0
+						})
+						status = anyProgress ? 'PARTIAL' : 'NOT_FOUND'
+					} else {
+						status = 'NOT_FOUND'
+					}
+				}
+			}
+			setRangeStatus(status)
+			if (status === 'OUT_OF_RANGE') {
+				setRangeMsg('Range outside active puzzle')
+				const ps = bins[0]?.startHex ? formatCompactHexRange(bins[0].startHex) : '—'
+				const pe = bins[bins.length - 1]?.endHex ? formatCompactHexRange(bins[bins.length - 1].endHex) : '—'
+				setRangeDetail(`The specified range is beyond the configured puzzle bounds. Valid range is ${ps} to ${pe}.`)
+			} else if (status === 'VALIDATED') {
+				setRangeMsg('Range is VALIDATED')
+				setRangeDetail('This exact range has been fully validated and recorded. You can inspect details on the bin page for proofs and progress history.')
+			} else if (status === 'ACTIVE') {
+				setRangeMsg('Range is ACTIVE')
+				setRangeDetail('This exact range is currently assigned and being processed by miners. Validation may increase over time as keys are found.')
+			} else if (status === 'PARTIAL') {
+				setRangeMsg('Range is PARTIAL')
+				setRangeDetail('The range overlaps puzzle bins that show some progress, but it is not fully validated. Blue borders indicate the covered bins.')
+			} else {
+				setRangeMsg('Range is NOT_VALIDATED')
+				setRangeDetail('The range lies within the puzzle but has no recorded assignments or validation yet.')
+			}
+			for (let bi = 0; bi < bins.length; bi++) {
+				const bs = parseHexBI(bins[bi].startHex)
+				const be = parseHexBI(bins[bi].endHex)
+				if (sBI <= be && eBI >= bs) { break }
+			}
+		} catch {
+			setRangeStatus(null)
+			setRangeMsg('Failed to check range')
+		}
+	}
 
 	return (
 		<Card className="shadow-md border-gray-200 mb-8">
@@ -147,7 +275,50 @@ export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = 
 					</div>
 				</div>
 
-				<p className="text-xs text-gray-600 mb-4">Darker colors indicate higher validation either by <span className="font-semibold">percent</span> or <span className="font-semibold">absolute</span> mode. Cells outside the configured puzzle range appear transparent with a dashed border.</p>
+				<p className="text-xs text-gray-600 mb-2">Darker colors indicate higher validation either by <span className="font-semibold">percent</span> or <span className="font-semibold">absolute</span> mode. Cells outside the configured puzzle range appear transparent with a dashed border.</p>
+
+				<Accordion type="single" collapsible className="mb-4 w-full">
+					<AccordionItem value="range-check" className="border-gray-200">
+						<AccordionTrigger className="text-sm text-gray-900 hover:no-underline">
+							<div className='flex gap-2'>
+								<PackageSearch className='w-5 h-5 text-blue-600 items-center justify-center' />
+								<span className="font-medium">Range check</span>
+							</div>
+						</AccordionTrigger>
+						<AccordionContent className="pt-0">
+							<div className="flex flex-col gap-2 w-full ">
+								<div className='flex gap-2 flex-1'>
+									<Input
+										placeholder="400000000000000000:7fffffffffffffffff"
+										value={rangeInput}
+										onChange={(e) => setRangeInput(e.target.value)}
+										onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkRangeAndFocus(); } }}
+										className="text-xs w-full flex-1"
+									/>
+									<Button variant="outline" onClick={checkRangeAndFocus} className="text-xs bg-blue-600 text-white hover:text-blue-600"><PackageSearch className='w-4 h-4' />Check</Button>
+								</div>
+								<div className='flex items-center gap-2 justify-center'>
+									{rangeMsg && (
+										<Badge className={
+											rangeStatus === 'VALIDATED' ? 'bg-green-100 text-green-700 border border-green-300' :
+												rangeStatus === 'ACTIVE' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
+													rangeStatus === 'PARTIAL' ? 'bg-amber-100 text-amber-700 border border-amber-300' :
+														rangeStatus === 'OUT_OF_RANGE' ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+															'bg-red-100 text-red-700 border border-red-300'
+										}>
+											{rangeMsg}
+										</Badge>
+									)}
+									{rangeDetail && (
+										<div className="text-[11px] text-gray-600 text-center">
+											{rangeDetail}
+										</div>
+									)}
+								</div>
+							</div>
+						</AccordionContent>
+					</AccordionItem>
+				</Accordion>
 
 				<TooltipProvider delayDuration={0}>
 					<div className="heatmap-container bg-purple-100/10 border border-gray-100  rounded-lg p-3 sm:p-4">
@@ -159,8 +330,8 @@ export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = 
 								const completedT = cell ? formatTrillionsNum(cell.completed) : ''
 								const totalT = cell ? formatTrillionsBI(lenBI) : ''
 								const bg = cell ? ((cell.completed ?? 0) > 0 ? heatColor(cell.percent, cell.completed, colorMode, maxAbsCompleted) : 'transparent') : 'transparent'
-								const isFocused = focusCellIndex !== null && focusCellIndex === i
-								const isHovered = (hoveredCell === i) || hoveredBlockCells.includes(i) || highlightedCells.includes(i) || isFocused
+								const isFocused = (focusCellIndex !== null && focusCellIndex === i) || (localFocusCell !== null && localFocusCell === i)
+								const isHovered = (hoveredCell === i) || hoveredBlockCells.includes(i) || highlightedCells.includes(i) || coveredCells.includes(i) || isFocused
 
 								const colorsLen = HEATMAP_COLORS.length
 								let colorIdx = 0
@@ -191,15 +362,21 @@ export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = 
 									}
 
 								return (
-									<Tooltip key={i} open={(hoveredCell === i) || isFocused}>
+									<Tooltip key={i} open={(hoveredCell === i) || (!suppressTooltip && isFocused)}>
 										<TooltipTrigger asChild>
 											<div
 												style={style}
 												className="w-full rounded-md relative overflow-hidden cursor-pointer heatmap-cell transition-all duration-200"
-												onMouseEnter={() => setHoveredCell(i)}
+												onMouseEnter={() => { setSuppressTooltip(false); setHoveredCell(i) }}
 												onMouseLeave={() => setHoveredCell(null)}
 												onClick={() => {
 													if (onClearFocus) onClearFocus()
+													setCoveredCells([])
+													setRangeStatus(null)
+													setRangeMsg('')
+													setRangeDetail('')
+													setSuppressTooltip(false)
+													setLocalFocusCell(null)
 													setHoveredCell(null)
 													if (!cell) return
 													if (onNavigateBin) onNavigateBin(cell.index)

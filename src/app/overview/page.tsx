@@ -412,6 +412,8 @@ export default function PoolOverviewPage() {
 							bins={bins}
 							binCount={meta?.binCount ?? bins.length}
 							hoveredBlockCells={hoveredBlockCells}
+							activeRanges={active.map(a => ({ startHex: a.hexRangeStartRaw || a.hexRangeStart, endHex: a.hexRangeEndRaw || a.hexRangeEnd }))}
+							completedRanges={recent.map(r => ({ startHex: r.hexRangeStartRaw || r.hexRangeStart, endHex: r.hexRangeEndRaw || r.hexRangeEnd }))}
 							onNavigateBin={(idx) => router.push(`/overview/bin/${idx}`)}
 						/>
 
