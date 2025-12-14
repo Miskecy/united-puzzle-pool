@@ -6,7 +6,8 @@ import { formatScaledKeys } from '@/lib/utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Hash, Expand, Clock, Target, CheckCircle2, XCircle, ArrowLeft, ArrowRight, Bitcoin, Key, Gauge, ArrowDownZA } from 'lucide-react'
+import { Hash, Expand, Clock, Target, CheckCircle2, XCircle, ArrowLeft, ArrowRight, Bitcoin, Key, Gauge, ArrowDownZA, LocateFixed } from 'lucide-react'
+import ValidationHeatmap from '@/components/ValidationHeatmap'
 
 type BlockItem = {
 	id: string
@@ -84,6 +85,8 @@ export default function BinDetailPage() {
 	const [error, setError] = useState<string | null>(null)
 	const [total, setTotal] = useState(0)
 	const [meta, setMeta] = useState<{ index: number; startHex: string; endHex: string } | null>(null)
+	const [subBins, setSubBins] = useState<Array<{ index: number; startHex: string; endHex: string; total: number; completed: number; percent: number }>>([])
+	const [focusedCell, setFocusedCell] = useState<number | null>(null)
 	const take = 50
 	const pageParam = Number(sp.get('page') || 1)
 	const page = (isFinite(pageParam) && pageParam > 0) ? pageParam : 1
@@ -111,6 +114,83 @@ export default function BinDetailPage() {
 		}
 		load()
 	}, [index, skip])
+
+	useEffect(() => {
+		const computeSubBins = () => {
+			if (!meta) { setSubBins([]); return }
+			try {
+				const binStart = parseHexBI(meta.startHex)
+				const binEnd = parseHexBI(meta.endHex)
+				if (binEnd <= binStart) { setSubBins([]); return }
+				const COUNT = 256
+				const totalLen = binEnd - binStart
+				const baseChunk = totalLen / BigInt(COUNT)
+				const remainder = totalLen % BigInt(COUNT)
+				let cursor = binStart
+				const slices: Array<{ start: bigint; end: bigint }> = []
+				for (let i = 0; i < COUNT; i++) {
+					const extra = i < Number(remainder) ? 1n : 0n
+					const size = baseChunk + extra
+					const start = cursor
+					const end = start + size
+					slices.push({ start, end })
+					cursor = end
+				}
+				const completedItems = items.filter(it => it.status === 'COMPLETED')
+				const result: Array<{ index: number; startHex: string; endHex: string; total: number; completed: number; percent: number }> = slices.map((sl, idx) => {
+					const lenBI = sl.end > sl.start ? (sl.end - sl.start) : 0n
+					let compBI = 0n
+					for (const it of completedItems) {
+						const s = parseHexBI(it.hexRangeStart)
+						const e = parseHexBI(it.hexRangeEnd)
+						compBI += intersectLen(s, e, sl.start, sl.end)
+					}
+					const pct = lenBI > 0n ? Math.max(0, Math.min(100, Number((compBI * 100n) / lenBI))) : 0
+					return {
+						index: idx,
+						startHex: toHex(sl.start),
+						endHex: toHex(sl.end),
+						total: Number(lenBI),
+						completed: Number(compBI),
+						percent: pct,
+					}
+				})
+				setSubBins(result)
+				setFocusedCell(null)
+			} catch {
+				setSubBins([])
+			}
+		}
+		computeSubBins()
+	}, [meta, items])
+
+	function findSubCellIndexForBlock(startHex: string, endHex: string): number {
+		if (!meta) return -1
+		try {
+			const binStart = parseHexBI(meta.startHex)
+			const binEnd = parseHexBI(meta.endHex)
+			const blockStart = parseHexBI(startHex)
+			const blockEnd = parseHexBI(endHex)
+			if (binEnd <= binStart || blockEnd <= blockStart) return -1
+			const COUNT = 256
+			const totalLen = binEnd - binStart
+			const baseChunk = totalLen / BigInt(COUNT)
+			const remainder = totalLen % BigInt(COUNT)
+			let cursor = binStart
+			let bestIdx = -1
+			let bestOverlap = 0n
+			for (let i = 0; i < COUNT; i++) {
+				const extra = i < Number(remainder) ? 1n : 0n
+				const size = baseChunk + extra
+				const start = cursor
+				const end = start + size
+				cursor = end
+				const overlap = intersectLen(blockStart, blockEnd, start, end)
+				if (overlap > bestOverlap) { bestOverlap = overlap; bestIdx = i }
+			}
+			return bestIdx
+		} catch { return -1 }
+	}
 
 	const totalPages = useMemo(() => {
 		return take > 0 ? Math.max(1, Math.ceil(total / take)) : 1
@@ -155,6 +235,16 @@ export default function BinDetailPage() {
 					</div>
 				</div>
 
+				{subBins.length > 0 && (
+					<ValidationHeatmap
+						bins={subBins}
+						binCount={256}
+						focusCellIndex={focusedCell}
+						onClearFocus={() => setFocusedCell(null)}
+						onNavigateBin={() => { }}
+					/>
+				)}
+
 				<Card className="shadow-sm border-gray-200 mb-6">
 					<CardHeader className="border-b pb-4">
 						<CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2"><Target className='h-5 w-5 text-purple-600' /> Blocks</CardTitle>
@@ -195,6 +285,18 @@ export default function BinDetailPage() {
 												) : (
 													<span className="inline-flex items-center gap-1 text-gray-700 bg-gray-100 px-2 py-1 rounded text-xs sm:text-sm">{b.status}</span>
 												)}
+												<Button
+													variant="outline"
+													size={"sm"}
+													className="group text-xs sm:text-sm inline-flex items-center gap-1 bg-blue-50 text-blue-600 hover:text-orange-600 hover:border-orange-600 border-blue-200"
+													onClick={() => {
+														const idx = findSubCellIndexForBlock(b.hexRangeStart, b.hexRangeEnd)
+														if (idx >= 0) {
+															setFocusedCell(idx)
+															window.scrollTo({ top: 0, behavior: 'smooth' })
+														}
+													}}
+												><LocateFixed className='w-4 h-4 text-blue-600 group-hover:text-orange-600' /> View on Heatmap</Button>
 											</div>
 										</div>
 										<div className="flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:gap-3">
@@ -233,4 +335,14 @@ export default function BinDetailPage() {
 			</div>
 		</div>
 	)
+}
+function toHex(big: bigint): string {
+	return `0x${big.toString(16)}`
+}
+
+function intersectLen(aStart: bigint, aEnd: bigint, bStart: bigint, bEnd: bigint): bigint {
+	const start = aStart > bStart ? aStart : bStart
+	const end = aEnd < bEnd ? aEnd : bEnd
+	if (end <= start) return 0n
+	return end - start
 }
