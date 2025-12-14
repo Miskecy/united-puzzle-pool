@@ -42,10 +42,7 @@ async function handler(req: NextRequest) {
 		if (!userToken) return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers: { 'Content-Type': 'application/json' } })
 
 		await ensureRedeemTable()
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_id TEXT`) } catch { }
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_address TEXT`) } catch { }
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN paid_at DATETIME`) } catch { }
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN canceled_at DATETIME`) } catch { }
+		await ensureRedeemColumns()
 
 		type Row = { id: string, amount: number, status: string, created_at?: string, approved_at?: string, updated_at?: string, paid_at?: string, canceled_at?: string, puzzle_address?: string | null }
 		const rows = await prisma.$queryRawUnsafe<Row[]>(`SELECT id, amount, status, created_at, approved_at, updated_at, paid_at, canceled_at, puzzle_address FROM reward_redemptions WHERE user_token_id = ? ORDER BY created_at DESC LIMIT 50`, userToken.id)
@@ -71,3 +68,13 @@ async function handler(req: NextRequest) {
 
 export const GET = rateLimitMiddleware(handler)
 
+async function ensureRedeemColumns() {
+	try {
+		const rows = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info('reward_redemptions')`)
+		const cols = new Set((rows || []).map(r => String(r.name)))
+		if (!cols.has('puzzle_id')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_id TEXT`) }
+		if (!cols.has('puzzle_address')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_address TEXT`) }
+		if (!cols.has('paid_at')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN paid_at DATETIME`) }
+		if (!cols.has('canceled_at')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN canceled_at DATETIME`) }
+	} catch { }
+}

@@ -50,6 +50,8 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 		const amountMu = Math.max(0, Number(row.amount || 0))
 		const now = new Date().toISOString()
 
+		await ensureRedeemColumns()
+
 		if (action === 'approve') {
 			if (status !== 'PENDING') {
 				return new Response(JSON.stringify({ error: 'Already processed' }), { status: 409, headers: { 'Content-Type': 'application/json' } })
@@ -86,14 +88,12 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 			if (status !== 'APPROVED') {
 				return new Response(JSON.stringify({ error: 'Only approved requests can be marked as paid' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
 			}
-			await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN paid_at DATETIME`).catch(() => { })
 			await prisma.$executeRawUnsafe(`UPDATE reward_redemptions SET status = 'PAID', updated_at = ?, paid_at = ?, admin_note = ? WHERE id = ?`, now, now, note || null, id)
 			return new Response(JSON.stringify({ success: true, status: 'PAID' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 		} else if (action === 'cancel') {
 			if (status !== 'APPROVED') {
 				return new Response(JSON.stringify({ error: 'Only approved requests can be canceled' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
 			}
-			await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN canceled_at DATETIME`).catch(() => { })
 			await prisma.$executeRawUnsafe(`UPDATE reward_redemptions SET status = 'CANCELED', updated_at = ?, canceled_at = ?, admin_note = ? WHERE id = ?`, now, now, note || null, id)
 			return new Response(JSON.stringify({ success: true, status: 'CANCELED' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 		}
@@ -105,3 +105,14 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 }
 
 export const PATCH = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => ctx.params.then(p => rateLimitMiddleware((r) => handler(r, { params: p }))(req))
+
+async function ensureRedeemColumns() {
+	try {
+		const rows = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info('reward_redemptions')`)
+		const cols = new Set((rows || []).map(r => String(r.name)))
+		if (!cols.has('paid_at')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN paid_at DATETIME`) }
+		if (!cols.has('canceled_at')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN canceled_at DATETIME`) }
+		if (!cols.has('puzzle_id')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_id TEXT`) }
+		if (!cols.has('puzzle_address')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_address TEXT`) }
+	} catch { }
+}

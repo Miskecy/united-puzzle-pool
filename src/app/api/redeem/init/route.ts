@@ -54,10 +54,7 @@ async function handler(req: NextRequest) {
 		}
 
 		await ensureRedeemTable()
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_id TEXT`) } catch { }
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_address TEXT`) } catch { }
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN paid_at DATETIME`) } catch { }
-		try { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN canceled_at DATETIME`) } catch { }
+		await ensureRedeemColumns()
 		try {
 			const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(`SELECT id FROM reward_redemptions WHERE user_token_id = ? AND status = 'PENDING' LIMIT 1`, userToken.id)
 			if (rows && rows[0]) {
@@ -124,5 +121,16 @@ async function ensureRedeemTable() {
         CONSTRAINT reward_redemptions_user_token_id_fkey FOREIGN KEY (user_token_id) REFERENCES user_tokens (id) ON DELETE RESTRICT ON UPDATE CASCADE
       )
     `)
+	} catch { }
+}
+
+async function ensureRedeemColumns() {
+	try {
+		const rows = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info('reward_redemptions')`)
+		const cols = new Set((rows || []).map(r => String(r.name)))
+		if (!cols.has('puzzle_id')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_id TEXT`) }
+		if (!cols.has('puzzle_address')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN puzzle_address TEXT`) }
+		if (!cols.has('paid_at')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN paid_at DATETIME`) }
+		if (!cols.has('canceled_at')) { await prisma.$executeRawUnsafe(`ALTER TABLE reward_redemptions ADD COLUMN canceled_at DATETIME`) }
 	} catch { }
 }

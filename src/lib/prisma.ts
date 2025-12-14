@@ -16,6 +16,8 @@ async function configure() {
 		await prisma.$queryRawUnsafe('PRAGMA journal_mode=WAL');
 		await prisma.$queryRawUnsafe('PRAGMA busy_timeout=60000');
 		await prisma.$queryRawUnsafe('PRAGMA synchronous=NORMAL');
+		await prisma.$queryRawUnsafe('PRAGMA wal_checkpoint(TRUNCATE)');
+		await prisma.$queryRawUnsafe('PRAGMA optimize');
 	} catch { }
 }
 

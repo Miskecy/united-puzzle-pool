@@ -36,9 +36,37 @@ async function handler(req: NextRequest) {
 	const { dbFile, walFile, shmFile } = resolveDbPath()
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	function withDb<T>(fn: (db: any) => T): T {
-		const db = new DatabaseCtor(dbFile, { fileMustExist: true })
+	function withDb<T>(fn: (db: any) => T, opts?: { readonly?: boolean, timeoutMs?: number }): T {
+		const db = new DatabaseCtor(dbFile, { fileMustExist: true, readonly: !!(opts && opts.readonly), timeout: opts?.timeoutMs ?? 5000 })
 		try { return fn(db) } finally { try { db.close() } catch { } }
+	}
+
+	async function createSafeBackup(): Promise<string> {
+		const backupDir = path.join(process.cwd(), 'db-backups')
+		const backupFilename = `backup-${Date.now()}.db`
+		const destinationPath = path.join(backupDir, backupFilename)
+		await fs.mkdir(backupDir, { recursive: true })
+		withDb(db => { }, { readonly: true })
+		const db = new DatabaseCtor(dbFile, { fileMustExist: true, readonly: true, timeout: 5000 })
+		try {
+			await (db as unknown as { backup: (dest: string) => Promise<void> }).backup(destinationPath)
+			return destinationPath
+		} finally {
+			try { db.close() } catch { }
+		}
+	}
+
+	async function createSafeBackupBuffer(): Promise<Buffer> {
+		const tmp = path.join(path.dirname(dbFile), `backup-${Date.now()}.db`)
+		const db = new DatabaseCtor(dbFile, { fileMustExist: true, readonly: true, timeout: 5000 })
+		try {
+			await (db as unknown as { backup: (dest: string) => Promise<void> }).backup(tmp)
+			const buf = await fs.readFile(tmp)
+			try { await fs.unlink(tmp) } catch { }
+			return buf
+		} finally {
+			try { db.close() } catch { }
+		}
 	}
 
 	if (req.method === 'GET') {
@@ -71,16 +99,15 @@ async function handler(req: NextRequest) {
 			}
 		}
 		try {
+			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
 			const now = new Date()
 			const pad = (n: number) => n.toString().padStart(2, '0')
 			const fname = `dev-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}.db`
-			const tmp = path.join(path.dirname(dbFile), `backup-${Date.now()}.db`)
 			try {
-				const db = new DatabaseCtor(dbFile, { fileMustExist: true, timeout: 5000 })
-				try { await (db as unknown as { backup: (dest: string) => Promise<void> }).backup(tmp) } finally { try { db.close() } catch { } }
-				const buf = await fs.readFile(tmp)
-				await fs.unlink(tmp)
-				return new Response(buf, {
+				const buf = await createSafeBackupBuffer()
+				const u8 = new Uint8Array(buf)
+				const blob = new Blob([u8], { type: 'application/octet-stream' })
+				return new Response(blob, {
 					status: 200,
 					headers: {
 						'Content-Type': 'application/octet-stream',
@@ -89,7 +116,9 @@ async function handler(req: NextRequest) {
 				})
 			} catch {
 				const buf = await fs.readFile(dbFile)
-				return new Response(buf, {
+				const u8 = new Uint8Array(buf)
+				const blob = new Blob([u8], { type: 'application/octet-stream' })
+				return new Response(blob, {
 					status: 200,
 					headers: {
 						'Content-Type': 'application/octet-stream',
