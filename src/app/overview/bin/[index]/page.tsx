@@ -199,39 +199,81 @@ export default function BinDetailPage() {
 	return (
 		<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
 			<div className="max-w-5xl mx-auto px-4 py-8">
-				<div className="mb-4 flex flex-col gap-3 px-4 sm:px-0">
 
-					<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-						<div className='flex items-center gap-3'>
-							<Button variant="ghost" onClick={() => router.push('/overview')} className="inline-flex hover:bg-transparent hover:shadow-none cursor-pointer items-center gap-2 text-gray-700 hover:text-blue-600">
-								<ArrowLeft className='w-4 h-4' /> Back
-							</Button>
+				<div className="mb-6 p-4 sm:p-6 sm:mb-8 sm:px-0">
+					{/* Header Row: Back Button (Left) and Sort Status (Right) */}
+					<div className='flex justify-between items-start'>
 
+						{/* Back Button */}
+						<Button
+							variant="ghost"
+							onClick={() => router.push('/overview')}
+							className="
+                inline-flex items-center gap-2 text-sm font-medium text-gray-500
+                hover:text-blue-600 hover:bg-transparent transition-colors duration-150 hover:shadow-none
+            "
+						>
+							<ArrowLeft className='w-4 h-4' />
+							Back to Overview
+						</Button>
 
-							<div className='flex items-center gap-3'>
-								<div className="p-3 bg-blue-100 rounded-full"><Hash className="h-5 w-5 text-blue-600" /></div>
-								<div>
-									<h1 className="text-xl sm:text-2xl font-bold text-gray-900">Bin {meta ? meta.index + 1 : index}</h1>
-									{meta && (
-										<p className="text-gray-600 text-xs sm:text-sm font-mono break-all flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mt-1">
-											<span className="font-semibold mr-1">Range:</span>
-											<span className='flex items-center gap-1'>
-												{meta.startHex} <span className="font-semibold text-blue-600">to</span> {meta.endHex}
-												<Badge className="bg-blue-100 text-blue-600 text-[11px] sm:text-xs border-blue-500 pt-1">
-													{lengthCompositeLabel(meta.startHex, meta.endHex)}
-												</Badge>
-											</span>
-										</p>
-									)}
-								</div>
+						{/* Action/Filter Badge (More subtle status display) */}
+						<div className="
+            inline-flex items-center gap-2 
+            px-3 py-1 rounded-full text-xs font-semibold
+            bg-green-50 text-green-600 border border-green-200
+        ">
+							<ArrowDownZA className="h-3 w-3 text-green-500" />
+							<span>Latest First</span>
+						</div>
+					</div>
+
+					{/* Main Content Area (Title and Metadata) */}
+					<div className='mt-4 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:mt-6'>
+
+						{/* Title Area */}
+						<div className='flex items-center gap-4'>
+							{/* Elegant Icon Block */}
+							<div className="p-3 bg-blue-50 rounded-lg">
+								<Hash className="h-6 w-6 text-blue-600" />
 							</div>
+							<h1 className="text-2xl font-extrabold text-gray-900 sm:text-3xl">
+								Bin {meta ? meta.index + 1 : index}
+							</h1>
 						</div>
 
+						{/* Separator on Desktop */}
+						<div className="hidden h-8 w-px bg-gray-200 sm:block mx-4" aria-hidden="true"></div>
 
-						<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 self-start mt-2 sm:mt-0">
-							<ArrowDownZA className="h-4 w-4 text-blue-600" />
-							<span className="text-xs font-semibold text-blue-700">Latest First</span>
-						</div>
+						{/* Range and Length Metadata */}
+						{meta && (
+							<div className='flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:gap-6 sm:pt-0'>
+
+								{/* Range Display */}
+								<div className="flex flex-col items-start text-sm">
+									<span className="font-medium text-gray-500 uppercase tracking-wider text-xs mb-1">
+										Range
+									</span>
+									<p className="
+                        text-gray-800 text-sm font-mono break-all leading-relaxed
+                        flex flex-col items-start gap-1
+                        sm:flex-row sm:items-center sm:text-base sm:gap-2
+                    ">
+										<span className='px-1 py-0.5 bg-gray-50 rounded'>{meta.startHex}</span>
+										<span className="font-normal text-blue-500">to</span>
+										<span className='px-1 py-0.5 bg-gray-50 rounded'>{meta.endHex}</span>
+									</p>
+								</div>
+
+								{/* Length Badge */}
+								<Badge className="
+                    self-start bg-blue-600 text-white border-blue-600 font-semibold
+                    text-xs py-1 px-3 mt-1 sm:mt-0
+                ">
+									Total Length: {lengthCompositeLabel(meta.startHex, meta.endHex)}
+								</Badge>
+							</div>
+						)}
 					</div>
 				</div>
 
