@@ -146,17 +146,23 @@ async function handler(req: NextRequest) {
 			if (!buf || (buf as ArrayBuffer).byteLength <= 0) {
 				return new Response(JSON.stringify({ error: 'Empty payload' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
 			}
+			const u8 = new Uint8Array(buf)
+			const sig = Buffer.from(u8.slice(0, 16)).toString('utf8')
+			if (!sig.startsWith('SQLite format 3')) {
+				return new Response(JSON.stringify({ error: 'Invalid file: not a SQLite database' }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+			}
 			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
 			try { await prisma.$disconnect() } catch { }
 			try { await fs.unlink(walFile) } catch { }
 			try { await fs.unlink(shmFile) } catch { }
 			try { await fs.unlink(dbFile) } catch { }
 			const tmp = path.join(path.dirname(dbFile), `restore-${Date.now()}.tmp`)
-			await fs.writeFile(tmp, Buffer.from(buf))
+			await fs.writeFile(tmp, Buffer.from(u8))
 			try { await fs.rename(tmp, dbFile) } catch { await fs.copyFile(tmp, dbFile); await fs.unlink(tmp) }
 			try {
 				withDb(db => {
 					db.pragma('journal_mode = WAL')
+					db.pragma('foreign_keys = ON')
 					db.exec('VACUUM')
 				})
 			} catch { }
@@ -172,8 +178,9 @@ async function handler(req: NextRequest) {
 			} catch { }
 			try { const st = await fs.stat(dbFile); sizeBytes = st.size } catch { }
 			return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl: (process.env.DATABASE_URL || '').trim(), sizeBytes }), { status: 200, headers: { 'Content-Type': 'application/json' } })
-		} catch {
-			return new Response(JSON.stringify({ error: 'Restore failed' }), { status: 500, headers: { 'Content-Type': 'application/json' } })
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : String(err)
+			return new Response(JSON.stringify({ error: 'Restore failed', message: msg }), { status: 500, headers: { 'Content-Type': 'application/json' } })
 		}
 	}
 
@@ -182,3 +189,4 @@ async function handler(req: NextRequest) {
 
 export const GET = rateLimitMiddleware(handler)
 export const POST = rateLimitMiddleware(handler)
+export const runtime = 'nodejs'
