@@ -18,7 +18,6 @@ type SortKey = 'rank' | 'speed' | 'efficiency' | 'cuda' | 'tdp'
 const NF_INT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 const NF_1DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 })
 const NF_2DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
-const NF_4DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 })
 function computeEfficiency(item: GPUItem) { const w = Number(item.tdp_w); if (!isFinite(w) || w <= 0) return 0; return item.approx_keys_per_second_mkeys / w }
 type Unit = '' | 'K' | 'M' | 'B' | 'T' | 'P' | 'E'
 const UNITS: Array<{ label: Unit; factor: bigint }> = [
@@ -48,21 +47,6 @@ function toSpeed(mkeys: number, unit: Unit) { return scaleFromMKeys(mkeys, unit)
 function toEff(mkeysPerW: number, unit: Unit) { return scaleFromMKeys(mkeysPerW, unit).value }
 function fmtSpeed(valMKeys: number, unit: Unit) { const { intPart, twoDec } = scaleFromMKeys(valMKeys, unit); return fmtScaled(intPart, twoDec) }
 function fmtEff(valMKeysPerW: number, unit: Unit) { const v = toEff(valMKeysPerW, unit); const decs = v >= 100 ? 0 : v >= 10 ? 1 : 2; return v.toFixed(decs) }
-function pickUnitForKeys(mkeysPerW: number): Unit {
-	const keys = BigInt(Math.round(mkeysPerW)) * 1_000_000n
-	for (const u of UNITS) {
-		const intPart = keys / u.factor
-		if (intPart >= 1n && intPart < 1000n) return u.label
-	}
-	return ''
-}
-function fmtEffAuto(mkeysPerW: number): { text: string; label: string; unit: Unit } {
-	const u = pickUnitForKeys(mkeysPerW)
-	const v = toEff(mkeysPerW, u)
-	const decs = v >= 100 ? 0 : v >= 10 ? 1 : 2
-	return { text: v.toFixed(decs), label: `${u ? u : ''}Keys/W`, unit: u }
-}
-function estimateSpeedMKeys(spec: { architecture: string; cuda_cores: number }) { const a = (spec.architecture || '').toLowerCase(); let f = 0.12; if (a.includes('ada')) f = 0.16; else if (a.includes('ampere')) f = 0.12; else if (a.includes('turing')) f = 0.30; else if (a.includes('rdna 4')) f = 0.14; else if (a.includes('rdna 3')) f = 0.12; else if (a.includes('rdna 2')) f = 0.10; else if (a.includes('rdna')) f = 0.09; else if (a.includes('vega')) f = 0.08; else if (a.includes('blackwell')) f = 0.18; const c = Number(spec.cuda_cores || 0); return c * f }
 function SortButton({ label, keySel, sortKey, sortDir, onClick }: { label: string; keySel: SortKey; sortKey: SortKey; sortDir: 'asc' | 'desc'; onClick: () => void }) { const isActive = sortKey === keySel; return (<Button variant={isActive ? 'default' : 'outline'} size="sm" onClick={onClick} className={`${isActive ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md' : 'border-gray-300 text-gray-700 hover:bg-gray-100'} transition-all font-medium`}>{label}{isActive && (sortDir === 'desc' ? <ChevronDown className="ml-1 w-4 h-4" /> : <ChevronUp className="ml-1 w-4 h-4" />)}</Button>) }
 
 export default function GPURankingPage() {

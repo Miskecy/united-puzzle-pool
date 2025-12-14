@@ -29,7 +29,6 @@ type SortKey = 'rank' | 'speed' | 'efficiency' | 'cuda' | 'tdp'
 const NF_INT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 const NF_1DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 })
 const NF_2DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 })
-const NF_4DP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 })
 
 function computeEfficiency(item: GPUItem) {
 	const w = Number(item.tdp_w)
@@ -64,23 +63,9 @@ function toSpeed(mkeys: number, unit: Unit) { return scaleFromMKeys(mkeys, unit)
 function toEff(mkeysPerW: number, unit: Unit) { return scaleFromMKeys(mkeysPerW, unit).value }
 function fmtSpeed(valMKeys: number, unit: Unit) { const { intPart, twoDec } = scaleFromMKeys(valMKeys, unit); return fmtScaled(intPart, twoDec) }
 function fmtEff(valMKeysPerW: number, unit: Unit) { const v = toEff(valMKeysPerW, unit); return v.toFixed(2) }
-function pickUnitForKeys(mkeysPerW: number): Unit {
-	const keys = BigInt(Math.round(mkeysPerW)) * 1_000_000n
-	for (const u of UNITS) {
-		const intPart = keys / u.factor
-		if (intPart >= 1n && intPart < 1000n) return u.label
-	}
-	return ''
-}
-function fmtEffAuto(mkeysPerW: number): { text: string; label: string; unit: Unit } {
-	const u = pickUnitForKeys(mkeysPerW)
-	const v = toEff(mkeysPerW, u)
-	const decs = v >= 100 ? 0 : v >= 10 ? 1 : 2
-	return { text: v.toFixed(decs), label: `${u ? u : ''}Keys/W`, unit: u }
-}
 
 
-// --- Component: SortButton (Minimalist Blue/Gray) ---
+// Component: SortButton
 function SortButton({ label, keySel, sortKey, sortDir, onClick }: { label: string; keySel: SortKey; sortKey: SortKey; sortDir: 'asc' | 'desc'; onClick: () => void }) {
 	const isActive = sortKey === keySel
 	return (

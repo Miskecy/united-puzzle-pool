@@ -232,7 +232,7 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							</Card>
 						</div>
 
-					<BlockLiveClient id={block.id} hexRangeStart={block.hexRangeStart} hexRangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} initialAddressMap={block.addressMap} completedAt={block.completedAt} bitcoinAddress={block.bitcoinAddress} puzzleAddress={block.puzzleAddress ?? undefined} />
+                    <BlockLiveClient id={block.id} hexRangeStart={block.hexRangeStart} hexRangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} initialAddressMap={block.addressMap} completedAt={block.completedAt} puzzleAddress={block.puzzleAddress ?? undefined} />
 
 
 					</div>

@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, Flame, BrickWallFire, Clock, Bitcoin, Key, PieChart, List as ListIcon, Blocks, Pickaxe } from 'lucide-react';
+import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, BrickWallFire, Clock, Bitcoin, Key, PieChart, List as ListIcon, Blocks, Pickaxe } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
 import PoolActivityTimelineStandalone from '@/components/PoolActivityTimelineStandalone';
@@ -36,29 +34,7 @@ type RecentBlock = {
 	creditsAwarded: number;
 };
 
-const HEATMAP_COLORS = Array.from({ length: 50 }, (_, i) => {
-	const t = i / 49;
-	const hue = Math.round(220 - 220 * t);
-	const sat = Math.round(40 + 45 * t);
-	const light = Math.round(88 - 43 * t);
-	const alpha = 0.35 + 0.65 * t;
-	return `hsla(${hue}, ${sat}%, ${light}%, ${alpha.toFixed(2)})`;
-});
 
-function heatColor(percent: number, completed?: number, mode: 'percent' | 'absolute' = 'percent', absMax?: number): string {
-	const colors = HEATMAP_COLORS;
-	if (mode === 'absolute') {
-		const max = absMax && isFinite(absMax) && absMax > 0 ? absMax : 1;
-		const c = completed && isFinite(completed) ? Math.max(0, completed) : 0;
-		const ratio = Math.max(0, Math.min(1, c / max));
-		const idx = Math.round(ratio * (colors.length - 1));
-		return colors[idx];
-	} else {
-		const p = isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
-		const idx = Math.round((p / 100) * (colors.length - 1));
-		return colors[idx];
-	}
-}
 
 function parseHexBI(hex: string): bigint {
 	const clean = hex.replace(/^0x/, '');
@@ -77,12 +53,7 @@ function pow2Label(len: bigint): string {
 	return `2^${expCeil}`;
 }
 
-function formatTrillionsNum(n: number): string {
-	const t = n / 1_000_000_000_000;
-	if (t >= 100) return `${Math.round(t)}T`;
-	if (t >= 10) return `${t.toFixed(1)}T`;
-	return `${t.toFixed(2)}T`;
-}
+
 
 function formatTrillionsBI(n: bigint): string {
 	const T = 1_000_000_000_000n;
@@ -100,20 +71,7 @@ function toBI(n: number): bigint {
 	return BigInt(safe);
 }
 
-function formatPercentPrecise(completed: number, lenBI: bigint): string {
-	try {
-		const len = lenBI;
-		if (len <= 0n) return '0.00000%';
-		const cBI = toBI(completed);
-		const scale = 100000n;
-		const scaled = (cBI * 100n * scale) / len;
-		const intPart = scaled / scale;
-		const frac = scaled % scale;
-		return `${intPart.toString()}.${frac.toString().padStart(5, '0')}%`;
-	} catch {
-		return '0.00000%';
-	}
-}
+
 
 function formatSpeedBI(totalLenBI: bigint, totalSeconds: number): string {
 	if (totalSeconds <= 0) return '—';
@@ -175,13 +133,7 @@ function adaptiveTextClass(s: string): string {
 	return 'text-sm';
 }
 
-function formatCompactHexRange(hex: string): string {
-	const s = hex.startsWith('0x') ? hex.slice(2) : hex;
-	if (s.length <= 24) return `0x${s}`;
-	const head = s.slice(0, 10);
-	const tail = s.slice(-8);
-	return `0x${head}…${tail}`;
-}
+
 
 // --- COMPONENTE PRINCIPAL ---
 export default function PoolOverviewPage() {
@@ -194,12 +146,11 @@ export default function PoolOverviewPage() {
 	const [recent, setRecent] = useState<RecentBlock[]>([]);
 	const [active, setActive] = useState<RecentBlock[]>([]);
 	const [miners, setMiners] = useState<Array<{ address: string; addressShort: string; tokenShort: string; avgSpeedLabel: string; validatedLabel: string; sharePercentLabel: string; totalBlocks: number }>>([]);
-	const [colorMode, setColorMode] = useState<'percent' | 'absolute'>('percent');
-	const [hoveredCell, setHoveredCell] = useState<number | null>(null);
+
 	const [hoveredBlockCells, setHoveredBlockCells] = useState<number[]>([]);
 	const [nextPollInSec, setNextPollInSec] = useState<number>(30);
 	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-    const router = useRouter();
+	const router = useRouter();
 
 	function formatLastUpdated(ts: number | null): string {
 		if (!ts) return '—';
@@ -213,7 +164,7 @@ export default function PoolOverviewPage() {
 		return `${d}d ago`;
 	}
 
-	const maxAbsCompleted = Math.max(0, ...bins.map(b => Math.max(0, b.completed || 0)));
+
 
 	useEffect(() => {
 		const load = async () => {
@@ -315,8 +266,8 @@ export default function PoolOverviewPage() {
 	const overallPow: string = meta?.maxExp ? `2^${meta.maxExp}` : pow2Label(bins.reduce((acc: bigint, b) => acc + binLength(b.startHex, b.endHex), 0n));
 	const rangeBits: string | null = (meta?.startExp !== undefined && meta?.endExp !== undefined) ? `2^${meta.startExp}…2^${meta.endExp}` : null;
 	const activeCells: number = meta?.binCount ?? bins.length;
-	const totalCells = 256; // Número total de células para preencher o grid (16x16)
-	const offset = Math.max(0, totalCells - activeCells);
+
+
 
 
 	// Renderização de Estado (Loading/No Puzzle)
@@ -457,12 +408,12 @@ export default function PoolOverviewPage() {
 							/>
 						</div>
 
-					<ValidationHeatmap
-						bins={bins}
-						binCount={meta?.binCount ?? bins.length}
-						hoveredBlockCells={hoveredBlockCells}
-						onNavigateBin={(idx) => router.push(`/overview/bin/${idx}`)}
-					/>
+						<ValidationHeatmap
+							bins={bins}
+							binCount={meta?.binCount ?? bins.length}
+							hoveredBlockCells={hoveredBlockCells}
+							onNavigateBin={(idx) => router.push(`/overview/bin/${idx}`)}
+						/>
 
 						<div className="mt-6">
 							<div className="flex items-center justify-between py-2">

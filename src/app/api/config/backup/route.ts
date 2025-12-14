@@ -41,20 +41,7 @@ async function handler(req: NextRequest) {
 		try { return fn(db) } finally { try { db.close() } catch { } }
 	}
 
-	async function createSafeBackup(): Promise<string> {
-		const backupDir = path.join(process.cwd(), 'db-backups')
-		const backupFilename = `backup-${Date.now()}.db`
-		const destinationPath = path.join(backupDir, backupFilename)
-		await fs.mkdir(backupDir, { recursive: true })
-		withDb(db => { }, { readonly: true })
-		const db = new DatabaseCtor(dbFile, { fileMustExist: true, readonly: true, timeout: 5000 })
-		try {
-			await (db as unknown as { backup: (dest: string) => Promise<void> }).backup(destinationPath)
-			return destinationPath
-		} finally {
-			try { db.close() } catch { }
-		}
-	}
+
 
 	async function createSafeBackupBuffer(): Promise<Buffer> {
 		const tmp = path.join(path.dirname(dbFile), `backup-${Date.now()}.db`)

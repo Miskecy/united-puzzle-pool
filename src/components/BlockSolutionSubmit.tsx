@@ -6,10 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { XCircle, RefreshCw, ClipboardPaste } from 'lucide-react'
 
-export default function BlockSolutionSubmit({ blockId, rangeStart, rangeEnd, blockBitcoinAddress, onParsedKeysChange }: { blockId: string, rangeStart?: string, rangeEnd?: string, blockBitcoinAddress?: string, onParsedKeysChange?: (keys: string[]) => void }) {
+export default function BlockSolutionSubmit({ blockId, onParsedKeysChange }: { blockId: string, onParsedKeysChange?: (keys: string[]) => void }) {
 	const [keysText, setKeysText] = useState('')
 	const [credentialInput, setCredentialInput] = useState('')
-	const [hasStoredToken, setHasStoredToken] = useState(false)
 	const [submitting, setSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const router = useRouter()
@@ -25,7 +24,7 @@ export default function BlockSolutionSubmit({ blockId, rangeStart, rangeEnd, blo
 		return /^[0-9a-fA-F]{64}$/.test(clean)
 	}).length, [parsedKeys])
 
-    const canSubmit = validCount >= 10 && !!blockId && credentialInput.trim().length > 0
+	const canSubmit = validCount >= 10 && !!blockId && credentialInput.trim().length > 0
 
 	useEffect(() => {
 		const valid = parsedKeys.filter(k => {
@@ -38,15 +37,8 @@ export default function BlockSolutionSubmit({ blockId, rangeStart, rangeEnd, blo
 	useEffect(() => {
 		try {
 			const t = typeof window !== 'undefined' ? localStorage.getItem('pool-token') : null
-			if (t) {
-				setHasStoredToken(true)
-				setCredentialInput(t)
-			} else {
-				setHasStoredToken(false)
-			}
-		} catch {
-			setHasStoredToken(false)
-		}
+			if (t) { setCredentialInput(t) }
+		} catch { }
 	}, [])
 
 	async function handlePaste() {
@@ -70,17 +62,17 @@ export default function BlockSolutionSubmit({ blockId, rangeStart, rangeEnd, blo
 		if (invalid.length > 0) { setError('All keys must be 64 hex chars'); return }
 		try {
 			setSubmitting(true)
-            const headerValue = credentialInput.trim()
-            if (!headerValue) { throw new Error('Missing pool token') }
+			const headerValue = credentialInput.trim()
+			if (!headerValue) { throw new Error('Missing pool token') }
 			const r = await fetch('/api/block/submit', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'pool-token': headerValue },
 				body: JSON.stringify({ privateKeys: limited, blockId }),
 			})
 			const j = await r.json().catch(() => ({}))
-            if (!r.ok) {
-                throw new Error(String(j?.error || 'Failed to submit block'))
-            }
+			if (!r.ok) {
+				throw new Error(String(j?.error || 'Failed to submit block'))
+			}
 			setKeysText('')
 			try { router.refresh() } catch { }
 		} catch (err) {
@@ -92,10 +84,10 @@ export default function BlockSolutionSubmit({ blockId, rangeStart, rangeEnd, blo
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-                <label className="block text-xs text-gray-600">Pool Token</label>
-                <Input value={credentialInput} onChange={e => setCredentialInput(e.target.value)} placeholder="Enter your pool token" className="font-mono text-sm" />
-            </div>
+			<div className="space-y-2">
+				<label className="block text-xs text-gray-600">Pool Token</label>
+				<Input value={credentialInput} onChange={e => setCredentialInput(e.target.value)} placeholder="Enter your pool token" className="font-mono text-sm" />
+			</div>
 			<div className="flex items-center justify-between gap-2">
 				<div className="flex items-center gap-2">
 					<span className={`px-2 py-1 rounded border text-xs font-semibold ${validCount >= 10 ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>Valid: {validCount} / 10</span>

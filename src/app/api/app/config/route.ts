@@ -44,10 +44,8 @@ async function setEnabled(enabled: boolean) {
         await prisma.$executeRaw`
     UPDATE app_config SET shared_pool_api_enabled = ${enabled ? 1 : 0}, updated_at = ${now} WHERE id = 'singleton'
   `
-    } catch (err: unknown) {
-        try {
-            await ensureAppConfigTable()
-        } catch { }
+    } catch {
+        try { await ensureAppConfigTable() } catch { }
     }
 }
 

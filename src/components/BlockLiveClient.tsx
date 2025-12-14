@@ -18,7 +18,6 @@ export default function BlockLiveClient({
 	checkworkAddresses,
 	initialAddressMap,
 	completedAt,
-	bitcoinAddress,
 	puzzleAddress,
 }: {
 	id: string
@@ -27,7 +26,6 @@ export default function BlockLiveClient({
 	checkworkAddresses: string[]
 	initialAddressMap: AddressMapItem[]
 	completedAt?: string | null
-	bitcoinAddress?: string
 	puzzleAddress?: string
 }) {
 	const [liveKeys, setLiveKeys] = React.useState<string[]>([])
@@ -118,7 +116,7 @@ export default function BlockLiveClient({
 							<span className="flex items-center gap-2 text-lg text-gray-900"><Key className="h-5 w-5 text-rose-600" /> Solution Submission</span>
 						</AccordionTrigger>
 						<AccordionContent className="px-6">
-							<BlockSolutionSubmit blockId={id} rangeStart={hexRangeStart} rangeEnd={hexRangeEnd} blockBitcoinAddress={bitcoinAddress} onParsedKeysChange={setLiveKeys} />
+							<BlockSolutionSubmit blockId={id} onParsedKeysChange={setLiveKeys} />
 						</AccordionContent>
 					</AccordionItem>
 				</Accordion>
