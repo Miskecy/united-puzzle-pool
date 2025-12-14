@@ -161,6 +161,37 @@ export function calculateExpirationTime(hours: number = 12): Date {
 	expiration.setHours(expiration.getHours() + hours);
 	return expiration;
 }
+export const SCALED_UNITS: Array<{ label: string; factor: bigint }> = [
+	{ label: 'E', factor: 1_000_000_000_000_000_000n },
+	{ label: 'P', factor: 1_000_000_000_000_000n },
+	{ label: 'T', factor: 1_000_000_000_000n },
+	{ label: 'B', factor: 1_000_000_000n },
+	{ label: 'M', factor: 1_000_000n },
+	{ label: 'K', factor: 1_000n },
+	{ label: '', factor: 1n },
+]
+
+export function formatScaledKeys(len: bigint): string {
+	let idx = SCALED_UNITS.findIndex(u => len >= u.factor)
+	if (idx < 0) idx = SCALED_UNITS.length - 1
+	while (idx > 0) {
+		const u = SCALED_UNITS[idx]
+		const scaledInt = len / u.factor
+		if (scaledInt >= 1000n) idx -= 1
+		else break
+	}
+	const u = SCALED_UNITS[idx]
+	const intPart = len / u.factor
+	const rem = len % u.factor
+	const twoDec = (rem * 100n) / u.factor
+	if (intPart >= 100n) {
+		return `${intPart.toString()}${u.label}Keys`
+	} else if (intPart >= 10n) {
+		const oneDec = twoDec / 10n
+		return `${intPart.toString()}.${oneDec.toString().padStart(1, '0')}${u.label}Keys`
+	}
+	return `${intPart.toString()}.${twoDec.toString().padStart(2, '0')}${u.label}Keys`
+}
 
 export function samplePrivateKeysInRange(startHex: string, endHex: string, count: number = 10): string[] {
 	console.log('samplePrivateKeysInRange - Parâmetros recebidos:');
