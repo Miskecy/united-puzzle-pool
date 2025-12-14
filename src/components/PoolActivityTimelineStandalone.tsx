@@ -142,7 +142,8 @@ export default function PoolActivityTimelineStandalone({
 			<div ref={containerRef} className="timeline-row top-8">
 				{unified.map(item => {
 					const left = positions.get(item.id) ?? 0
-					const addr = item.puzzleAddress || item.bitcoinAddress || 'Unknown address'
+                    const addr = item.puzzleAddress || item.bitcoinAddress || 'Unknown address'
+                    const minerAddr = item.bitcoinAddress || 'Unknown address'
 					const lenLabel = formatLenPrecise(binLength(item.hexRangeStart, item.hexRangeEnd))
 					const cls = item.state === 'active' ? 'block3d block3d-active' : 'block3d block3d-validated'
 					const totalMs = (() => {
@@ -184,16 +185,17 @@ export default function PoolActivityTimelineStandalone({
 							<div className="block3d-content">
 								{item.state === 'active' ? <div className="time-fill" style={{ height: `${fillPct}%` }} /> : null}
 								{item.state === 'validated' ? <div className="duration-fill" style={{ height: `${durFillPct}%` }} /> : null}
-								<div className="block3d-body">
-									<div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
-									<div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
-									<div className="block3d-range">{item.hexRangeStart.slice(0, 8)}...{item.hexRangeStart.slice(-4)} → {item.hexRangeEnd.slice(0, 8)}...{item.hexRangeEnd.slice(-4)}</div>
-									<div className="block3d-difficulty">{lenLabel}</div>
-									<div className="block3d-meta">
-										<span className="time">{fmtAgo(item.state === 'active' ? item.createdAt : item.completedAt)}</span>
-										<span className="credits">{item.state === 'active' ? '—' : Number(item.creditsAwarded ?? 0).toFixed(3)}</span>
-									</div>
-								</div>
+                                <div className="block3d-body">
+                                    <div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
+                                    <div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
+                                    <div className="block3d-miner">{minerAddr.slice(0, 8)}...{minerAddr.slice(-8)}</div>
+                                    <div className="block3d-range">{item.hexRangeStart.slice(0, 8)}...{item.hexRangeStart.slice(-4)} → {item.hexRangeEnd.slice(0, 8)}...{item.hexRangeEnd.slice(-4)}</div>
+                                    <div className="block3d-difficulty">{lenLabel}</div>
+                                    <div className="block3d-meta">
+                                        <span className="time">{fmtAgo(item.state === 'active' ? item.createdAt : item.completedAt)}</span>
+                                        <span className="credits">{item.state === 'active' ? '—' : Number(item.creditsAwarded ?? 0).toFixed(3)}</span>
+                                    </div>
+                                </div>
 							</div>
 						</div>
 					)
@@ -226,6 +228,7 @@ export default function PoolActivityTimelineStandalone({
         .block3d-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
         .block3d-puzzle { font-size: 13px; color: #111827; font-weight: 700; }
         .block3d-title { display: block; font-size: 11px; color: #6b7280; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-weight: 500; }
+        .block3d-miner { display: block; font-size: 11px; color: #334155; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-weight: 600; }
         .block3d-range { font-size: 10px; color: #4b5563; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; line-height: 1.4; }
         .block3d-difficulty { font-size: 10px; color: #374151; font-weight: 500; }
         .block3d-meta { display: flex; align-items: center; justify-content: space-between; }

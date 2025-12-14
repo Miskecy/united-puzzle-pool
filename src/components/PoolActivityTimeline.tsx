@@ -161,7 +161,8 @@ export default function PoolActivityTimeline({
 		})()
 		const fillPct = item.state === 'active' && totalMs > 0 ? Math.max(0, Math.min(100, Math.round((1 - (remainingMs / totalMs)) * 100))) : 0
 		const isHovered = hoverIdsRef.current.has(item.id)
-		const addr = item.puzzleAddress || item.bitcoinAddress || 'Unknown address'
+        const addr = item.puzzleAddress || item.bitcoinAddress || 'Unknown address'
+        const minerAddr = item.bitcoinAddress || 'Unknown address'
 		const lenLabel = formatLenPrecise(binLength(item.hexRangeStart, item.hexRangeEnd))
 		const cls = item.state === 'active' ? 'block3d block3d-active shrink-0' : 'block3d block3d-validated shrink-0'
 		return (
@@ -173,19 +174,20 @@ export default function PoolActivityTimeline({
 				onMouseLeave={() => { hoverIdsRef.current.delete(item.id); lastHoverFill.current = 0; onHoverRange?.('', '') }}
 				onClick={() => router.push(`/block/${item.id}`)}
 			>
-				<div className="block3d-content" style={{ transition: (animationsEnabled && hoverAnimationEnabled) ? 'transform .2s ease, box-shadow .2s ease' : 'none', transform: (animationsEnabled && hoverAnimationEnabled) ? undefined : 'none' }}>
-					{item.state === 'active' ? <div className="time-fill" style={{ height: `${isHovered ? lastHoverFill.current : fillPct}%`, transition: (animationsEnabled && progressAnimationEnabled) ? 'height .5s ease' : 'none' }} /> : null}
-					<div className="block3d-body">
-						<div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
-						<div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
-						<div className="block3d-range">{item.hexRangeStart.slice(0, 8)}...{item.hexRangeStart.slice(-4)} → {item.hexRangeEnd.slice(0, 8)}...{item.hexRangeEnd.slice(-4)}</div>
-						<div className="block3d-difficulty">{lenLabel}</div>
-						<div className="block3d-meta">
-							<span className="time">{fmtAgo(item.state === 'active' ? item.createdAt : item.completedAt)}</span>
-							<span className="credits">{item.state === 'active' ? '—' : Number(item.creditsAwarded ?? 0).toFixed(3)}</span>
-						</div>
-					</div>
-				</div>
+            <div className="block3d-content" style={{ transition: (animationsEnabled && hoverAnimationEnabled) ? 'transform .2s ease, box-shadow .2s ease' : 'none', transform: (animationsEnabled && hoverAnimationEnabled) ? undefined : 'none' }}>
+              {item.state === 'active' ? <div className="time-fill" style={{ height: `${isHovered ? lastHoverFill.current : fillPct}%`, transition: (animationsEnabled && progressAnimationEnabled) ? 'height .5s ease' : 'none' }} /> : null}
+              <div className="block3d-body">
+                <div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
+                <div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
+                <div className="block3d-miner">{minerAddr.slice(0, 8)}...{minerAddr.slice(-8)}</div>
+                <div className="block3d-range">{item.hexRangeStart.slice(0, 8)}...{item.hexRangeStart.slice(-4)} → {item.hexRangeEnd.slice(0, 8)}...{item.hexRangeEnd.slice(-4)}</div>
+                <div className="block3d-difficulty">{lenLabel}</div>
+                <div className="block3d-meta">
+                  <span className="time">{fmtAgo(item.state === 'active' ? item.createdAt : item.completedAt)}</span>
+                  <span className="credits">{item.state === 'active' ? '—' : Number(item.creditsAwarded ?? 0).toFixed(3)}</span>
+                </div>
+              </div>
+            </div>
 			</div>
 		)
 	}
@@ -267,6 +269,13 @@ export default function PoolActivityTimeline({
           color: #4b5563; 
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; 
           line-height: 1.4;
+        }
+        .block3d-miner {
+          display: block;
+          font-size: 11px;
+          color: #334155;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          font-weight: 600;
         }
         .block3d-difficulty { font-size: 10px; color: #374151; font-weight: 500; }
         .block3d-meta { display: flex; align-items: center; justify-content: space-between; }

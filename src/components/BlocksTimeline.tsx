@@ -119,7 +119,8 @@ export default function BlocksTimeline({
 					style={{ animationDuration: `${Math.max(1000, speedMs)}ms`, animationPlayState: ((animationsEnabled && loopBlocks.length > 0) ? 'running' : 'paused'), gap: `${Math.max(0, gapPx)}px` }}
 				>
 					{loopBlocks.map((b, i) => {
-						const addr = b.puzzleAddress || b.bitcoinAddress || 'Unknown address'
+                    const addr = b.puzzleAddress || b.bitcoinAddress || 'Unknown address'
+                    const minerAddr = b.bitcoinAddress || 'Unknown address'
 						const lenLabel = formatLenPrecise(binLength(b.hexRangeStart, b.hexRangeEnd))
 						const created = b.createdAt ? new Date(b.createdAt).getTime() : NaN
 						const completed = b.completedAt ? new Date(b.completedAt).getTime() : NaN
@@ -142,7 +143,8 @@ export default function BlocksTimeline({
 									{durFillPct > 0 ? <div className="duration-fill" style={{ height: `${durFillPct}%` }} /> : null}
 									<div className="block3d-body">
 										<div className="block3d-puzzle">{b.puzzleName || 'Puzzle'}</div>
-										<div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
+                                        <div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
+                                        <div className="block3d-miner">{minerAddr.slice(0, 8)}...{minerAddr.slice(-8)}</div>
 										<div className="block3d-range">{b.hexRangeStart.slice(0, 8)}...{b.hexRangeStart.slice(-4)} → {b.hexRangeEnd.slice(0, 8)}...{b.hexRangeEnd.slice(-4)}</div>
 										<div className="block3d-difficulty">{lenLabel}</div>
 										<div className="block3d-meta">
@@ -209,6 +211,13 @@ export default function BlocksTimeline({
           color: #4b5563; 
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; 
           line-height: 1.4;
+        }
+        .block3d-miner {
+          display: block;
+          font-size: 11px;
+          color: #334155;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          font-weight: 600;
         }
         .block3d-difficulty { font-size: 10px; color: #374151; font-weight: 500; }
         .block3d-meta { display: flex; align-items: center; justify-content: space-between; }

@@ -32,23 +32,19 @@ export function formatCompactRange(startRange: string, endRange: string): string
  * Valida se um endereço Bitcoin é válido (formato básico)
  */
 export function isValidBitcoinAddress(address: string): boolean {
-  // Remove espaços em branco
-  const cleanAddress = address.trim();
-  
-  // Verifica se tem entre 26 e 35 caracteres
-  if (cleanAddress.length < 26 || cleanAddress.length > 35) {
-    return false;
-  }
-  
-  // Verifica se começa com 1, 3 ou bc1
-  if (!/^[13]|^bc1/.test(cleanAddress)) {
-    return false;
-  }
-  
-  // Verifica se contém apenas caracteres válidos (base58)
-  if (!/^[1-9A-HJ-NP-Za-km-z]+$/.test(cleanAddress)) {
-    return false;
-  }
-  
-  return true;
+  const s = (address || '').trim();
+  if (!s) return false;
+
+  // Legacy Base58 (P2PKH/P2SH): starts with 1 or 3, typical length 26–35
+  const base58Reg = /^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/;
+  if (base58Reg.test(s)) return true;
+
+  // Bech32 (SegWit/Taproot): bc1q... (P2WPKH/P2WSH) or bc1p... (Taproot)
+  // BIP-0173 charset for data part: qpzry9x8gf2tvdw0s3jn54khce6mua7l
+  // Length can vary; allow 14–90 to be safe and require at least 6-char data part
+  const lower = s.toLowerCase();
+  const bech32Reg = /^bc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{6,87}$/;
+  if (bech32Reg.test(lower)) return true;
+
+  return false;
 }
