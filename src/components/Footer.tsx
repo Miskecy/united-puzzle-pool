@@ -28,10 +28,18 @@ export default function Footer() {
 							<span>Open Source — United Puzzle Pool</span>
 						</div>
 						<p className="text-sm text-gray-600">Contributions welcome. Star the project and build together.</p>
-						<Link href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
-							<span>View on GitHub</span>
-							<Github className="h-4 w-4" />
-						</Link>
+
+
+						<div className="flex gap-4">
+							<Link href={githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
+								<span>View on GitHub</span>
+								<Github className="h-4 w-4" />
+							</Link>
+							<Link href="https://status.unitedpuzzlepool.com/status/united-puzzle-pool" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 text-sm font-medium inline-flex items-center gap-1">
+								<span>Service Status</span>
+								<ExternalLink className="h-4 w-4" />
+							</Link>
+						</div>
 
 						<div className="pt-3 border-t border-gray-200">
 							<div className="text-gray-900 font-semibold">Inspired by</div>
