@@ -18,7 +18,7 @@ COPY --from=builder /app/package-lock.json ./package-lock.json
 RUN npm ci --omit=dev
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=builder /app/src/data ./src/data
 EXPOSE 3000
 CMD ["sh","-c","npx prisma generate && npx prisma migrate deploy && npm run start -- -p 3000"]

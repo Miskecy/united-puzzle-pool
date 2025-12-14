@@ -204,6 +204,7 @@ export default function SetupConfigPage() {
 
 	const [dbStatus, setDbStatus] = useState<{ tables: number; tableNames: string[]; dbFile: string; envUrl: string; sizeBytes: number; envRaw?: string; envInPrisma?: boolean; pathMismatch?: boolean; suggestedEnvUrl?: string } | null>(null)
 	const [dbStatusLoading, setDbStatusLoading] = useState(false)
+	const [backupLoading, setBackupLoading] = useState(false)
 
 	const [userGpuItems, setUserGpuItems] = useState<{ id: string; model: string; approx_keys_per_second_mkeys: number; tdp_w?: number; brand?: string; architecture?: string; series?: string; status: 'PENDING' | 'APPROVED' | 'DENIED'; createdAt: string }[]>([])
 	const [userGpuLoading, setUserGpuLoading] = useState(false)
@@ -954,9 +955,11 @@ export default function SetupConfigPage() {
 										<p className='text-sm text-gray-600 mb-3'>Download the current database file to your local machine for safekeeping.</p>
 										<Button
 											type="button"
-											className="bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-2 w-full sm:w-auto"
+											className={`inline-flex items-center gap-2 w-full sm:w-auto ${backupLoading ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+											disabled={backupLoading}
 											onClick={async () => {
 												try {
+													setBackupLoading(true)
 													const r = await fetch('/api/config/backup', { headers: setupSecret ? { 'x-setup-secret': setupSecret } : undefined })
 													if (!r.ok) return
 													const blob = await r.blob()
@@ -972,9 +975,10 @@ export default function SetupConfigPage() {
 													a.remove()
 													URL.revokeObjectURL(url)
 												} catch { }
+												finally { setBackupLoading(false) }
 											}}
 										>
-											<Download className="h-4 w-4" /> Download Backup
+											{backupLoading ? <RotateCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} {backupLoading ? 'Generating...' : 'Download Backup'}
 										</Button>
 									</div>
 									{/* Restore */}
