@@ -142,8 +142,8 @@ export default function PoolActivityTimelineStandalone({
 			<div ref={containerRef} className="timeline-row top-8">
 				{unified.map(item => {
 					const left = positions.get(item.id) ?? 0
-                    const addr = item.puzzleAddress || item.bitcoinAddress || 'Unknown address'
-                    const minerAddr = item.bitcoinAddress || 'Unknown address'
+					const addr = item.puzzleAddress || item.bitcoinAddress || 'Unknown address'
+					const minerAddr = item.bitcoinAddress || 'Unknown address'
 					const lenLabel = formatLenPrecise(binLength(item.hexRangeStart, item.hexRangeEnd))
 					const cls = item.state === 'active' ? 'block3d block3d-active' : 'block3d block3d-validated'
 					const totalMs = (() => {
@@ -184,18 +184,18 @@ export default function PoolActivityTimelineStandalone({
 						>
 							<div className="block3d-content">
 								{item.state === 'active' ? <div className="time-fill" style={{ height: `${fillPct}%` }} /> : null}
-								{item.state === 'validated' ? <div className="duration-fill" style={{ height: `${durFillPct}%` }} /> : null}
-                                <div className="block3d-body">
-                                    <div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
-                                    <div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
-                                    <div className="block3d-miner">{minerAddr.slice(0, 8)}...{minerAddr.slice(-8)}</div>
-                                    <div className="block3d-range">{item.hexRangeStart.slice(0, 8)}...{item.hexRangeStart.slice(-4)} → {item.hexRangeEnd.slice(0, 8)}...{item.hexRangeEnd.slice(-4)}</div>
-                                    <div className="block3d-difficulty">{lenLabel}</div>
-                                    <div className="block3d-meta">
-                                        <span className="time">{fmtAgo(item.state === 'active' ? item.createdAt : item.completedAt)}</span>
-                                        <span className="credits">{item.state === 'active' ? '—' : Number(item.creditsAwarded ?? 0).toFixed(3)}</span>
-                                    </div>
-                                </div>
+								{item.state === 'validated' ? <div className="duration-fill -z-10" style={{ height: `${durFillPct}%` }} /> : null}
+								<div className="block3d-body">
+									<div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
+									<div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
+									<div className="block3d-miner">{minerAddr.slice(0, 8)}...{minerAddr.slice(-8)}</div>
+									<div className="block3d-range">{item.hexRangeStart.slice(0, 8)}...{item.hexRangeStart.slice(-4)} → {item.hexRangeEnd.slice(0, 8)}...{item.hexRangeEnd.slice(-4)}</div>
+									<div className="block3d-difficulty">{lenLabel}</div>
+									<div className="block3d-meta">
+										<span className="time">{fmtAgo(item.state === 'active' ? item.createdAt : item.completedAt)}</span>
+										<span className="credits">{item.state === 'active' ? '—' : Number(item.creditsAwarded ?? 0).toFixed(3)}</span>
+									</div>
+								</div>
 							</div>
 						</div>
 					)
