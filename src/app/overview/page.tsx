@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, BrickWallFire, Clock, Bitcoin, Key, PieChart, List as ListIcon, Blocks, Pickaxe } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
@@ -267,6 +268,79 @@ export default function PoolOverviewPage() {
 	const rangeBits: string | null = (meta?.startExp !== undefined && meta?.endExp !== undefined) ? `2^${meta.startExp}…2^${meta.endExp}` : null;
 	const activeCells: number = meta?.binCount ?? bins.length;
 
+	function computeOverallProgress(bins: BinStat[]): { ratio: number; percent: number } {
+		const totals = bins.reduce(
+			(acc, b) => {
+				acc.total += typeof b.total === 'number' ? b.total : 0;
+				acc.completed += typeof b.completed === 'number' ? b.completed : 0;
+				return acc;
+			},
+			{ total: 0, completed: 0 }
+		);
+		const ratio = totals.total > 0 ? Math.min(1, Math.max(0, totals.completed / totals.total)) : 0;
+		return { ratio, percent: Math.round(ratio * 100) };
+	}
+	const overallProgress = computeOverallProgress(bins);
+	const overallProgressLabel = overallProgress.ratio.toFixed(6);
+	const totalLenBI = bins.reduce((acc: bigint, b) => acc + binLength(b.startHex, b.endHex), 0n);
+	const onePercentLabel = formatTrillionsBI(totalLenBI / 100n);
+
+	const [minedAgg, setMinedAgg] = useState<{ segments: Array<{ leftPct: number; widthPct: number; color: string; label: string }>; legend: Array<{ label: string; color: string; count: number }> } | null>(null);
+	useEffect(() => {
+		const loadAgg = async () => {
+			try {
+				const r = await fetch('/api/pool/segments?days=0', { cache: 'no-store' });
+				if (r.ok) {
+					const j = await r.json();
+					if (j && Array.isArray(j.segments)) setMinedAgg({ segments: j.segments, legend: j.legend || [] });
+				}
+			} catch { }
+		};
+		loadAgg();
+	}, []);
+
+	function categorizeLen(len: bigint): { label: string; color: string } {
+		const B = 1_000_000_000n;
+		const T = 1_000_000_000_000n;
+		if (len <= 10n * B) return { label: '≤10B', color: 'bg-blue-400' };
+		if (len <= 250n * B) return { label: '≤250B', color: 'bg-cyan-500' };
+		if (len <= 1n * T) return { label: '≤1T', color: 'bg-green-500' };
+		if (len <= 10n * T) return { label: '≤10T', color: 'bg-amber-500' };
+		if (len <= 20n * T) return { label: '≤20T', color: 'bg-orange-600' };
+		if (len >= 100n * T) return { label: '≥100T+', color: 'bg-red-600' };
+		return { label: '20–100T', color: 'bg-orange-400' };
+	}
+
+	function computeMinedSegments(recentBlocks: RecentBlock[], allBins: BinStat[]): { segments: Array<{ leftPct: number; widthPct: number; color: string; label: string }>; legend: Array<{ label: string; color: string; count: number }> } {
+		const segments: Array<{ leftPct: number; widthPct: number; color: string; label: string }> = [];
+		const legendMap: Record<string, { color: string; count: number }> = {};
+		if (!allBins.length) return { segments, legend: [] };
+		const rangeStart = parseHexBI(allBins[0].startHex);
+		const rangeEnd = parseHexBI(allBins[allBins.length - 1].endHex);
+		if (rangeEnd <= rangeStart) return { segments, legend: [] };
+		const fullLen = rangeEnd - rangeStart;
+		for (const rb of recentBlocks) {
+			const sHex = rb.hexRangeStartRaw || rb.hexRangeStart;
+			const eHex = rb.hexRangeEndRaw || rb.hexRangeEnd;
+			if (!sHex || !eHex) continue;
+			const s = parseHexBI(sHex);
+			const e = parseHexBI(eHex);
+			if (e <= s) continue;
+			const start = s > rangeStart ? s : rangeStart;
+			const end = e < rangeEnd ? e : rangeEnd;
+			if (end <= start) continue;
+			const len = end - start;
+			const cat = categorizeLen(len);
+			const leftPct = Number(((start - rangeStart) * 10000n) / fullLen) / 100;
+			const widthPct = Number((len * 10000n) / fullLen) / 100;
+			segments.push({ leftPct, widthPct, color: cat.color, label: cat.label });
+			legendMap[cat.label] = { color: cat.color, count: (legendMap[cat.label]?.count || 0) + 1 };
+		}
+		const legend = Object.entries(legendMap).map(([label, v]) => ({ label, color: v.color, count: v.count })).sort((a, b) => a.label.localeCompare(b.label));
+		return { segments, legend };
+	}
+	const mined = computeMinedSegments(recent, bins);
+
 
 
 
@@ -381,6 +455,76 @@ export default function PoolOverviewPage() {
 										);
 									})()}
 									<div className="text-sm text-gray-600 mt-1">Validated / Remaining (T-keys).</div>
+								</CardContent>
+							</Card>
+							<Card className="shadow-sm border-gray-200">
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
+										<Expand className="h-5 w-5 text-blue-600" /> Range Swept
+									</h3>
+									<span className="text-xs text-gray-500">{overallProgress.percent}%</span>
+								</CardHeader>
+								<CardContent>
+									<div className="flex items-center justify-between mb-2">
+										<span className="text-sm text-gray-600">Swept</span>
+										<span className="font-mono text-sm text-gray-900">{overallProgressLabel}</span>
+									</div>
+									<div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
+										<div
+											style={{ width: `${overallProgress.percent}%` }}
+											className="h-3 bg-blue-600"
+										/>
+									</div>
+									<div className="text-xs text-gray-600 mt-2">Fraction of total range swept. 1% ≈ <span className="font-mono text-gray-900">{onePercentLabel}</span></div>
+								</CardContent>
+							</Card>
+							<Card className="shadow-sm border-gray-200">
+								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
+										<Blocks className="h-5 w-5 text-blue-600" /> Mined Regions
+									</h3>
+									<span className="text-xs text-gray-500">{(minedAgg?.segments?.length ?? 0) || (mined.segments.length)} segments</span>
+								</CardHeader>
+								<CardContent>
+									<TooltipProvider delayDuration={100}>
+										<div className="relative w-full h-4 bg-gray-200 rounded overflow-hidden">
+											<div className="absolute top-0 left-0 h-4 overflow-hidden" style={{ width: `${overallProgress.percent}%` }}>
+												{(minedAgg?.segments ?? mined.segments).map((s, idx) => {
+													const scaledLeft = (s.leftPct * overallProgress.percent) / 100;
+													const scaledWidth = (s.widthPct * overallProgress.percent) / 100;
+													const hundredths = Math.max(0, Math.round(s.widthPct * 100));
+													const lenApproxBI = (totalLenBI * BigInt(hundredths)) / 10000n;
+													const lenLabel = formatTrillionsBI(lenApproxBI);
+													const pctLabel = `${s.widthPct.toFixed(2)}%`;
+													return (
+														<Tooltip key={idx}>
+															<TooltipTrigger asChild>
+																<div className={`absolute top-0 h-4 ${s.color} opacity-70`} style={{ left: `${scaledLeft}%`, width: `${scaledWidth}%` }} />
+															</TooltipTrigger>
+															<TooltipContent side="top" align="center">
+																<div className="flex items-center gap-2">
+																	<span className="font-mono">{s.label}</span>
+																	<span className="text-gray-500">|</span>
+																	<span className="font-mono">{pctLabel}</span>
+																	<span className="text-gray-500">|</span>
+																	<span className="font-mono">{lenLabel}</span>
+																</div>
+															</TooltipContent>
+														</Tooltip>
+													);
+												})}
+											</div>
+										</div>
+									</TooltipProvider>
+									<div className="flex flex-wrap gap-3 mt-3">
+										{(minedAgg?.legend ?? mined.legend).map((l, i) => (
+											<div key={i} className="flex items-center gap-2 text-xs text-gray-700">
+												<span className={`inline-block w-3 h-3 rounded ${l.color}`} />
+												<span className="font-mono">{l.label}</span>
+												<span className="text-gray-500">({l.count})</span>
+											</div>
+										))}
+									</div>
 								</CardContent>
 							</Card>
 						</div>
