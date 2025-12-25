@@ -8,6 +8,7 @@ import { loadPuzzleConfig } from '@/lib/config';
 interface BlockSubmissionRequest {
 	privateKeys: string[];
 	blockId?: string;
+	workerId?: string;
 }
 
 // Helper function to strip 0x prefix from hex strings
@@ -259,9 +260,9 @@ async function handler(req: NextRequest) {
 
 		// 9. Limpar o bloco ativo do Redis
 		try {
-			const currentActive = await getActiveBlockByToken(token);
+			const currentActive = await getActiveBlockByToken(token, body.workerId);
 			if (currentActive === blockAssignment.id) {
-				await clearActiveBlock(token);
+				await clearActiveBlock(token, body.workerId);
 			}
 		} catch { }
 

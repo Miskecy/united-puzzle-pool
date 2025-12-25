@@ -52,7 +52,7 @@ async function handler(req: NextRequest) {
 			pendingBlocks,
 			totalCredits,
 			availableCredits,
-			activeBlock,
+			activeBlocks,
 			completedWithSolutions,
 		] = await Promise.all([
 			// Total blocks assigned
@@ -95,8 +95,8 @@ async function handler(req: NextRequest) {
 				},
 			}),
 
-			// Active block (if any)
-			prisma.blockAssignment.findFirst({
+			// Active block (fetch all active to filter out browser blocks)
+			prisma.blockAssignment.findMany({
 				where: {
 					userTokenId: userToken.id,
 					status: 'ACTIVE'
@@ -128,6 +128,18 @@ async function handler(req: NextRequest) {
 		}
 
 		const cfg = await loadPuzzleConfig();
+
+		// Filter out browser blocks (small blocks < 500k) to show only Manual/GPU blocks
+		const manualBlock = activeBlocks.find(b => {
+			try {
+				const start = BigInt(b.startRange);
+				const end = BigInt(b.endRange);
+				return (end - start) > 500000n;
+			} catch {
+				return false;
+			}
+		}) || null;
+
 		const stats = {
 			token: userToken.token,
 			bitcoinAddress: userToken.bitcoinAddress,
@@ -138,14 +150,14 @@ async function handler(req: NextRequest) {
 			availableCredits: Number(availableCredits._sum.amount || 0) / 1000,
 			totalKeysValidated: totalKeysValidatedBI.toString(),
 			totalTimeSpentSeconds,
-			activeBlock: activeBlock ? {
-				id: activeBlock.id,
-				startRange: formatCompactHexRange(activeBlock.startRange),
-				endRange: formatCompactHexRange(activeBlock.endRange),
-				bitcoinAddress: activeBlock.puzzleAddressSnapshot || cfg?.address || userToken.bitcoinAddress,
-				checkworkAddress: activeBlock.checkworkAddresses ? JSON.parse(activeBlock.checkworkAddresses)[0] : '',
-				assignedAt: activeBlock.createdAt,
-				expiresAt: new Date(activeBlock.createdAt.getTime() + 12 * 60 * 60 * 1000),
+			activeBlock: manualBlock ? {
+				id: manualBlock.id,
+				startRange: formatCompactHexRange(manualBlock.startRange),
+				endRange: formatCompactHexRange(manualBlock.endRange),
+				bitcoinAddress: manualBlock.puzzleAddressSnapshot || cfg?.address || userToken.bitcoinAddress,
+				checkworkAddress: manualBlock.checkworkAddresses ? JSON.parse(manualBlock.checkworkAddresses)[0] : '',
+				assignedAt: manualBlock.createdAt,
+				expiresAt: new Date(manualBlock.createdAt.getTime() + 12 * 60 * 60 * 1000),
 			} : null,
 		};
 

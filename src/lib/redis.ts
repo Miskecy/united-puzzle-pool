@@ -34,20 +34,27 @@ export async function deleteBlockExpiration(blockId: string) {
 	await client.del(`block:${blockId}:expires`);
 }
 
-export async function getActiveBlockByToken(tokenId: string) {
+export async function getActiveBlockByToken(tokenId: string, workerId?: string | null) {
 	const client = await connectRedis();
-	const activeBlock = await client.get(`token:${tokenId}:active-block`);
+	const key = workerId ? `token:${tokenId}:${workerId}:active-block` : `token:${tokenId}:active-block`;
+	const activeBlock = await client.get(key);
 	return activeBlock;
 }
 
-export async function setActiveBlock(tokenId: string, blockId: string) {
+export async function setActiveBlock(tokenId: string, blockId: string, workerId?: string | null, ttl?: number) {
 	const client = await connectRedis();
-	await client.set(`token:${tokenId}:active-block`, blockId);
+	const key = workerId ? `token:${tokenId}:${workerId}:active-block` : `token:${tokenId}:active-block`;
+	if (ttl) {
+		await client.set(key, blockId, { EX: ttl });
+	} else {
+		await client.set(key, blockId);
+	}
 }
 
-export async function clearActiveBlock(tokenId: string) {
+export async function clearActiveBlock(tokenId: string, workerId?: string | null) {
 	const client = await connectRedis();
-	await client.del(`token:${tokenId}:active-block`);
+	const key = workerId ? `token:${tokenId}:${workerId}:active-block` : `token:${tokenId}:active-block`;
+	await client.del(key);
 }
 
 export default redisClient;

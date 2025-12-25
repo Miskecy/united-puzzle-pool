@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { formatNumber } from '@/lib/utils';
 import { formatCompactHexRange, isValidBitcoinAddress } from '@/lib/formatRange';
-import { Zap, Target, Clock, Bitcoin, Copy, BookOpen, Eye, EyeOff, Coins, Key, CheckCircle2, ArrowRight, XCircle, RotateCw, LogOut, Award } from 'lucide-react';
+import { Zap, Target, Clock, Bitcoin, Copy, BookOpen, Eye, EyeOff, Coins, Key, CheckCircle2, ArrowRight, XCircle, RotateCw, LogOut, Award, Chromium, Gpu } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import BrowserMiner from '@/components/BrowserMiner';
 
 interface UserStats {
 	token: string;
@@ -1151,196 +1153,210 @@ export default function UserDashboard() {
 					</Card>
 				</div>
 
-				{/* Active Block & Submission */}
-				{/* Grid 2/3 (Detalhes do Bloco) + 1/3 (Submissão) */}
-				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+				<Tabs defaultValue="manual" className="mb-8">
+					<TabsList className="grid w-full grid-cols-2 max-w-[400px] mb-4 bg-gray-100 p-1 rounded-xl">
+						<TabsTrigger value="manual" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all duration-200"><Gpu className='w-5 h-5 mr-2' />Manual / GPU</TabsTrigger>
+						<TabsTrigger value="browser" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all duration-200"><Chromium className='w-5 h-5 mr-2' />Browser Mining</TabsTrigger>
+					</TabsList>
+					<TabsContent value="manual">
+						{/* Active Block & Submission */}
+						{/* Grid 2/3 (Detalhes do Bloco) + 1/3 (Submissão) */}
+						<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-					{/* Coluna 1: Active Block Details & Request (2/3) */}
-					<div className='lg:col-span-2'>
-						<Card className="shadow-md border-gray-200 h-full">
-							<CardHeader className='border-b pb-4'>
-								<div className="flex items-center justify-between">
-									<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-										<Bitcoin className="h-5 w-5 text-blue-600" />
-										Active Work Block
-									</CardTitle>
-									{userStats.activeBlock ? (
-										<Button
-											type="button"
-											variant='outline'
-											className="inline-flex items-center gap-2 bg-white text-red-600 border-red-400 hover:bg-red-50 hover:text-red-700"
-											onClick={() => setConfirmDeleteOpen(true)}
-											disabled={deletingBlock}
-										>
-											<LogOut className='w-4 h-4' /> {deletingBlock ? 'Deleting...' : 'Delete Active Block'}
-										</Button>
-									) : null}
-								</div>
-								<CardDescription className='text-gray-600'>
-									{userStats.activeBlock ? 'Your current assigned key range and expiration time.' : 'No active block at the moment. Assign one below.'}
-								</CardDescription>
-							</CardHeader>
-							<CardContent className='pt-6'>
-								{userStats.activeBlock ? (
-									<div className="space-y-4">
-										{/* Range e Contagem */}
-										<div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-											<div className="flex items-center justify-between text-gray-700 text-sm">
-												<div className='flex items-center'>
-													<span className="font-mono text-gray-800 break-all pr-2">{formatCompactHexRange(userStats.activeBlock.startRange)}</span>
-													<ArrowRight className='w-4 h-4 text-blue-600' />
-													<span className="font-mono text-gray-800 break-all pl-2">{formatCompactHexRange(userStats.activeBlock.endRange)}</span>
-												</div>
-												<div className="px-3 py-1 rounded bg-white border text-xs font-semibold text-blue-600">
-													{formatRangePowerLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)}
-												</div>
-											</div>
-											<p className='text-xs text-green-600 mt-2'>{formatKeysCountLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)} keys in range</p>
-										</div>
-
-										<div className="flex items-center justify-between text-xs">
-											<div className="flex items-center gap-2">
-												<span className="text-gray-600 font-medium">Assigned</span>
-												<span className="font-semibold text-gray-800">{new Date(userStats.activeBlock.assignedAt).toLocaleString()}</span>
-												<Badge className="bg-gray-100 text-gray-800 border border-gray-300">
-													{formatAgo(userStats.activeBlock.assignedAt)}
-												</Badge>
-											</div>
-											<div className="flex items-center gap-2">
-												<span className="text-gray-600 font-medium">Expires</span>
-												{userStats.activeBlock.expiresAt && (
-													<>
-														<span className="font-semibold text-gray-800">{new Date(userStats.activeBlock.expiresAt).toLocaleString()}</span>
-														<Badge
-															className={new Date(userStats.activeBlock.expiresAt).getTime() <= Date.now() ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}
-														>
-															{new Date(userStats.activeBlock.expiresAt).getTime() <= Date.now() ? formatAgo(userStats.activeBlock.expiresAt) : formatUntil(userStats.activeBlock.expiresAt)}
-														</Badge>
-													</>
-												)}
-											</div>
-										</div>
-
-										{/* Endereços de Checkwork */}
-										<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-											<h4 className="text-gray-800 font-semibold mb-3">Checkwork Addresses ({checkworkAddresses.length})</h4>
-											<div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-												{checkworkAddresses.length > 0 ? (
-													checkworkAddresses.map((addr, idx) => (
-														<div key={idx} className="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-1.5">
-															<code className="text-gray-800 text-xs break-all font-mono">{addr}</code>
-															<button
-																type="button"
-																onClick={async () => {
-																	await navigator.clipboard.writeText(addr);
-																	setCopiedIdx(idx);
-																	setTimeout(() => setCopiedIdx(null), 1500);
-																}}
-																className="text-gray-600 hover:text-blue-600 text-xs inline-flex items-center gap-1 ml-2 shrink-0"
-															>
-																{copiedIdx === idx ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-															</button>
-														</div>
-													))
-												) : (
-													<p className="text-gray-600 text-sm">Loading checkwork addresses...</p>
-												)}
-											</div>
-											<Button
-												type="button"
-												variant='outline'
-												className="mt-3 w-full inline-flex items-center justify-center gap-2 text-blue-600 border-blue-400 hover:bg-blue-50"
-												onClick={async () => {
-													await navigator.clipboard.writeText(checkworkAddresses.join('\n'));
-													setCopiedAll(true);
-													setTimeout(() => setCopiedAll(false), 1500);
-												}}
-											>
-												{copiedAll ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-												<span>{copiedAll ? 'Copied All Addresses!' : 'Copy All Addresses'}</span>
-											</Button>
-										</div>
-									</div>
-								) : (
-									// Estado: Sem Bloco Ativo (Ação de Atribuir Bloco)
-									<div className="text-center py-8 bg-gray-50 border border-gray-200 rounded-lg">
-										<Bitcoin className="w-10 h-10 text-gray-500 mx-auto mb-4" />
-										<p className="text-gray-700 mb-4">You don’t have any active block at the moment. Request a new one.</p>
-										<div className="flex items-center justify-center gap-3 mb-4">
-											<label className="text-sm text-gray-600">Block length</label>
-											<select value={blockLength} onChange={(e) => setBlockLength(e.target.value)} className="px-3 py-2 border border-gray-300 rounded text-sm bg-white">
-												<option value="1T">1T</option>
-												<option value="10T">10T</option>
-												<option value="10B">10B</option>
-												<option value="100T">100T</option>
-											</select>
-										</div>
-										<Button
-											onClick={assignNewBlock}
-											disabled={assigningBlock || puzzleLoading}
-											className="bg-green-600 text-white hover:bg-green-700 font-semibold"
-										>
-											{assigningBlock ? 'Assigning...' : 'Assign New Block'}
-										</Button>
-									</div>
-								)}
-							</CardContent>
-						</Card>
-					</div>
-
-					{/* Coluna 2: Private Key Submission (1/3) */}
-					<div className='lg:col-span-1'>
-						<Card className="shadow-md border-gray-200 h-full">
-							<CardHeader className='border-b pb-4'>
-								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-									<Key className="h-5 w-5 text-purple-600" />
-									Solution Submission
-								</CardTitle>
-								<CardDescription className='text-gray-600'>Paste and submit your found private keys.</CardDescription>
-							</CardHeader>
-							<CardContent className='pt-6'>
-								<form onSubmit={handleSubmitBlock} className="space-y-4 h-full">
-									<div className="space-y-3 h-full flex flex-col">
+							{/* Coluna 1: Active Block Details & Request (2/3) */}
+							<div className='lg:col-span-2'>
+								<Card className="shadow-md border-gray-200 h-full">
+									<CardHeader className='border-b pb-4'>
 										<div className="flex items-center justify-between">
-											<div className="flex items-center gap-2">
-												{/* Status de Validação */}
-												<span className={`px-2 py-1 rounded border text-xs font-semibold ${validCount >= 10 ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>
-													Valid: {validCount} / 10
-												</span>
-												<span className="px-2 py-1 rounded bg-gray-100 border text-xs text-gray-700">Parsed: {parsedKeys.length}</span>
+											<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
+												<Bitcoin className="h-5 w-5 text-blue-600" />
+												Active Work Block
+											</CardTitle>
+											{userStats.activeBlock ? (
+												<Button
+													type="button"
+													variant='outline'
+													className="inline-flex items-center gap-2 bg-white text-red-600 border-red-400 hover:bg-red-50 hover:text-red-700"
+													onClick={() => setConfirmDeleteOpen(true)}
+													disabled={deletingBlock}
+												>
+													<LogOut className='w-4 h-4' /> {deletingBlock ? 'Deleting...' : 'Delete Active Block'}
+												</Button>
+											) : null}
+										</div>
+										<CardDescription className='text-gray-600'>
+											{userStats.activeBlock ? 'Your current assigned key range and expiration time.' : 'No active block at the moment. Assign one below.'}
+										</CardDescription>
+									</CardHeader>
+									<CardContent className='pt-6'>
+										{userStats.activeBlock ? (
+											<div className="space-y-4">
+												{/* Range e Contagem */}
+												<div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+													<div className="flex items-center justify-between text-gray-700 text-sm">
+														<div className='flex items-center'>
+															<span className="font-mono text-gray-800 break-all pr-2">{formatCompactHexRange(userStats.activeBlock.startRange)}</span>
+															<ArrowRight className='w-4 h-4 text-blue-600' />
+															<span className="font-mono text-gray-800 break-all pl-2">{formatCompactHexRange(userStats.activeBlock.endRange)}</span>
+														</div>
+														<div className="px-3 py-1 rounded bg-white border text-xs font-semibold text-blue-600">
+															{formatRangePowerLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)}
+														</div>
+													</div>
+													<p className='text-xs text-green-600 mt-2'>{formatKeysCountLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)} keys in range</p>
+												</div>
+
+												<div className="flex items-center justify-between text-xs">
+													<div className="flex items-center gap-2">
+														<span className="text-gray-600 font-medium">Assigned</span>
+														<span className="font-semibold text-gray-800">{new Date(userStats.activeBlock.assignedAt).toLocaleString()}</span>
+														<Badge className="bg-gray-100 text-gray-800 border border-gray-300">
+															{formatAgo(userStats.activeBlock.assignedAt)}
+														</Badge>
+													</div>
+													<div className="flex items-center gap-2">
+														<span className="text-gray-600 font-medium">Expires</span>
+														{userStats.activeBlock.expiresAt && (
+															<>
+																<span className="font-semibold text-gray-800">{new Date(userStats.activeBlock.expiresAt).toLocaleString()}</span>
+																<Badge
+																	className={new Date(userStats.activeBlock.expiresAt).getTime() <= Date.now() ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}
+																>
+																	{new Date(userStats.activeBlock.expiresAt).getTime() <= Date.now() ? formatAgo(userStats.activeBlock.expiresAt) : formatUntil(userStats.activeBlock.expiresAt)}
+																</Badge>
+															</>
+														)}
+													</div>
+												</div>
+
+												{/* Endereços de Checkwork */}
+												<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+													<h4 className="text-gray-800 font-semibold mb-3">Checkwork Addresses ({checkworkAddresses.length})</h4>
+													<div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+														{checkworkAddresses.length > 0 ? (
+															checkworkAddresses.map((addr, idx) => (
+																<div key={idx} className="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-1.5">
+																	<code className="text-gray-800 text-xs break-all font-mono">{addr}</code>
+																	<button
+																		type="button"
+																		onClick={async () => {
+																			await navigator.clipboard.writeText(addr);
+																			setCopiedIdx(idx);
+																			setTimeout(() => setCopiedIdx(null), 1500);
+																		}}
+																		className="text-gray-600 hover:text-blue-600 text-xs inline-flex items-center gap-1 ml-2 shrink-0"
+																	>
+																		{copiedIdx === idx ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+																	</button>
+																</div>
+															))
+														) : (
+															<p className="text-gray-600 text-sm">Loading checkwork addresses...</p>
+														)}
+													</div>
+													<Button
+														type="button"
+														variant='outline'
+														className="mt-3 w-full inline-flex items-center justify-center gap-2 text-blue-600 border-blue-400 hover:bg-blue-50"
+														onClick={async () => {
+															await navigator.clipboard.writeText(checkworkAddresses.join('\n'));
+															setCopiedAll(true);
+															setTimeout(() => setCopiedAll(false), 1500);
+														}}
+													>
+														{copiedAll ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+														<span>{copiedAll ? 'Copied All Addresses!' : 'Copy All Addresses'}</span>
+													</Button>
+												</div>
 											</div>
-											<button type="button" className="px-3 py-1 rounded-lg text-sm font-medium transition-colors bg-gray-200 hover:bg-gray-300 text-gray-800" onClick={async () => { try { const t = await navigator.clipboard.readText(); setKeysText(t); } catch { } }}>Paste</button>
-										</div>
-
-										<label className="block text-xs text-gray-600">Private Keys (10 required, hex format)</label>
-										<textarea
-											value={keysText}
-											onChange={(e) => setKeysText(e.target.value)}
-											className="w-full flex-1 h-full min-h-[250px] px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-600"
-											placeholder="Paste one key per line, or separated by spaces/commas."
-											disabled={!userStats.activeBlock}
-										/>
-
-										<div className="flex flex-wrap gap-3 pt-2">
-											<Button
-												type="submit"
-												disabled={submitting || !canSubmit || !userStats.activeBlock}
-												className="bg-purple-600 text-white hover:bg-purple-700 font-semibold inline-flex items-center gap-2"
-											>
-												{submitting ? 'Submitting...' : 'Submit Keys'}
-											</Button>
-											<Button type="button" onClick={handleExtractHexKeys} variant='outline' className="text-gray-700 hover:bg-gray-200">Extract 0x Keys</Button>
-											<Button type="button" onClick={() => { setKeysText(''); }} variant='outline' className="text-red-600 border-red-400 hover:bg-red-50">Clear All</Button>
-										</div>
-										{error && !error.includes('token') && (
-											<p className='text-red-600 text-sm pt-2 inline-flex items-center gap-1'><XCircle className='w-4 h-4' /> {error}</p>
+										) : (
+											// Estado: Sem Bloco Ativo (Ação de Atribuir Bloco)
+											<div className="text-center py-8 bg-gray-50 border border-gray-200 rounded-lg">
+												<Bitcoin className="w-10 h-10 text-gray-500 mx-auto mb-4" />
+												<p className="text-gray-700 mb-4">You don’t have any active block at the moment. Request a new one.</p>
+												<div className="flex items-center justify-center gap-3 mb-4">
+													<label className="text-sm text-gray-600">Block length</label>
+													<select value={blockLength} onChange={(e) => setBlockLength(e.target.value)} className="px-3 py-2 border border-gray-300 rounded text-sm bg-white">
+														<option value="1T">1T</option>
+														<option value="10T">10T</option>
+														<option value="10B">10B</option>
+														<option value="100T">100T</option>
+													</select>
+												</div>
+												<Button
+													onClick={assignNewBlock}
+													disabled={assigningBlock || puzzleLoading}
+													className="bg-green-600 text-white hover:bg-green-700 font-semibold"
+												>
+													{assigningBlock ? 'Assigning...' : 'Assign New Block'}
+												</Button>
+											</div>
 										)}
-									</div>
-								</form>
-							</CardContent>
-						</Card>
-					</div>
-				</div>
+									</CardContent>
+								</Card>
+							</div>
+
+							{/* Coluna 2: Private Key Submission (1/3) */}
+							<div className='lg:col-span-1'>
+								<Card className="shadow-md border-gray-200 h-full">
+									<CardHeader className='border-b pb-4'>
+										<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
+											<Key className="h-5 w-5 text-purple-600" />
+											Solution Submission
+										</CardTitle>
+										<CardDescription className='text-gray-600'>Paste and submit your found private keys.</CardDescription>
+									</CardHeader>
+									<CardContent className='pt-6'>
+										<form onSubmit={handleSubmitBlock} className="space-y-4 h-full">
+											<div className="space-y-3 h-full flex flex-col">
+												<div className="flex items-center justify-between">
+													<div className="flex items-center gap-2">
+														{/* Status de Validação */}
+														<span className={`px-2 py-1 rounded border text-xs font-semibold ${validCount >= 10 ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>
+															Valid: {validCount} / 10
+														</span>
+														<span className="px-2 py-1 rounded bg-gray-100 border text-xs text-gray-700">Parsed: {parsedKeys.length}</span>
+													</div>
+													<button type="button" className="px-3 py-1 rounded-lg text-sm font-medium transition-colors bg-gray-200 hover:bg-gray-300 text-gray-800" onClick={async () => { try { const t = await navigator.clipboard.readText(); setKeysText(t); } catch { } }}>Paste</button>
+												</div>
+
+												<label className="block text-xs text-gray-600">Private Keys (10 required, hex format)</label>
+												<textarea
+													value={keysText}
+													onChange={(e) => setKeysText(e.target.value)}
+													className="w-full flex-1 h-full min-h-[250px] px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-600"
+													placeholder="Paste one key per line, or separated by spaces/commas."
+													disabled={!userStats.activeBlock}
+												/>
+
+												<div className="flex flex-wrap gap-3 pt-2">
+													<Button
+														type="submit"
+														disabled={submitting || !canSubmit || !userStats.activeBlock}
+														className="bg-purple-600 text-white hover:bg-purple-700 font-semibold inline-flex items-center gap-2"
+													>
+														{submitting ? 'Submitting...' : 'Submit Keys'}
+													</Button>
+													<Button type="button" onClick={handleExtractHexKeys} variant='outline' className="text-gray-700 hover:bg-gray-200">Extract 0x Keys</Button>
+													<Button type="button" onClick={() => { setKeysText(''); }} variant='outline' className="text-red-600 border-red-400 hover:bg-red-50">Clear All</Button>
+												</div>
+												{error && !error.includes('token') && (
+													<p className='text-red-600 text-sm pt-2 inline-flex items-center gap-1'><XCircle className='w-4 h-4' /> {error}</p>
+												)}
+											</div>
+										</form>
+									</CardContent>
+								</Card>
+							</div>
+						</div>
+					</TabsContent>
+					<TabsContent value="browser">
+						<BrowserMiner
+							puzzleAddress={puzzleMeta?.address || undefined}
+						// forceShowFoundKey={true} 
+						/>
+					</TabsContent>
+				</Tabs>
 
 				{/* Quick Actions & Docs */}
 				<div className="max-w-7xl mx-auto">
