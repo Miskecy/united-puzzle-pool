@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Play, Square, RefreshCw, Cpu, CheckCircle2, AlertCircle, Settings, Chromium, Copy, Zap } from 'lucide-react';
-import CoinKey from 'coinkey';
 import { Switch } from './ui/switch';
 
 // Helper functions
@@ -109,7 +108,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		settingsRef.current = { customStart, customEnd, customTargets, customLength, autoSubmit };
 	}, [customStart, customEnd, customTargets, customLength, autoSubmit]);
 
-	const workerRef = useRef<NodeJS.Timeout | null>(null);
+	const workerRef = useRef<Worker | null>(null);
 	const timerRef = useRef<NodeJS.Timeout | null>(null);
 
 	// Helper to fetch a block
@@ -184,7 +183,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		engineRef.current.mining = false;
 		setIsMining(false);
 		if (workerRef.current) {
-			clearTimeout(workerRef.current);
+			workerRef.current.terminate();
 			workerRef.current = null;
 		}
 		if (timerRef.current) {
@@ -208,173 +207,156 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		setStatusMessage(`Stopped. Ran for ${formatTime(Date.now() - engineRef.current.startTime)}`);
 	}, [workerId]);
 
-	const mineLoop = useCallback(async () => {
-		const engine = engineRef.current;
-		if (!engine.mining || !engine.currentBlock) return;
+	const startWorker = useCallback((block: BlockData) => {
+		if (workerRef.current) {
+			workerRef.current.terminate();
+		}
 
-		const BATCH_SIZE = 500; // Increased batch size for 200k blocks
-		const { currentBlock } = engine;
-		let current = currentBlock.current;
-		const end = currentBlock.end;
+		const worker = new Worker('/miner-worker.js');
+		workerRef.current = worker;
 
-		// 1. Process Batch
-		for (let i = 0; i < BATCH_SIZE; i++) {
-			if (current > end) {
-				// Block Finished
-				// Submit results
-				submitBlock(currentBlock.id, currentBlock.found);
+		// Send START
+		const targets = settingsRef.current.customTargets
+			? settingsRef.current.customTargets.split(/[\n,]+/).map(t => t.trim()).filter(t => t)
+			: block.checkwork;
 
-				// If we are in a custom range mode, stop here
+		worker.postMessage({
+			type: 'START',
+			data: {
+				start: bigIntToHex64(block.start),
+				end: bigIntToHex64(block.end),
+				targets: targets,
+				puzzleAddress: puzzleAddress
+			}
+		});
+
+		worker.onerror = (e) => {
+			console.error("Worker error:", e);
+			setError("Worker error: " + (e.message || "Unknown error"));
+			stopMining();
+		};
+
+		worker.onmessage = (e) => {
+			if (!engineRef.current.mining) return;
+			const { type, data, key, isPuzzle } = e.data;
+
+			if (type === 'PROGRESS') {
+				const { current, keysScanned: delta, speed: workerSpeed } = data;
+				const engine = engineRef.current;
+
+				// Update counters
+				engine.totalScanned += delta;
+				engine.sessionScanned += delta;
+
+				// Calculate speed (Worker might send 0, we can calc mostly here or use worker provided if we improved it)
+				// Use main thread speed calc for now based on delta and time
+				const now = Date.now();
+				if (now - engine.lastTick > 1000) {
+					const elapsed = (now - engine.lastTick) / 1000;
+					const currentSpeed = Math.round(engine.sessionScanned / elapsed);
+					setSpeed(currentSpeed);
+					engine.sessionScanned = 0;
+					engine.lastTick = now;
+				}
+
+				// Update Progress
+				if (engine.currentBlock) {
+					const currentBig = parseHexToBigInt(current);
+					engine.currentBlock.current = currentBig;
+
+					const total = Number(engine.currentBlock.end - engine.currentBlock.start);
+					const done = Number(currentBig - engine.currentBlock.start);
+					const pct = (done / total) * 100;
+
+					setProgress(Math.min(100, pct));
+					setKeysScanned(engine.totalScanned);
+					setCurrentKey('0x' + current);
+
+					// Prefetch Logic (90%)
+					const isCustom = settingsRef.current.customStart && settingsRef.current.customEnd;
+					if (pct > 90 && !engine.nextBlock && !engine.isFetchingNext && !isCustom) {
+						const token = localStorage.getItem('pool-token');
+						if (token) {
+							engine.isFetchingNext = true;
+							fetchBlock(token, true).then(block => {
+								if (block) engine.nextBlock = block;
+								engine.isFetchingNext = false;
+							});
+						}
+					}
+				}
+			} else if (type === 'FOUND') {
+				const privateKeyHex = key;
+				const engine = engineRef.current;
+
+				if (engine.currentBlock) {
+					engine.currentBlock.found.push(privateKeyHex);
+					setFoundKeys(prev => [...prev, privateKeyHex]);
+
+					if (isPuzzle) {
+						setPuzzleKey(privateKeyHex);
+						alert(`FOUND PUZZLE KEY: ${privateKeyHex}`);
+						if (settingsRef.current.autoSubmit) {
+							submitBlock(engine.currentBlock.id, [privateKeyHex]);
+						}
+						stopMining();
+					} else {
+						// Regular target found
+						// Just log/store
+					}
+				}
+			} else if (type === 'FINISHED') {
+				const engine = engineRef.current;
+				if (!engine.currentBlock) return;
+
+				// Submit
+				submitBlock(engine.currentBlock.id, engine.currentBlock.found);
+
+				// Custom range check
 				if (settingsRef.current.customStart && settingsRef.current.customEnd) {
-					// Force UI to 100% and update final stats
 					setProgress(100);
-					setKeysScanned(engine.totalScanned + i);
 					setStatusMessage('Custom range finished.');
 					stopMining();
 					return;
 				}
 
-				// Switch to next block
+				// Next block
 				if (engine.nextBlock) {
 					engine.currentBlock = engine.nextBlock;
 					engine.nextBlock = null;
-					engine.isFetchingNext = false;
-					// Reset local vars for next iteration immediately
-					current = engine.currentBlock.current;
 					setActiveBlockId(engine.currentBlock.id);
 					setCheckworkAddresses(engine.currentBlock.checkwork);
-					setFoundKeys([]); // Clear found keys for new block
+					setFoundKeys([]);
 					setProgress(0);
 					setStatusMessage('Mining next block...');
-					break; // Break inner loop to restart with new block
+
+					// Restart worker with new block
+					startWorker(engine.currentBlock);
 				} else {
-					// No next block yet? Wait a bit or try to fetch immediately if not fetching
-					if (!engine.isFetchingNext) {
-						setStatusMessage('Fetching next block...');
-						const token = localStorage.getItem('pool-token');
-						if (token) {
-							engine.isFetchingNext = true;
-							fetchBlock(token, true).then(block => {
-								if (block) {
-									engine.currentBlock = block;
-									engine.isFetchingNext = false;
-									setActiveBlockId(block.id);
-									setCheckworkAddresses(block.checkwork);
-									mineLoop(); // Restart loop
-								} else {
-									setError('Failed to fetch next block');
-									stopMining();
-								}
-							});
-						}
-						return; // Exit loop, fetch callback will restart
+					// Fetch next
+					setStatusMessage('Fetching next block...');
+					const token = localStorage.getItem('pool-token');
+					if (token) {
+						fetchBlock(token, true).then(block => {
+							if (block) {
+								engine.currentBlock = block;
+								setActiveBlockId(block.id);
+								setCheckworkAddresses(block.checkwork);
+								setFoundKeys([]);
+								setProgress(0);
+								startWorker(block);
+							} else {
+								setError('Failed to fetch next block');
+								stopMining();
+							}
+						});
+					} else {
+						stopMining();
 					}
-					// If already fetching, just wait (reschedule)
-					workerRef.current = setTimeout(mineLoop, 100);
-					return;
 				}
 			}
-
-			const privateKeyHex = bigIntToHex64(current);
-
-			try {
-				const buffer = Buffer.from(privateKeyHex, 'hex');
-				const ck = new CoinKey(buffer);
-				const address = ck.publicAddress;
-
-				if (puzzleAddress && address === puzzleAddress) {
-					currentBlock.found.push(privateKeyHex);
-					setFoundKeys(prev => [...prev, privateKeyHex]);
-					setPuzzleKey(privateKeyHex);
-					if (settingsRef.current.autoSubmit) {
-						submitBlock(currentBlock.id, [privateKeyHex]);
-					}
-					alert(`FOUND PUZZLE KEY: ${privateKeyHex}`);
-					stopMining();
-					return;
-				}
-
-				// Check against custom targets if provided, otherwise check against block checkwork
-				const targets = settingsRef.current.customTargets
-					? settingsRef.current.customTargets.split(/[\n,]+/).map(t => t.trim()).filter(t => t)
-					: currentBlock.checkwork;
-
-				if (targets.length > 0 && targets.includes(address)) {
-					currentBlock.found.push(privateKeyHex);
-					setFoundKeys(prev => [...prev, privateKeyHex]);
-				}
-			} catch (e) {
-				console.error("Crypto error:", e);
-				stopMining();
-				return;
-			}
-
-			current += 1n;
-		}
-
-		// Update Refs
-		engine.currentBlock.current = current;
-		engine.sessionScanned += BATCH_SIZE;
-		engine.totalScanned += BATCH_SIZE;
-
-		// 2. Prefetch Logic (at 90%)
-		const total = Number(engine.currentBlock.end - engine.currentBlock.start);
-		const done = Number(current - engine.currentBlock.start);
-		const pct = (done / total) * 100;
-
-		const isCustom = settingsRef.current.customStart && settingsRef.current.customEnd;
-
-		if (pct > 90 && !engine.nextBlock && !engine.isFetchingNext) {
-			// Don't prefetch if we are in custom range mode
-
-			if (!isCustom) {
-				const token = localStorage.getItem('pool-token');
-				if (token) {
-					engine.isFetchingNext = true;
-					// Fetch in background
-					fetchBlock(token, true).then(block => {
-						if (block) {
-							engine.nextBlock = block;
-						}
-						engine.isFetchingNext = false;
-					});
-				}
-			}
-		}
-
-		if (isCustom && pct >= 100) {
-			setStatusMessage('Custom range completed.');
-			stopMining();
-			return;
-		}
-
-		// 3. UI Updates (throttled)
-		const now = Date.now();
-
-		// Update UI more frequently for "rolling" effect
-		if (now - engine.lastAddressUpdate > 60) {
-			setCurrentKey('0x' + bigIntToHex64(current));
-			engine.lastAddressUpdate = now;
-		}
-
-		if (now - engine.lastTick > 1000) {
-			const elapsed = (now - engine.lastTick) / 1000;
-			const currentSpeed = Math.round(engine.sessionScanned / elapsed);
-
-			setSpeed(currentSpeed);
-			setKeysScanned(engine.totalScanned);
-			setProgress(Math.min(100, pct));
-			// Key updated in fast loop above
-
-			setElapsedTime(now - engine.startTime);
-
-			engine.sessionScanned = 0;
-			engine.lastTick = now;
-		}
-
-		// 4. Schedule next
-		workerRef.current = setTimeout(mineLoop, 0);
-	}, [puzzleAddress, stopMining, fetchBlock, submitBlock]); // foundKeys dependency is tricky, better to use ref for found keys if we want perfect accuracy, but state is okay for display
+		};
+	}, [puzzleAddress, fetchBlock, submitBlock, stopMining]);
 
 	const startMining = async () => {
 		try {
@@ -419,8 +401,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 			setIsMining(true);
 			setStatusMessage('Mining...');
 
-			// Start Loop
-			mineLoop();
+			// Start Worker
+			startWorker(block);
 
 			// Start Timer for UI
 			timerRef.current = setInterval(() => {
@@ -438,7 +420,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 	// Cleanup
 	useEffect(() => {
 		return () => {
-			if (workerRef.current) clearTimeout(workerRef.current);
+			if (workerRef.current) workerRef.current.terminate();
 			if (timerRef.current) clearInterval(timerRef.current);
 			engineRef.current.mining = false;
 		};
