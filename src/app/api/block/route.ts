@@ -524,7 +524,15 @@ async function handler(req: NextRequest) {
 				);
 			}
 
-			const expiresAt = calculateExpirationTime(12);
+			const isBrowserWorker = workerId && workerId.startsWith('browser-');
+			let expiresAt: Date;
+			if (isBrowserWorker) {
+				// 10 minutes for browser miners
+				expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+			} else {
+				// 12 hours for others
+				expiresAt = calculateExpirationTime(12);
+			}
 
 			// Create block assignment with retry on uniqueness
 			let blockAssignment: { id: string; startRange: string; endRange: string; checkworkAddresses: string; expiresAt: Date } | undefined;
