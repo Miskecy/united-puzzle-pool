@@ -11,6 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Play, Square, RefreshCw, Cpu, CheckCircle2, AlertCircle, Settings, Chromium, Copy, Zap } from 'lucide-react';
 import { Switch } from './ui/switch';
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select"
 
 // Helper functions
 function parseHexToBigInt(hex: string): bigint {
@@ -66,7 +73,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 	const [customEnd, setCustomEnd] = useState('');
 	const [customLength, setCustomLength] = useState('');
 	const [sizeInput, setSizeInput] = useState('');
-	const [sizeUnit, setSizeUnit] = useState('1');
+	const [sizeUnit, setSizeUnit] = useState('1000');
 	const [customTargets, setCustomTargets] = useState('');
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -87,17 +94,15 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 				} else if (len >= 1000000 && len % 1000000 === 0) {
 					setSizeInput((len / 1000000).toString());
 					setSizeUnit('1000000');
-				} else if (len >= 1000 && len % 1000 === 0) {
+				} else {
+					// Default to K
 					setSizeInput((len / 1000).toString());
 					setSizeUnit('1000');
-				} else {
-					setSizeInput(len.toString());
-					setSizeUnit('1');
 				}
 			}
 		} else {
 			setSizeInput('');
-			setSizeUnit('1');
+			setSizeUnit('1000');
 		}
 
 		setIsSettingsOpen(true);
@@ -108,7 +113,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		setCustomEnd('');
 		setCustomLength('');
 		setSizeInput('');
-		setSizeUnit('1');
+		setSizeUnit('1000');
 		setCustomTargets('');
 	};
 
@@ -443,7 +448,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 				totalScanned: 0,
 				sessionScanned: 0,
 				lastTick: Date.now(),
-				lastAddressUpdate: Date.now()
+				lastAddressUpdate: Date.now(),
+				stopRequested: false
 			};
 
 			setActiveBlockId(block.id);
@@ -612,34 +618,37 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 															if (!e.target.value) {
 																setCustomLength('');
 															} else {
-																const val = parseInt(e.target.value);
+																const val = parseFloat(e.target.value);
 																const unit = parseInt(sizeUnit);
 																if (!isNaN(val)) {
-																	setCustomLength((val * unit).toString());
+																	setCustomLength(Math.floor(val * unit).toString());
 																}
 															}
 														}}
 														type="number"
 													/>
-													<select
-														className="h-9 w-24 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+													<Select
 														value={sizeUnit}
-														onChange={(e) => {
-															setSizeUnit(e.target.value);
+														onValueChange={(value) => {
+															setSizeUnit(value);
 															if (sizeInput) {
-																const val = parseInt(sizeInput);
-																const unit = parseInt(e.target.value);
+																const val = parseFloat(sizeInput);
+																const unit = parseInt(value);
 																if (!isNaN(val)) {
-																	setCustomLength((val * unit).toString());
+																	setCustomLength(Math.floor(val * unit).toString());
 																}
 															}
 														}}
 													>
-														<option value="1">Keys</option>
-														<option value="1000">K (x10³)</option>
-														<option value="1000000">M (x10⁶)</option>
-														<option value="1000000000">B (x10⁹)</option>
-													</select>
+														<SelectTrigger className="w-32">
+															<SelectValue placeholder="Unit" />
+														</SelectTrigger>
+														<SelectContent>
+															<SelectItem value="1000">K (x10³)</SelectItem>
+															<SelectItem value="1000000">M (x10⁶)</SelectItem>
+															<SelectItem value="1000000000">B (x10⁹)</SelectItem>
+														</SelectContent>
+													</Select>
 												</div>
 												<p className="text-[10px] text-gray-400">
 													Leave empty for default (200,000 keys/block).
