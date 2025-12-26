@@ -67,6 +67,10 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 	const [error, setError] = useState<string | null>(null);
 	const [accordionValue, setAccordionValue] = useState<string>("");
 
+	// Submission Queue State
+	const [submissionQueue, setSubmissionQueue] = useState<{ blockId: string; keys: string[]; workerId: string; retries: number; timestamp: number }[]>([]);
+	const [isSubmitting, setIsSubmitting] = useState(false);
+
 	// Settings State
 	const [autoSubmit, setAutoSubmit] = useState(true);
 	const [customStart, setCustomStart] = useState('');
@@ -85,11 +89,24 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 	const [draftSizeUnit, setDraftSizeUnit] = useState('1000');
 	const [draftCustomTargets, setDraftCustomTargets] = useState('');
 
-	// Load settings from localStorage on mount
+	// Load settings and queue from localStorage on mount
 	useEffect(() => {
 		const savedAutoSubmit = localStorage.getItem('browser-miner-autosubmit');
 		const savedSizeInput = localStorage.getItem('browser-miner-blocksize-input');
 		const savedSizeUnit = localStorage.getItem('browser-miner-blocksize-unit');
+
+		// Load queue
+		try {
+			const savedQueue = localStorage.getItem('browser-miner-queue');
+			if (savedQueue) {
+				const parsed = JSON.parse(savedQueue);
+				if (Array.isArray(parsed)) {
+					setSubmissionQueue(parsed);
+				}
+			}
+		} catch (e) {
+			console.error("Failed to load submission queue", e);
+		}
 
 		if (savedAutoSubmit !== null) {
 			setAutoSubmit(savedAutoSubmit === 'true');
@@ -226,17 +243,29 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		}
 	}, [workerId]);
 
-	const submitBlock = useCallback(async (blockId: string, found: string[]) => {
-		const token = localStorage.getItem('pool-token');
-		if (!token) return false;
+	// Persist queue to localStorage whenever it changes
+	useEffect(() => {
+		localStorage.setItem('browser-miner-queue', JSON.stringify(submissionQueue));
+	}, [submissionQueue]);
 
-		// If autoSubmit is disabled, don't send keys (unless it's the puzzle key? But we can't distinguish easily here without address check)
-		// Assuming autoSubmit controls ALL key submissions to DB.
-		const keysToSend = settingsRef.current.autoSubmit ? found : [];
+	// Process Submission Queue
+	useEffect(() => {
+		if (submissionQueue.length === 0 || isSubmitting) return;
 
-		let retries = 3;
-		while (retries > 0) {
+		const processQueue = async () => {
+			setIsSubmitting(true);
+			const item = submissionQueue[0]; // Process oldest first
+			const token = localStorage.getItem('pool-token');
+
+			if (!token) {
+				// No token, can't submit. Wait? Or drop? 
+				// Better to keep in queue until token is back (user logs in)
+				setIsSubmitting(false);
+				return;
+			}
+
 			try {
+				console.log(`Processing queue item: Block ${item.blockId} (Retry ${item.retries})`);
 				const response = await fetch('/api/block/submit', {
 					method: 'POST',
 					headers: {
@@ -244,28 +273,60 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 						'pool-token': token,
 					},
 					body: JSON.stringify({
-						privateKeys: keysToSend.length > 0 ? keysToSend : [],
-						blockId: blockId,
-						workerId: workerId
+						privateKeys: item.keys,
+						blockId: item.blockId,
+						workerId: item.workerId
 					}),
 				});
 
 				if (response.ok) {
 					const data = await response.json();
-					console.log(`Block ${blockId} submitted. Credits: ${data.creditsAwarded || 0}`);
-					return true;
+					console.log(`Block ${item.blockId} submitted successfully. Credits: ${data.creditsAwarded || 0}`);
+					// Remove from queue
+					setSubmissionQueue(prev => prev.slice(1));
 				} else {
-					console.warn(`Submit failed for block ${blockId}, status: ${response.status}`);
+					// Handle error
+					const status = response.status;
+					if (status >= 400 && status < 500 && status !== 429) {
+						// Fatal error (Bad Request, Unauthorized, etc.) - except Rate Limit
+						// Drop it to avoid clogging the queue forever
+						console.warn(`Fatal error submitting block ${item.blockId}: ${status}. Dropping.`);
+						setSubmissionQueue(prev => prev.slice(1));
+					} else {
+						// Retryable error (5xx, 429)
+						console.warn(`Retryable error submitting block ${item.blockId}: ${status}. Waiting...`);
+						// Move to end or just keep at start with backoff?
+						// Let's keep at start but increment retry count and maybe wait longer
+						// For now, we just wait a bit before setting isSubmitting false
+						await new Promise(r => setTimeout(r, 2000));
+					}
 				}
 			} catch (e) {
-				console.error(`Submit error for block ${blockId} (retry ${4 - retries}/3):`, e);
+				console.error(`Network error submitting block ${item.blockId}`, e);
+				// Network error, retry later
+				await new Promise(r => setTimeout(r, 2000));
+			} finally {
+				setIsSubmitting(false);
 			}
+		};
 
-			retries--;
-			if (retries > 0) await new Promise(r => setTimeout(r, 1000));
-		}
+		processQueue();
+	}, [submissionQueue, isSubmitting]);
 
-		return false;
+	const submitBlock = useCallback((blockId: string, found: string[]) => {
+		// Add to queue instead of submitting directly
+		const keysToSend = settingsRef.current.autoSubmit ? found : [];
+
+		setSubmissionQueue(prev => [
+			...prev,
+			{
+				blockId,
+				keys: keysToSend.length > 0 ? keysToSend : [],
+				workerId,
+				retries: 0,
+				timestamp: Date.now()
+			}
+		]);
 	}, [workerId]);
 
 	const [isStopping, setIsStopping] = useState(false);
@@ -400,7 +461,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 						setPuzzleKey(privateKeyHex);
 						alert(`FOUND PUZZLE KEY: ${privateKeyHex}`);
 						if (settingsRef.current.autoSubmit) {
-							await submitBlock(engine.currentBlock.id, [privateKeyHex]);
+							submitBlock(engine.currentBlock.id, [privateKeyHex]);
 						}
 						stopMining(true);
 					} else {
@@ -412,12 +473,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 				const engine = engineRef.current;
 				if (!engine.currentBlock) return;
 
-				// Submit (Wait for it to ensure completion before moving to next block)
-				setStatusMessage('Submitting block...');
-				await submitBlock(engine.currentBlock.id, engine.currentBlock.found);
-
-				// Check if mining was stopped during submission
-				if (!engine.mining) return;
+				// Submit (Queue and forget)
+				submitBlock(engine.currentBlock.id, engine.currentBlock.found);
 
 				// Custom range check
 				if (settingsRef.current.customStart && settingsRef.current.customEnd) {
@@ -729,6 +786,11 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 									<span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
 								</span>}
 							</div>
+							{submissionQueue.length > 0 && (
+								<span className="text-[10px] text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
+									{submissionQueue.length} pending submit{submissionQueue.length > 1 ? 's' : ''}
+								</span>
+							)}
 						</div>
 						<div className="space-y-1 text-right">
 							<p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Speed</p>
