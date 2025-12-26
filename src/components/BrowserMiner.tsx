@@ -77,44 +77,96 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 	const [customTargets, setCustomTargets] = useState('');
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-	const openSettings = () => {
-		// Auto-fill with current block data if inputs are empty and we have a block
-		if (engineRef.current.currentBlock && !customStart && !customEnd) {
-			setCustomStart('0x' + bigIntToHex64(engineRef.current.currentBlock.start));
-			setCustomEnd('0x' + bigIntToHex64(engineRef.current.currentBlock.end));
+	// Settings Draft State (for Dialog)
+	const [draftAutoSubmit, setDraftAutoSubmit] = useState(true);
+	const [draftCustomStart, setDraftCustomStart] = useState('');
+	const [draftCustomEnd, setDraftCustomEnd] = useState('');
+	const [draftSizeInput, setDraftSizeInput] = useState('');
+	const [draftSizeUnit, setDraftSizeUnit] = useState('1000');
+	const [draftCustomTargets, setDraftCustomTargets] = useState('');
+
+	// Load settings from localStorage on mount
+	useEffect(() => {
+		const savedAutoSubmit = localStorage.getItem('browser-miner-autosubmit');
+		const savedSizeInput = localStorage.getItem('browser-miner-blocksize-input');
+		const savedSizeUnit = localStorage.getItem('browser-miner-blocksize-unit');
+
+		if (savedAutoSubmit !== null) {
+			setAutoSubmit(savedAutoSubmit === 'true');
+		}
+		if (savedSizeInput) {
+			setSizeInput(savedSizeInput);
+		}
+		if (savedSizeUnit) {
+			setSizeUnit(savedSizeUnit);
 		}
 
-		// Parse customLength for UI
-		if (customLength) {
-			const len = parseInt(customLength);
-			if (!isNaN(len)) {
-				if (len >= 1000000000 && len % 1000000000 === 0) {
-					setSizeInput((len / 1000000000).toString());
-					setSizeUnit('1000000000');
-				} else if (len >= 1000000 && len % 1000000 === 0) {
-					setSizeInput((len / 1000000).toString());
-					setSizeUnit('1000000');
-				} else {
-					// Default to K
-					setSizeInput((len / 1000).toString());
-					setSizeUnit('1000');
-				}
+		// Calculate customLength from saved size
+		if (savedSizeInput && savedSizeUnit) {
+			const val = parseFloat(savedSizeInput);
+			const unit = parseInt(savedSizeUnit);
+			if (!isNaN(val) && !isNaN(unit)) {
+				setCustomLength(Math.floor(val * unit).toString());
 			}
-		} else {
-			setSizeInput('');
-			setSizeUnit('1000');
+		}
+	}, []);
+
+	const openSettings = () => {
+		// Initialize draft state with current actual settings
+		setDraftAutoSubmit(autoSubmit);
+		setDraftCustomStart(customStart);
+		setDraftCustomEnd(customEnd);
+		setDraftSizeInput(sizeInput);
+		setDraftSizeUnit(sizeUnit);
+		setDraftCustomTargets(customTargets);
+
+		// Auto-fill draft with current block data if inputs are empty and we have a block
+		// This is for display convenience only, doesn't affect actual mining until saved
+		if (engineRef.current.currentBlock && !customStart && !customEnd) {
+			setDraftCustomStart('0x' + bigIntToHex64(engineRef.current.currentBlock.start));
+			setDraftCustomEnd('0x' + bigIntToHex64(engineRef.current.currentBlock.end));
 		}
 
 		setIsSettingsOpen(true);
 	};
 
+	const saveSettings = () => {
+		// Apply draft settings to main state
+		setAutoSubmit(draftAutoSubmit);
+		setCustomStart(draftCustomStart);
+		setCustomEnd(draftCustomEnd);
+		setSizeInput(draftSizeInput);
+		setSizeUnit(draftSizeUnit);
+		setCustomTargets(draftCustomTargets);
+
+		// Calculate customLength
+		if (draftSizeInput) {
+			const val = parseFloat(draftSizeInput);
+			const unit = parseInt(draftSizeUnit);
+			if (!isNaN(val)) {
+				setCustomLength(Math.floor(val * unit).toString());
+			} else {
+				setCustomLength('');
+			}
+		} else {
+			setCustomLength('');
+		}
+
+		// Persist to localStorage
+		localStorage.setItem('browser-miner-autosubmit', draftAutoSubmit.toString());
+		localStorage.setItem('browser-miner-blocksize-input', draftSizeInput);
+		localStorage.setItem('browser-miner-blocksize-unit', draftSizeUnit);
+
+		setIsSettingsOpen(false);
+	};
+
 	const clearCustomSettings = () => {
-		setCustomStart('');
-		setCustomEnd('');
-		setCustomLength('');
-		setSizeInput('');
-		setSizeUnit('1000');
-		setCustomTargets('');
+		// Clear drafts
+		setDraftCustomStart('');
+		setDraftCustomEnd('');
+		setDraftSizeInput('');
+		setDraftSizeUnit('1000');
+		setDraftCustomTargets('');
 	};
 
 	// Unique worker ID for this browser session to allow parallel mining
@@ -541,8 +593,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 											</div>
 											<Switch
 												id="autosubmit"
-												checked={autoSubmit}
-												onCheckedChange={(checked) => setAutoSubmit(checked)}
+												checked={draftAutoSubmit}
+												onCheckedChange={(checked) => setDraftAutoSubmit(checked)}
 											/>
 										</div>
 									</div>
@@ -554,7 +606,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 												<Cpu className="h-3.5 w-3.5" />
 												Range Strategy
 											</h4>
-											{(customStart || customEnd || customLength) && (
+											{(draftCustomStart || draftCustomEnd || draftSizeInput) && (
 												<Button
 													variant="link"
 													size="sm"
@@ -575,8 +627,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 														id="custom-start"
 														className="font-mono text-[11px] bg-muted/30 focus-visible:ring-orange-500"
 														placeholder="0x000..."
-														value={customStart}
-														onChange={(e) => setCustomStart(e.target.value)}
+														value={draftCustomStart}
+														onChange={(e) => setDraftCustomStart(e.target.value)}
 													/>
 												</div>
 												<div className="space-y-2">
@@ -585,8 +637,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 														id="custom-end"
 														className="font-mono text-[11px] bg-muted/30 focus-visible:ring-orange-500"
 														placeholder="0x0ff..."
-														value={customEnd}
-														onChange={(e) => setCustomEnd(e.target.value)}
+														value={draftCustomEnd}
+														onChange={(e) => setDraftCustomEnd(e.target.value)}
 													/>
 												</div>
 											</div>
@@ -597,8 +649,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 													id="custom-targets"
 													className="font-mono text-xs min-h-[80px]"
 													placeholder="Paste Bitcoin addresses here (one per line or comma separated)..."
-													value={customTargets}
-													onChange={(e) => setCustomTargets(e.target.value)}
+													value={draftCustomTargets}
+													onChange={(e) => setDraftCustomTargets(e.target.value)}
 												/>
 												<p className="text-[10px] text-gray-400">
 													If provided, only these addresses will be validated in the custom range. Puzzle address is always checked.
@@ -612,33 +664,13 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 														id="custom-length"
 														className="font-mono flex-1"
 														placeholder="Default: 200"
-														value={sizeInput}
-														onChange={(e) => {
-															setSizeInput(e.target.value);
-															if (!e.target.value) {
-																setCustomLength('');
-															} else {
-																const val = parseFloat(e.target.value);
-																const unit = parseInt(sizeUnit);
-																if (!isNaN(val)) {
-																	setCustomLength(Math.floor(val * unit).toString());
-																}
-															}
-														}}
+														value={draftSizeInput}
+														onChange={(e) => setDraftSizeInput(e.target.value)}
 														type="number"
 													/>
 													<Select
-														value={sizeUnit}
-														onValueChange={(value) => {
-															setSizeUnit(value);
-															if (sizeInput) {
-																const val = parseFloat(sizeInput);
-																const unit = parseInt(value);
-																if (!isNaN(val)) {
-																	setCustomLength(Math.floor(val * unit).toString());
-																}
-															}
-														}}
+														value={draftSizeUnit}
+														onValueChange={(value) => setDraftSizeUnit(value)}
 													>
 														<SelectTrigger className="w-32">
 															<SelectValue placeholder="Unit" />
@@ -663,7 +695,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 										Discard
 									</Button>
 									<Button
-										onClick={() => setIsSettingsOpen(false)}
+										onClick={saveSettings}
 										className="px-8 shadow-sm"
 									>
 										Save Configuration
