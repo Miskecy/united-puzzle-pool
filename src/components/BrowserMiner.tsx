@@ -120,13 +120,6 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		setDraftSizeUnit(sizeUnit);
 		setDraftCustomTargets(customTargets);
 
-		// Auto-fill draft with current block data if inputs are empty and we have a block
-		// This is for display convenience only, doesn't affect actual mining until saved
-		if (engineRef.current.currentBlock && !customStart && !customEnd) {
-			setDraftCustomStart('0x' + bigIntToHex64(engineRef.current.currentBlock.start));
-			setDraftCustomEnd('0x' + bigIntToHex64(engineRef.current.currentBlock.end));
-		}
-
 		setIsSettingsOpen(true);
 	};
 
@@ -164,8 +157,6 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		// Clear drafts
 		setDraftCustomStart('');
 		setDraftCustomEnd('');
-		setDraftSizeInput('');
-		setDraftSizeUnit('1000');
 		setDraftCustomTargets('');
 	};
 
@@ -548,8 +539,6 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		}
 	}, [forceShowFoundKey]);
 
-	const isCustomModified = !!(customStart && customEnd);
-
 	return (
 		<div className="space-y-6">
 			<Card className="border shadow-md">
@@ -606,7 +595,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 												<Cpu className="h-3.5 w-3.5" />
 												Range Strategy
 											</h4>
-											{(draftCustomStart || draftCustomEnd || draftSizeInput) && (
+											{(draftCustomStart || draftCustomEnd || draftCustomTargets) && (
 												<Button
 													variant="link"
 													size="sm"
