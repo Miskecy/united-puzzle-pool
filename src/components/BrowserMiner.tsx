@@ -539,6 +539,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		}
 	}, [forceShowFoundKey]);
 
+	const isCustomModified = !!(customStart && customEnd);
+
 	return (
 		<div className="space-y-6">
 			<Card className="border shadow-md">
