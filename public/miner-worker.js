@@ -1,29 +1,67 @@
 // Web Worker for Browser Mining
-// Imports Coinkey for address generation
+// Uses elliptic and crypto-js from CDN for reliability
+importScripts(
+    'https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.4/elliptic.min.js'
+);
+importScripts(
+    'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js'
+);
 
-importScripts('https://bundle.run/coinkey@3.0.0');
+// Initialize Elliptic Curve (secp256k1)
+const EC = elliptic.ec;
+const ec = new EC('secp256k1');
 
-// Try to resolve CoinKey from various potential global exports
-let CoinKey;
-if (typeof self.CoinKey !== 'undefined') {
-    CoinKey = self.CoinKey;
-} else if (typeof self.coinkey !== 'undefined') {
-    CoinKey = self.coinkey;
-} else if (typeof module !== 'undefined' && module.exports) {
-    CoinKey = module.exports;
-} else if (typeof window !== 'undefined' && window.CoinKey) {
-    CoinKey = window.CoinKey;
+// Base58 Alphabet
+const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const BASE = BigInt(58);
+
+// Helper: Convert Hex to Base58 (with leading zeros handling)
+function toBase58(hex) {
+    let n = BigInt('0x' + hex);
+    let result = '';
+    while (n > 0n) {
+        const remainder = n % BASE;
+        n = n / BASE;
+        result = ALPHABET[Number(remainder)] + result;
+    }
+    // Handle leading zeros (each '00' byte becomes a '1')
+    for (let i = 0; i < hex.length; i += 2) {
+        if (hex.substr(i, 2) === '00') {
+            result = '1' + result;
+        } else {
+            break;
+        }
+    }
+    return result;
 }
 
-if (!CoinKey) {
-    console.error('CoinKey library not found or failed to load.');
-}
-// Also need Buffer polyfill for coinkey if not present in bundle.run
-// bundle.run usually includes deps, but let's check.
-// If bundle.run fails, we might need a more robust solution, but let's try this.
-// Alternative: importScripts('https://unpkg.com/coinkey@3.0.0/dist/coinkey.bundle.js') - doesn't exist on unpkg directly.
+// Helper: Generate Bitcoin Address from Private Key Hex
+function generateAddress(privateKeyHex) {
+    // 1. Get Public Key (Compressed)
+    const key = ec.keyFromPrivate(privateKeyHex);
+    const pubKeyHex = key.getPublic(true, 'hex');
 
-// Helper for BigInt <-> Hex
+    // 2. SHA256(PublicKey)
+    const sha256 = CryptoJS.SHA256(CryptoJS.enc.Hex.parse(pubKeyHex));
+
+    // 3. RIPEMD160(SHA256)
+    const ripemd160 = CryptoJS.RIPEMD160(sha256);
+
+    // 4. Add Version Byte (0x00 for Mainnet)
+    const versionByte = '00';
+    const payloadHex = versionByte + ripemd160.toString(CryptoJS.enc.Hex);
+
+    // 5. Checksum: SHA256(SHA256(Payload))
+    const checksumHash = CryptoJS.SHA256(
+        CryptoJS.SHA256(CryptoJS.enc.Hex.parse(payloadHex))
+    );
+    const checksumHex = checksumHash.toString(CryptoJS.enc.Hex).substring(0, 8);
+
+    // 6. Base58 Encode (Payload + Checksum)
+    return toBase58(payloadHex + checksumHex);
+}
+
+// Helper: BigInt to 64-char Hex
 function bigIntToHex64(n) {
     return n.toString(16).padStart(64, '0');
 }
@@ -42,8 +80,12 @@ self.onmessage = function (e) {
 };
 
 function mineLoop(startHex, endHex, targets, puzzleAddress) {
-    let current = BigInt(startHex);
-    const end = BigInt(endHex);
+    // Ensure 0x prefix for BigInt conversion
+    const startStr = startHex.startsWith('0x') ? startHex : '0x' + startHex;
+    const endStr = endHex.startsWith('0x') ? endHex : '0x' + endHex;
+
+    let current = BigInt(startStr);
+    const end = BigInt(endStr);
 
     let keysScannedSinceLastReport = 0;
     let lastReport = Date.now();
@@ -51,7 +93,6 @@ function mineLoop(startHex, endHex, targets, puzzleAddress) {
     function runBatch() {
         if (!isMining) return;
 
-        // Check if finished
         if (current > end) {
             self.postMessage({ type: 'FINISHED' });
             isMining = false;
@@ -61,44 +102,14 @@ function mineLoop(startHex, endHex, targets, puzzleAddress) {
         const batchStart = Date.now();
         let scannedInBatch = 0;
 
-        // Process batch (Time-based for better background performance)
+        // Process batch (Time-based: 500ms)
         while (Date.now() - batchStart < 500) {
             if (current > end) break;
 
             const privateKeyHex = bigIntToHex64(current);
 
             try {
-                // Coinkey usage depends on how it's exposed.
-                // bundle.run usually exposes it as module.exports or global.
-                // We'll assume 'CoinKey' is available globally or we find it.
-
-                // Polyfill Buffer if missing (browser context)
-                if (typeof Buffer === 'undefined') {
-                    // Minimal Buffer implementation for Coinkey if needed
-                    // Actually Coinkey expects Buffer.
-                    // We can use a hex string if Coinkey supports it?
-                    // Docs say: new CoinKey(new Buffer(..., 'hex'))
-                    // We need a Buffer shim.
-                    self.Buffer = {
-                        from: (str, enc) => {
-                            if (enc === 'hex') {
-                                const bytes = new Uint8Array(str.length / 2);
-                                for (let i = 0; i < str.length; i += 2) {
-                                    bytes[i / 2] = parseInt(
-                                        str.substr(i, 2),
-                                        16
-                                    );
-                                }
-                                return bytes;
-                            }
-                            return new Uint8Array([]);
-                        },
-                    };
-                }
-
-                const buffer = self.Buffer.from(privateKeyHex, 'hex');
-                const ck = new CoinKey(buffer);
-                const address = ck.publicAddress;
+                const address = generateAddress(privateKeyHex);
 
                 // Check Puzzle
                 if (puzzleAddress && address === puzzleAddress) {
@@ -120,7 +131,7 @@ function mineLoop(startHex, endHex, targets, puzzleAddress) {
                     });
                 }
             } catch (e) {
-                // console.error("Crypto error", e);
+                console.error('Mining error:', e);
             }
 
             current += 1n;
@@ -132,20 +143,18 @@ function mineLoop(startHex, endHex, targets, puzzleAddress) {
         // Report progress
         const elapsed = (Date.now() - lastReport) / 1000;
         if (elapsed > 1) {
-            // Report every second
             self.postMessage({
                 type: 'PROGRESS',
                 data: {
                     current: bigIntToHex64(current),
-                    keysScanned: keysScannedSinceLastReport, // Send delta
-                    speed: 0, // Main thread can calc
+                    keysScanned: keysScannedSinceLastReport,
+                    speed: 0,
                 },
             });
             keysScannedSinceLastReport = 0;
             lastReport = Date.now();
         }
 
-        // Continue
         if (isMining) {
             setTimeout(runBatch, 0);
         }
