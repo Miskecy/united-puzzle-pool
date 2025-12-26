@@ -227,32 +227,45 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 	}, [workerId]);
 
 	const submitBlock = useCallback(async (blockId: string, found: string[]) => {
-		try {
-			const token = localStorage.getItem('pool-token');
-			if (!token) return;
+		const token = localStorage.getItem('pool-token');
+		if (!token) return false;
 
-			// If autoSubmit is disabled, don't send keys (unless it's the puzzle key? But we can't distinguish easily here without address check)
-			// Assuming autoSubmit controls ALL key submissions to DB.
-			const keysToSend = settingsRef.current.autoSubmit ? found : [];
+		// If autoSubmit is disabled, don't send keys (unless it's the puzzle key? But we can't distinguish easily here without address check)
+		// Assuming autoSubmit controls ALL key submissions to DB.
+		const keysToSend = settingsRef.current.autoSubmit ? found : [];
 
-			// Fire and forget, don't await in the loop
-			fetch('/api/block/submit', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'pool-token': token,
-				},
-				body: JSON.stringify({
-					privateKeys: keysToSend.length > 0 ? keysToSend : [],
-					blockId: blockId,
-					workerId: workerId
-				}),
-			}).then(res => res.json()).then(data => {
-				console.log(`Block ${blockId} submitted. Credits: ${data.creditsAwarded || 0}`);
-			}).catch(e => console.error('Submit error:', e));
-		} catch (e) {
-			console.error('Error submitting block:', e);
+		let retries = 3;
+		while (retries > 0) {
+			try {
+				const response = await fetch('/api/block/submit', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'pool-token': token,
+					},
+					body: JSON.stringify({
+						privateKeys: keysToSend.length > 0 ? keysToSend : [],
+						blockId: blockId,
+						workerId: workerId
+					}),
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					console.log(`Block ${blockId} submitted. Credits: ${data.creditsAwarded || 0}`);
+					return true;
+				} else {
+					console.warn(`Submit failed for block ${blockId}, status: ${response.status}`);
+				}
+			} catch (e) {
+				console.error(`Submit error for block ${blockId} (retry ${4 - retries}/3):`, e);
+			}
+
+			retries--;
+			if (retries > 0) await new Promise(r => setTimeout(r, 1000));
 		}
+
+		return false;
 	}, [workerId]);
 
 	const [isStopping, setIsStopping] = useState(false);
@@ -326,7 +339,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 			stopMining(true);
 		};
 
-		worker.onmessage = (e) => {
+		worker.onmessage = async (e) => {
 			if (!engineRef.current.mining) return;
 			const { type, data, key, isPuzzle } = e.data;
 
@@ -387,7 +400,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 						setPuzzleKey(privateKeyHex);
 						alert(`FOUND PUZZLE KEY: ${privateKeyHex}`);
 						if (settingsRef.current.autoSubmit) {
-							submitBlock(engine.currentBlock.id, [privateKeyHex]);
+							await submitBlock(engine.currentBlock.id, [privateKeyHex]);
 						}
 						stopMining(true);
 					} else {
@@ -399,8 +412,12 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 				const engine = engineRef.current;
 				if (!engine.currentBlock) return;
 
-				// Submit
-				submitBlock(engine.currentBlock.id, engine.currentBlock.found);
+				// Submit (Wait for it to ensure completion before moving to next block)
+				setStatusMessage('Submitting block...');
+				await submitBlock(engine.currentBlock.id, engine.currentBlock.found);
+
+				// Check if mining was stopped during submission
+				if (!engine.mining) return;
 
 				// Custom range check
 				if (settingsRef.current.customStart && settingsRef.current.customEnd) {
