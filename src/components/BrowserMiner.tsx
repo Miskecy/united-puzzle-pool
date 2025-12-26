@@ -65,6 +65,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 	const [customStart, setCustomStart] = useState('');
 	const [customEnd, setCustomEnd] = useState('');
 	const [customLength, setCustomLength] = useState('');
+	const [sizeInput, setSizeInput] = useState('');
+	const [sizeUnit, setSizeUnit] = useState('1');
 	const [customTargets, setCustomTargets] = useState('');
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -73,8 +75,31 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		if (engineRef.current.currentBlock && !customStart && !customEnd) {
 			setCustomStart('0x' + bigIntToHex64(engineRef.current.currentBlock.start));
 			setCustomEnd('0x' + bigIntToHex64(engineRef.current.currentBlock.end));
-			setCustomLength((engineRef.current.currentBlock.end - engineRef.current.currentBlock.start).toString());
 		}
+
+		// Parse customLength for UI
+		if (customLength) {
+			const len = parseInt(customLength);
+			if (!isNaN(len)) {
+				if (len >= 1000000000 && len % 1000000000 === 0) {
+					setSizeInput((len / 1000000000).toString());
+					setSizeUnit('1000000000');
+				} else if (len >= 1000000 && len % 1000000 === 0) {
+					setSizeInput((len / 1000000).toString());
+					setSizeUnit('1000000');
+				} else if (len >= 1000 && len % 1000 === 0) {
+					setSizeInput((len / 1000).toString());
+					setSizeUnit('1000');
+				} else {
+					setSizeInput(len.toString());
+					setSizeUnit('1');
+				}
+			}
+		} else {
+			setSizeInput('');
+			setSizeUnit('1');
+		}
+
 		setIsSettingsOpen(true);
 	};
 
@@ -82,6 +107,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		setCustomStart('');
 		setCustomEnd('');
 		setCustomLength('');
+		setSizeInput('');
+		setSizeUnit('1');
 		setCustomTargets('');
 	};
 
@@ -98,7 +125,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		totalScanned: 0,
 		sessionScanned: 0,
 		lastTick: Date.now(),
-		lastAddressUpdate: Date.now()
+		lastAddressUpdate: Date.now(),
+		stopRequested: false
 	});
 
 	const settingsRef = useRef({ customStart, customEnd, customTargets, customLength, autoSubmit });
@@ -179,9 +207,23 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		}
 	}, [workerId]);
 
-	const stopMining = useCallback(() => {
+	const [isStopping, setIsStopping] = useState(false);
+
+	const stopMining = useCallback((force: boolean = false) => {
+		// If graceful stop requested and mining is active
+		if (!force && engineRef.current.mining) {
+			setIsStopping(true);
+			engineRef.current.stopRequested = true;
+			setStatusMessage('Finishing current block...');
+			return;
+		}
+
+		// Force stop or actual stop logic
 		engineRef.current.mining = false;
+		engineRef.current.stopRequested = false;
 		setIsMining(false);
+		setIsStopping(false);
+
 		if (workerRef.current) {
 			workerRef.current.terminate();
 			workerRef.current = null;
@@ -233,7 +275,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		worker.onerror = (e) => {
 			console.error("Worker error:", e);
 			setError("Worker error: " + (e.message || "Unknown error"));
-			stopMining();
+			stopMining(true);
 		};
 
 		worker.onmessage = (e) => {
@@ -299,7 +341,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 						if (settingsRef.current.autoSubmit) {
 							submitBlock(engine.currentBlock.id, [privateKeyHex]);
 						}
-						stopMining();
+						stopMining(true);
 					} else {
 						// Regular target found
 						// Just log/store
@@ -316,7 +358,15 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 				if (settingsRef.current.customStart && settingsRef.current.customEnd) {
 					setProgress(100);
 					setStatusMessage('Custom range finished.');
-					stopMining();
+					stopMining(true);
+					return;
+				}
+
+				// Check if stop was requested
+				if (engine.stopRequested) {
+					setProgress(100);
+					setStatusMessage('Block finished. Stopping...');
+					stopMining(true);
 					return;
 				}
 
@@ -347,11 +397,11 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 								startWorker(block);
 							} else {
 								setError('Failed to fetch next block');
-								stopMining();
+								stopMining(true);
 							}
 						});
 					} else {
-						stopMining();
+						stopMining(true);
 					}
 				}
 			}
@@ -440,7 +490,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		}
 	}, [forceShowFoundKey]);
 
-	const isCustomModified = !!(customStart || customEnd || customLength);
+	const isCustomModified = !!(customStart && customEnd);
 
 	return (
 		<div className="space-y-6">
@@ -551,14 +601,46 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 
 											<div className="grid grid-cols-1 gap-2">
 												<Label htmlFor="custom-length" className="text-xs font-semibold text-gray-500 uppercase">Block Size (Keys)</Label>
-												<Input
-													id="custom-length"
-													className="font-mono"
-													placeholder="Default: 200000"
-													value={customLength}
-													onChange={(e) => setCustomLength(e.target.value)}
-													type="number"
-												/>
+												<div className="flex gap-2">
+													<Input
+														id="custom-length"
+														className="font-mono flex-1"
+														placeholder="Default: 200"
+														value={sizeInput}
+														onChange={(e) => {
+															setSizeInput(e.target.value);
+															if (!e.target.value) {
+																setCustomLength('');
+															} else {
+																const val = parseInt(e.target.value);
+																const unit = parseInt(sizeUnit);
+																if (!isNaN(val)) {
+																	setCustomLength((val * unit).toString());
+																}
+															}
+														}}
+														type="number"
+													/>
+													<select
+														className="h-9 w-24 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+														value={sizeUnit}
+														onChange={(e) => {
+															setSizeUnit(e.target.value);
+															if (sizeInput) {
+																const val = parseInt(sizeInput);
+																const unit = parseInt(e.target.value);
+																if (!isNaN(val)) {
+																	setCustomLength((val * unit).toString());
+																}
+															}
+														}}
+													>
+														<option value="1">Keys</option>
+														<option value="1000">K (x10³)</option>
+														<option value="1000000">M (x10⁶)</option>
+														<option value="1000000000">B (x10⁹)</option>
+													</select>
+												</div>
 												<p className="text-[10px] text-gray-400">
 													Leave empty for default (200,000 keys/block).
 												</p>
@@ -627,7 +709,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 						</div>
 						<div className="flex justify-between text-xs text-gray-500 font-mono">
 							<span>{keysScanned.toLocaleString()} keys scanned total</span>
-							<span>{engineRef.current.nextBlock ? 'Next block ready' : '...'}</span>
+							<span>{!isStopping && engineRef.current.nextBlock ? 'Next block ready' : '...'}</span>
 						</div>
 						{engineRef.current.currentBlock && (
 							<div className="flex flex-col gap-1 text-[10px] text-gray-400 font-mono bg-gray-50 p-2 rounded border border-gray-100">
@@ -664,10 +746,27 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 
 					<div className="flex gap-4 pt-2">
 						<Button
-							className={`flex-1 h-12 text-lg font-semibold shadow-sm transition-all ${isMining ? 'bg-red-500 hover:bg-red-600 active:scale-95' : (isCustomModified ? 'bg-yellow-500 hover:bg-yellow-600 text-black active:scale-95' : 'bg-green-600 hover:bg-green-700 active:scale-95')}`}
-							onClick={isMining ? stopMining : startMining}
+							className={`flex-1 h-12 text-lg font-semibold shadow-sm transition-all ${isStopping
+								? 'bg-orange-500 hover:bg-orange-600 active:scale-95'
+								: isMining
+									? 'bg-red-500 hover:bg-red-600 active:scale-95'
+									: (isCustomModified ? 'bg-yellow-500 hover:bg-yellow-600 text-black active:scale-95' : 'bg-green-600 hover:bg-green-700 active:scale-95')
+								}`}
+							onClick={() => {
+								if (isStopping) {
+									stopMining(true);
+								} else if (isMining) {
+									stopMining(false);
+								} else {
+									startMining();
+								}
+							}}
 						>
-							{isMining ? (
+							{isStopping ? (
+								<>
+									<Square className="mr-2 h-5 w-5 animate-pulse" /> Finishing... (Force Stop)
+								</>
+							) : isMining ? (
 								<>
 									<Square className="mr-2 h-5 w-5" /> Stop ({formatTime(elapsedTime)})
 								</>
