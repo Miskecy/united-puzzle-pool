@@ -234,6 +234,13 @@ async function handler(req: NextRequest) {
 				const rnd = randomBigIntBelow(span);
 				sizeKeys = min + rnd;
 			}
+
+			// Enforce hard limit of 1000T (1000 * 10^12)
+			const MAX_ALLOWED_SIZE = BigInt('1000000000000000'); 
+			if (sizeKeys > MAX_ALLOWED_SIZE) {
+				sizeKeys = MAX_ALLOWED_SIZE;
+			}
+
 			const sizeClamped = sizeKeys > maxRange ? maxRange : sizeKeys;
 
 			// 4. Se não estiver pulando ativo, verifica se já tem bloco ativo
