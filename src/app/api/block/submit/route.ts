@@ -65,9 +65,9 @@ async function handler(req: NextRequest) {
 			);
 		}
 
-		if (!body.privateKeys || !Array.isArray(body.privateKeys) || body.privateKeys.length < 10) {
+		if (!body.privateKeys || !Array.isArray(body.privateKeys) || body.privateKeys.length === 0) {
 			return new Response(
-				JSON.stringify({ error: 'At least 10 private keys must be provided' }),
+				JSON.stringify({ error: 'At least 1 private key must be provided' }),
 				{ status: 400, headers: { 'Content-Type': 'application/json' } }
 			);
 		}

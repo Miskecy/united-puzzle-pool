@@ -315,7 +315,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 
 	const submitBlock = useCallback((blockId: string, found: string[]) => {
 		// Add to queue instead of submitting directly
-		const keysToSend = settingsRef.current.autoSubmit ? found : [];
+		// Always send found keys regardless of autoSubmit setting, as they are required for validation
+		const keysToSend = found;
 
 		setSubmissionQueue(prev => [
 			...prev,
