@@ -15,7 +15,10 @@ export default function GPUScriptDocs() {
     "user_token": "YOUR_POOL_TOKEN",
     "worker_name": "your_worker_name",
     "program_name": "VanitySearch | cuBitCrack | VanitySearch-V3",
-    "program_path": "./VanitySearch | ./cuBitCrack | ./VanitySearch-V3",
+    "gpu_index_map": {
+        "0": { "alg_path": "./bin/vanitysearch86-v3", "share": 65 },
+        "1": { "alg_path": "./bin/vanitysearch75-v3", "share": 35 }
+    },
     "program_arguments": "",
     "block_length": "1T",
     "oneshot": false,
@@ -57,7 +60,7 @@ export default function GPUScriptDocs() {
 					<CardContent className="pt-6">
 						<ul className="text-gray-700 text-sm space-y-2 list-disc pl-5">
 							<li>Fetches a block, writes addresses to <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">in.txt</code>, runs the selected tool with <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">--keyspace</code>, parses <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">out.txt</code>, and posts keys in batches of 10.</li>
-							<li>Auto-selects <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">BitCrack</code> for blocks under <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">1T</code> on single GPU and <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">VanitySearch</code> otherwise. Multi-GPU forces <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">VanitySearch</code>.</li>
+							<li>Support for mixed-GPU setups using <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">gpu_index_map</code>. You can define specific binaries and weighted workload shares (e.g., 65% for GPU0, 35% for GPU1) to optimize performance across different card generations (e.g., RTX 2070 + RTX 3070).</li>
 							<li>Reloads <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">settings.json</code> every iteration so you can edit while running. Supports configurable delay via <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">post_block_delay_enabled</code> and <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">post_block_delay_minutes</code> (default 10s).</li>
 						</ul>
 					</CardContent>
@@ -74,7 +77,7 @@ export default function GPUScriptDocs() {
 					<CardContent className="pt-6">
 						<CodeSnippet code={exampleSettingsJson} lang="json" />
 
-						<p className="text-gray-700 text-sm mt-3">Configure <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">api_url</code>, your <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">user_token</code>, and choose <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">program_name</code> with matching <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">program_path</code> and <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">program_arguments</code>. Use <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">post_block_delay_minutes</code> and Telegram fields if needed.</p>
+						<p className="text-gray-700 text-sm mt-3">Configure <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">api_url</code> and <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">user_token</code>. Use <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">gpu_index_map</code> to assign specific binaries and shares to each GPU index. The <code className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono">share</code> property allows you to balance the workload (e.g., giving a faster card a larger slice of the keyspace).</p>
 					</CardContent>
 				</Card>
 
