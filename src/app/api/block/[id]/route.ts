@@ -78,6 +78,8 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 			addressMap,
 			matchedCount,
 			missingAddresses,
+			status: block.status,
+			expiresAt: block.expiresAt,
 		}
 
 		return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } })

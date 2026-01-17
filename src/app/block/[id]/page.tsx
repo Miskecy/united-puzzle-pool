@@ -1,9 +1,9 @@
-import { Gauge, Hash, Clock, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Gauge, Hash, Clock, ArrowRight } from 'lucide-react'
 import { headers } from 'next/headers'
-import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import BlockLiveClient from '@/components/BlockLiveClient'
 import CopyButton from '@/components/CopyButton'
+import BackButton from '@/components/BackButton'
 
 function formatSpeed(n?: number | null): string {
 	if (!n || !isFinite(n) || n <= 0) return '—'
@@ -81,12 +81,14 @@ interface BlockData {
 	bitcoinAddress: string;
 	puzzleAddress?: string | null;
 	tokenMasked: string;
+	status: "ACTIVE" | "COMPLETED" | "EXPIRED" | string;
 	hexRangeStart: string;
 	hexRangeEnd: string;
 	hexRangeStartRaw: string;
 	hexRangeEndRaw: string;
 	assignedAt: string;
 	completedAt?: string | null;
+	expiresAt?: string | null;
 	durationSeconds: number | null;
 	keysValidated: number;
 	avgSpeedKeysPerSec: number | null;
@@ -122,10 +124,7 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 				{/* Header Section */}
 				<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 border-b border-gray-200 pb-4">
 					<div className="flex items-center gap-3">
-						<Link href="/overview" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium">
-							<ArrowLeft className="h-4 w-4" />
-							<span className="text-sm">Back to Overview</span>
-						</Link>
+						<BackButton />
 						<h1 className="text-3xl font-bold text-gray-900 ml-4">Block Details</h1>
 					</div>
 				</div>
@@ -151,6 +150,10 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							{block.completedAt ? (
 								<span className="inline-flex items-center gap-1 px-3 py-1 bg-green-100 text-green-700 rounded font-medium text-sm">
 									<Clock className="h-4 w-4" /> Completed: {timeAgoStr(block.completedAt)}
+								</span>
+							) : block.status === 'EXPIRED' ? (
+								<span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded font-medium text-sm">
+									<Clock className="h-4 w-4" /> Expired: {timeAgoStr(block.expiresAt ?? undefined)}
 								</span>
 							) : (
 								<span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-700 rounded font-medium text-sm">
@@ -232,7 +235,7 @@ export default async function BlockDetailsPage({ params }: { params: Promise<{ i
 							</Card>
 						</div>
 
-                    <BlockLiveClient id={block.id} hexRangeStart={block.hexRangeStart} hexRangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} initialAddressMap={block.addressMap} completedAt={block.completedAt} puzzleAddress={block.puzzleAddress ?? undefined} />
+						<BlockLiveClient id={block.id} hexRangeStart={block.hexRangeStart} hexRangeEnd={block.hexRangeEnd} checkworkAddresses={block.checkworkAddresses} initialAddressMap={block.addressMap} completedAt={block.completedAt} puzzleAddress={block.puzzleAddress ?? undefined} />
 
 
 					</div>
