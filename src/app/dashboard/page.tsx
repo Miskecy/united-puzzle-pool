@@ -1232,7 +1232,7 @@ export default function UserDashboard() {
 												{/* Endereços de Checkwork */}
 												<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
 													<h4 className="text-gray-800 font-semibold mb-3">Checkwork Addresses ({checkworkAddresses.length})</h4>
-													<div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+													<div className="space-y-2 max-h-fit overflow-y-auto pr-2">
 														{checkworkAddresses.length > 0 ? (
 															checkworkAddresses.map((addr, idx) => (
 																<div key={idx} className="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-1.5">
@@ -1306,7 +1306,7 @@ export default function UserDashboard() {
 										</CardTitle>
 										<CardDescription className='text-gray-600'>Paste and submit your found private keys.</CardDescription>
 									</CardHeader>
-									<CardContent className='pt-6'>
+									<CardContent className='pt-6 h-full'>
 										<form onSubmit={handleSubmitBlock} className="space-y-4 h-full">
 											<div className="space-y-3 h-full flex flex-col">
 												<div className="flex items-center justify-between">
