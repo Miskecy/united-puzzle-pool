@@ -19,6 +19,8 @@ import {
 	SelectValue,
 } from "@/components/ui/select"
 
+import { toast } from 'sonner';
+
 // Helper functions
 function parseHexToBigInt(hex: string): bigint {
 	const cleanHex = hex.replace(/^0x/i, '');
@@ -268,6 +270,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 				console.log(`Processing queue item: Block ${item.blockId} (Retry ${item.retries})`);
 				const response = await fetch('/api/block/submit', {
 					method: 'POST',
+					keepalive: true,
 					headers: {
 						'Content-Type': 'application/json',
 						'pool-token': token,
@@ -291,6 +294,11 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 						// Fatal error (Bad Request, Unauthorized, etc.) - except Rate Limit
 						// Drop it to avoid clogging the queue forever
 						console.warn(`Fatal error submitting block ${item.blockId}: ${status}. Dropping.`);
+						// Log response body for debugging
+						try {
+							const errorBody = await response.text();
+							console.warn('Error body:', errorBody);
+						} catch { }
 						setSubmissionQueue(prev => prev.slice(1));
 					} else {
 						// Retryable error (5xx, 429)
@@ -313,9 +321,9 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		processQueue();
 	}, [submissionQueue, isSubmitting]);
 
-	const submitBlock = useCallback((blockId: string, found: string[]) => {
+	const submitBlock = useCallback((blockId: string, found: string[], isPuzzleKey: boolean = false) => {
 		// Add to queue instead of submitting directly
-		// Always send found keys regardless of autoSubmit setting, as they are required for validation
+		// Always send found keys if it's a puzzle key or if we found something
 		const keysToSend = found;
 
 		setSubmissionQueue(prev => [
@@ -332,7 +340,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 
 	const [isStopping, setIsStopping] = useState(false);
 
-	const stopMining = useCallback((force: boolean = false) => {
+	const stopMining = useCallback((force: boolean = false, skipDelete: boolean = false) => {
 		// If graceful stop requested and mining is active
 		if (!force && engineRef.current.mining) {
 			setIsStopping(true);
@@ -356,9 +364,9 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 			timerRef.current = null;
 		}
 
-		// Clear active block in Redis
+		// Clear active block in Redis only if not skipped
 		const token = localStorage.getItem('pool-token');
-		if (token) {
+		if (token && !skipDelete) {
 			fetch(`/api/block?workerId=${workerId}`, {
 				method: 'DELETE',
 				headers: { 'pool-token': token }
@@ -460,11 +468,20 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 
 					if (isPuzzle) {
 						setPuzzleKey(privateKeyHex);
-						alert(`FOUND PUZZLE KEY: ${privateKeyHex}`);
-						if (settingsRef.current.autoSubmit) {
-							submitBlock(engine.currentBlock.id, [privateKeyHex]);
-						}
-						stopMining(true);
+						// Always submit puzzle key immediately, regardless of autoSubmit
+						submitBlock(engine.currentBlock.id, [privateKeyHex], true);
+
+						// Show success message (non-blocking)
+						toast.success(`FOUND PUZZLE KEY: ${privateKeyHex}`, {
+							duration: 10000,
+							action: {
+								label: 'Copy',
+								onClick: () => navigator.clipboard.writeText(privateKeyHex)
+							}
+						});
+
+						// Stop mining, but skip deleting the block (submission will handle completion)
+						stopMining(true, true);
 					} else {
 						// Regular target found
 						// Just log/store
