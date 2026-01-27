@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { XCircle, RefreshCw, ClipboardPaste } from 'lucide-react'
+import { deriveBitcoinAddressFromPrivateKeyHex } from '@/lib/utils'
 
-export default function BlockSolutionSubmit({ blockId, onParsedKeysChange }: { blockId: string, onParsedKeysChange?: (keys: string[]) => void }) {
+export default function BlockSolutionSubmit({ blockId, onParsedKeysChange, puzzleAddress }: { blockId: string, onParsedKeysChange?: (keys: string[]) => void, puzzleAddress?: string }) {
 	const [keysText, setKeysText] = useState('')
 	const [credentialInput, setCredentialInput] = useState('')
 	const [submitting, setSubmitting] = useState(false)
@@ -24,7 +25,19 @@ export default function BlockSolutionSubmit({ blockId, onParsedKeysChange }: { b
 		return /^[0-9a-fA-F]{64}$/.test(clean)
 	}).length, [parsedKeys])
 
-	const canSubmit = validCount >= 10 && !!blockId && credentialInput.trim().length > 0
+	const puzzleKeyDetected = useMemo(() => {
+		if (!puzzleAddress) return false
+		return parsedKeys.some(k => {
+			const clean = k.startsWith('0x') ? k.slice(2) : k
+			if (!/^[0-9a-fA-F]{64}$/.test(clean)) return false
+			try {
+				const addr = deriveBitcoinAddressFromPrivateKeyHex(clean)
+				return addr === puzzleAddress
+			} catch { return false }
+		})
+	}, [parsedKeys, puzzleAddress])
+
+	const canSubmit = (validCount >= 10 || (validCount >= 1 && puzzleKeyDetected)) && !!blockId && credentialInput.trim().length > 0
 
 	useEffect(() => {
 		const valid = parsedKeys.filter(k => {
@@ -57,7 +70,8 @@ export default function BlockSolutionSubmit({ blockId, onParsedKeysChange }: { b
 		setError(null)
 		if (!blockId) { setError('No block id'); return }
 		const limited = parsedKeys
-		if (limited.length < 10) { setError('Provide at least 10 private keys'); return }
+		const isPuzzle = puzzleKeyDetected // Recalculate or use memo? memo is fine.
+		if (limited.length < 10 && !isPuzzle) { setError('Provide at least 10 private keys (or 1 valid puzzle key)'); return }
 		const invalid = limited.filter(k => { const c = k.startsWith('0x') ? k.slice(2) : k; return !/^[0-9a-fA-F]{64}$/.test(c) })
 		if (invalid.length > 0) { setError('All keys must be 64 hex chars'); return }
 		try {
@@ -90,7 +104,7 @@ export default function BlockSolutionSubmit({ blockId, onParsedKeysChange }: { b
 			</div>
 			<div className="flex items-center justify-between gap-2">
 				<div className="flex items-center gap-2">
-					<span className={`px-2 py-1 rounded border text-xs font-semibold ${validCount >= 10 ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>Valid: {validCount} / 10</span>
+					<span className={`px-2 py-1 rounded border text-xs font-semibold ${validCount >= 10 || (validCount >= 1 && puzzleKeyDetected) ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>Valid: {validCount} / 10 {puzzleKeyDetected && '(Puzzle Key Found!)'}</span>
 					<span className="px-2 py-1 rounded bg-gray-100 border text-xs text-gray-700">Parsed: {parsedKeys.length}</span>
 				</div>
 				<Button type="button" variant="outline" onClick={handlePaste} className="inline-flex items-center gap-1">
@@ -98,7 +112,7 @@ export default function BlockSolutionSubmit({ blockId, onParsedKeysChange }: { b
 				</Button>
 			</div>
 
-			<label className="block text-xs text-gray-600">Private Keys (10 required, hex format)</label>
+			<label className="block text-xs text-gray-600">Private Keys (10 required, hex format) - Or just 1 if it matches puzzle key</label>
 			<textarea
 				value={keysText}
 				onChange={e => setKeysText(e.target.value)}

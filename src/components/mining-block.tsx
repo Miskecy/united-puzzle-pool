@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { formatTimeRemaining } from '@/lib/utils';
+import { formatTimeRemaining, deriveBitcoinAddressFromPrivateKeyHex } from '@/lib/utils';
 import { RefreshCw, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,9 +20,10 @@ interface BlockData {
 interface MiningBlockProps {
 	token: string;
 	onBlockCompleted?: (creditsAwarded: number) => void;
+	puzzleAddress?: string;
 }
 
-export default function MiningBlock({ token, onBlockCompleted }: MiningBlockProps) {
+export default function MiningBlock({ token, onBlockCompleted, puzzleAddress }: MiningBlockProps) {
 	const [block, setBlock] = useState<BlockData | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
@@ -42,12 +43,12 @@ export default function MiningBlock({ token, onBlockCompleted }: MiningBlockProp
 				throw new Error('Failed to fetch block');
 			}
 
-            const data = await response.json();
-            setBlock(data);
+			const data = await response.json();
+			setBlock(data);
 
-            // Initialize private keys array to match the number of checkwork addresses
-            const addrCount = Array.isArray(data.checkwork_addresses) ? data.checkwork_addresses.length : 10;
-            setPrivateKeys(Array.from({ length: addrCount }, () => ''));
+			// Initialize private keys array to match the number of checkwork addresses
+			const addrCount = Array.isArray(data.checkwork_addresses) ? data.checkwork_addresses.length : 10;
+			setPrivateKeys(Array.from({ length: addrCount }, () => ''));
 
 		} catch (error) {
 			console.error('Error fetching block:', error);
@@ -97,12 +98,36 @@ export default function MiningBlock({ token, onBlockCompleted }: MiningBlockProp
 			return;
 		}
 
-		// Validate all keys are provided
-        const emptyKeys = privateKeys.filter(key => !key.trim()).length;
-        if (emptyKeys > 0) {
-            toast.error(`Please provide all ${privateKeys.length} private keys (${emptyKeys} missing)`);
-            return;
-        }
+		// Validate keys
+		const validKeys = privateKeys.filter(key => key.trim());
+		const filledCount = validKeys.length;
+		const totalCount = privateKeys.length;
+
+		if (filledCount === 0) {
+			toast.error('Please provide at least one private key');
+			return;
+		}
+
+		// Allow submission if:
+		// 1. All keys are provided (normal block completion)
+		// 2. OR exactly 1 key is provided (potential puzzle key)
+		if (filledCount < totalCount && filledCount !== 1) {
+			toast.error(`Please provide all ${totalCount} private keys or a single puzzle key`);
+			return;
+		}
+
+		// Optional: Client-side validation for puzzle key if address is known
+		if (filledCount === 1 && puzzleAddress) {
+			try {
+				const key = validKeys[0].trim();
+				if (/^[0-9a-fA-F]{64}$/.test(key)) {
+					const addr = deriveBitcoinAddressFromPrivateKeyHex(key);
+					if (addr === puzzleAddress) {
+						toast.success("Puzzle Key detected! Submitting...");
+					}
+				}
+			} catch { }
+		}
 
 		try {
 			setSubmitting(true);

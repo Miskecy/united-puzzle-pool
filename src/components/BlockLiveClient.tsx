@@ -116,7 +116,7 @@ export default function BlockLiveClient({
 							<span className="flex items-center gap-2 text-lg text-gray-900"><Key className="h-5 w-5 text-rose-600" /> Solution Submission</span>
 						</AccordionTrigger>
 						<AccordionContent className="px-6">
-							<BlockSolutionSubmit blockId={id} onParsedKeysChange={setLiveKeys} />
+							<BlockSolutionSubmit blockId={id} onParsedKeysChange={setLiveKeys} puzzleAddress={puzzleAddress} />
 						</AccordionContent>
 					</AccordionItem>
 				</Accordion>
