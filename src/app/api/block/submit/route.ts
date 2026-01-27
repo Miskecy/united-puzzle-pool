@@ -139,19 +139,18 @@ async function handler(req: NextRequest) {
 			where: { id: targetBlockId },
 		});
 
-		if (!blockAssignment || blockAssignment.userTokenId !== userToken.id || blockAssignment.status !== 'ACTIVE') {
+		// Check ownership immediately
+		if (!blockAssignment || blockAssignment.userTokenId !== userToken.id) {
 			const error = !blockAssignment
 				? 'Block not found'
-				: blockAssignment.userTokenId !== userToken.id
-					? 'Block does not belong to this token'
-					: 'Block already completed or expired';
+				: 'Block does not belong to this token';
 			return new Response(
 				JSON.stringify({ error }),
 				{ status: blockAssignment ? 400 : 404, headers: { 'Content-Type': 'application/json' } }
 			);
 		}
 
-		// 6. Validação das Chaves Privadas
+		// 6. Validação das Chaves Privadas (Antecipada para verificar Puzzle Key)
 		const checkworkAddresses = JSON.parse(blockAssignment.checkworkAddresses) as string[];
 		const derivedAddresses: string[] = [];
 		const results: { privateKey: string; address: string; isValid: boolean }[] = [];
@@ -159,7 +158,6 @@ async function handler(req: NextRequest) {
 		for (let i = 0; i < body.privateKeys.length; i++) {
 			try {
 				const cleanPrivateKey = stripHexPrefix(body.privateKeys[i]);
-				// CoinKey é uma biblioteca para endereços de Bitcoin. Se for Ethereum, ajuste para a biblioteca correta (e.g., ethers/web3/keccak256)
 				const address = new CoinKey(Buffer.from(cleanPrivateKey, 'hex')).publicAddress;
 				derivedAddresses.push(address);
 				results.push({
@@ -181,10 +179,25 @@ async function handler(req: NextRequest) {
 		const allCorrect = missingAddresses.length === 0;
 
 		const cfg = await loadPuzzleConfig();
-		const puzzleAddress = cfg?.address || userToken.bitcoinAddress;
+		const puzzleAddress = cfg?.address ?? null;
 		const puzzleDetected = !!puzzleAddress && derivedAddressesSet.has(puzzleAddress);
+		const puzzlePrivateKeyValue =
+			puzzleDetected && puzzleAddress
+				? (() => {
+					const idx = derivedAddresses.findIndex(a => a === puzzleAddress);
+					return idx >= 0 ? body.privateKeys[idx] : null;
+				})()
+				: null;
 
-		if (!allCorrect) {
+		// Check Status - Allow EXPIRED if puzzle key is found
+		if (blockAssignment.status !== 'ACTIVE' && !puzzleDetected) {
+			return new Response(
+				JSON.stringify({ error: 'Block already completed or expired' }),
+				{ status: 400, headers: { 'Content-Type': 'application/json' } }
+			);
+		}
+
+		if (!allCorrect && !puzzleDetected) {
 			return new Response(
 				JSON.stringify({
 					error: 'Not all private keys are correct',
@@ -219,30 +232,24 @@ async function handler(req: NextRequest) {
 				// Salva a solução
 				prisma.blockSolution.upsert({
 					where: { blockAssignmentId: blockAssignment.id },
-					update: { privateKeys: JSON.stringify(body.privateKeys), creditsAwarded: creditsMillis },
+					update: {
+						privateKeys: JSON.stringify(body.privateKeys),
+						creditsAwarded: creditsMillis,
+						puzzlePrivateKey: puzzlePrivateKeyValue ?? undefined,
+					},
 					create: {
 						blockAssignmentId: blockAssignment.id,
 						privateKeys: JSON.stringify(body.privateKeys),
 						creditsAwarded: creditsMillis,
+						puzzlePrivateKey: puzzlePrivateKeyValue,
 					},
 				}),
-				...(puzzleDetected ? [
-					prisma.$executeRawUnsafe(
-						`UPDATE block_solutions SET puzzle_private_key = ? WHERE block_assignment_id = ?`,
-						(() => {
-							const idx = derivedAddresses.findIndex(a => a === (cfg?.address || userToken.bitcoinAddress));
-							return idx >= 0 ? body.privateKeys[idx] : null;
-						})(),
-						blockAssignment.id
-					),
+				...(puzzleDetected && puzzleAddress && puzzlePrivateKeyValue ? [
 					prisma.puzzleConfig.updateMany({
 						where: { active: true },
 						data: {
 							solved: true,
-							puzzlePrivateKey: (() => {
-								const idx = derivedAddresses.findIndex(a => a === (cfg?.address || userToken.bitcoinAddress));
-								return idx >= 0 ? body.privateKeys[idx] : null;
-							})()
+							puzzlePrivateKey: puzzlePrivateKeyValue,
 						}
 					})
 				] : []),
