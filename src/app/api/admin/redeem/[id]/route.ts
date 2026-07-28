@@ -7,12 +7,8 @@ function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
 
 async function handler(req: NextRequest, { params }: { params: { id: string } }) {
-	const secret = getSecret()
-	if (!secret) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
-	const supplied = req.headers.get('x-setup-secret') || ''
-	const cookie = req.headers.get('cookie') || ''
-	const hasSession = /(?:^|;\s*)setup_session=1(?:;|$)/.test(cookie)
-	if (!hasSession && supplied !== secret) return unauthorized()
+	if (!getSecret()) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+	if (!/(?:^|;\s*)setup_session=1(?:;|$)/.test(req.headers.get('cookie') || '')) return unauthorized()
 
 	try {
 		if (req.method !== 'PATCH') {

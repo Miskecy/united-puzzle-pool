@@ -9,12 +9,8 @@ function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
 
 async function handler(req: NextRequest) {
-	const secret = getSecret()
-	if (!secret) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
-	const supplied = req.headers.get('x-setup-secret') || ''
-	const cookie = req.headers.get('cookie') || ''
-	const hasSession = /(?:^|;\s*)setup_session=1(?:;|$)/.test(cookie)
-	if (!hasSession && supplied !== secret) return unauthorized()
+	if (!getSecret()) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+	if (!/(?:^|;\s*)setup_session=1(?:;|$)/.test(req.headers.get('cookie') || '')) return unauthorized()
 
 	function resolveDbPath() {
 		const url = (process.env.DATABASE_URL || '').trim()
@@ -140,12 +136,19 @@ async function handler(req: NextRequest) {
 			}
 			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
 			try { await prisma.$disconnect() } catch { }
+			// Give Windows a moment to release the file handle after disconnect
+			await new Promise(resolve => setTimeout(resolve, 300))
 			try { await fs.unlink(walFile) } catch { }
 			try { await fs.unlink(shmFile) } catch { }
-			try { await fs.unlink(dbFile) } catch { }
 			const tmp = path.join(path.dirname(dbFile), `restore-${Date.now()}.tmp`)
 			await fs.writeFile(tmp, Buffer.from(u8))
-			try { await fs.rename(tmp, dbFile) } catch { await fs.copyFile(tmp, dbFile); await fs.unlink(tmp) }
+			// Try atomic rename first; fall back to direct write if the file is still locked
+			let replaced = false
+			try { await fs.unlink(dbFile); await fs.rename(tmp, dbFile); replaced = true } catch { }
+			if (!replaced) {
+				try { await fs.writeFile(dbFile, Buffer.from(u8)); try { await fs.unlink(tmp) } catch { }; replaced = true } catch { }
+			}
+			if (!replaced) throw new Error('Could not replace database file — the server may need to be restarted')
 			try {
 				withDb(db => {
 					db.pragma('journal_mode = WAL')
@@ -153,18 +156,10 @@ async function handler(req: NextRequest) {
 					db.exec('VACUUM')
 				})
 			} catch { }
-			try { await prisma.$connect() } catch { }
-			try { await prisma.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL);') } catch { }
-			let tables = 0
-			let tableNames: string[] = []
+			// Prisma will auto-reconnect on the next query; explicit $connect() is not needed with the driver adapter
 			let sizeBytes = 0
-			try {
-				const rows = await prisma.$queryRaw<{ name: string }[]>`SELECT name FROM sqlite_master WHERE type='table'`
-				tableNames = Array.isArray(rows) ? rows.map(r => String(r.name)) : []
-				tables = tableNames.length
-			} catch { }
 			try { const st = await fs.stat(dbFile); sizeBytes = st.size } catch { }
-			return new Response(JSON.stringify({ ok: true, tables, tableNames, dbFile, envUrl: (process.env.DATABASE_URL || '').trim(), sizeBytes }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+			return new Response(JSON.stringify({ ok: true, dbFile, envUrl: (process.env.DATABASE_URL || '').trim(), sizeBytes }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 		} catch (err: unknown) {
 			const msg = err instanceof Error ? err.message : String(err)
 			return new Response(JSON.stringify({ error: 'Restore failed', message: msg }), { status: 500, headers: { 'Content-Type': 'application/json' } })

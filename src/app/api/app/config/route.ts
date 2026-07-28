@@ -50,18 +50,13 @@ async function setEnabled(enabled: boolean) {
 }
 
 async function handler(req: NextRequest) {
-	const secret = getSecret()
-
     if (req.method === 'GET') {
         const cfg = await getConfig()
         return new Response(JSON.stringify(cfg), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }
 
 	if (req.method === 'PATCH') {
-		const supplied = req.headers.get('x-setup-secret') || ''
-		const cookie = req.headers.get('cookie') || ''
-		const hasSession = /(?:^|;\s*)setup_session=1(?:;|$)/.test(cookie)
-		if (!hasSession && supplied !== secret) return unauthorized()
+		if (!/(?:^|;\s*)setup_session=1(?:;|$)/.test(req.headers.get('cookie') || '')) return unauthorized()
 		try {
 			const body = await req.json()
             const v = !!body?.shared_pool_api_enabled

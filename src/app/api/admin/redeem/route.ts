@@ -29,12 +29,8 @@ async function ensureRedeemTable() {
 }
 
 async function handler(req: NextRequest) {
-	const secret = getSecret()
-	if (!secret) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
-	const supplied = req.headers.get('x-setup-secret') || ''
-	const cookie = req.headers.get('cookie') || ''
-	const hasSession = /(?:^|;\s*)setup_session=1(?:;|$)/.test(cookie)
-	if (!hasSession && supplied !== secret) return unauthorized()
+	if (!getSecret()) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+	if (!/(?:^|;\s*)setup_session=1(?:;|$)/.test(req.headers.get('cookie') || '')) return unauthorized()
 
 	try {
 		if (req.method !== 'GET') {
