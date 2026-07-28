@@ -2,12 +2,12 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { XCircle, RefreshCw, ClipboardPaste } from 'lucide-react'
 import { deriveBitcoinAddressFromPrivateKeyHex } from '@/lib/utils'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 export default function BlockSolutionSubmit({ blockId, onParsedKeysChange, puzzleAddress }: { blockId: string, onParsedKeysChange?: (keys: string[]) => void, puzzleAddress?: string }) {
+	const { t } = useTranslation()
 	const [keysText, setKeysText] = useState('')
 	const [credentialInput, setCredentialInput] = useState('')
 	const [submitting, setSubmitting] = useState(false)
@@ -50,7 +50,7 @@ export default function BlockSolutionSubmit({ blockId, onParsedKeysChange, puzzl
 	useEffect(() => {
 		try {
 			const t = typeof window !== 'undefined' ? localStorage.getItem('pool-token') : null
-			if (t) { setCredentialInput(t) }
+			if (t) setCredentialInput(t)
 		} catch { }
 	}, [])
 
@@ -60,33 +60,28 @@ export default function BlockSolutionSubmit({ blockId, onParsedKeysChange, puzzl
 
 	function handleExtractHexKeys() {
 		const all = keysText.match(/(?:0[xX])?[0-9a-fA-F]{64}/g) || []
-		const cleaned = all.map(s => s.trim())
-		setKeysText(cleaned.join('\n'))
+		setKeysText(all.map(s => s.trim()).join('\n'))
 	}
-
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault()
 		setError(null)
 		if (!blockId) { setError('No block id'); return }
-		const limited = parsedKeys
-		const isPuzzle = puzzleKeyDetected // Recalculate or use memo? memo is fine.
-		if (limited.length < 10 && !isPuzzle) { setError('Provide at least 10 private keys (or 1 valid puzzle key)'); return }
-		const invalid = limited.filter(k => { const c = k.startsWith('0x') ? k.slice(2) : k; return !/^[0-9a-fA-F]{64}$/.test(c) })
-		if (invalid.length > 0) { setError('All keys must be 64 hex chars'); return }
+		const isPuzzle = puzzleKeyDetected
+		if (parsedKeys.length < 10 && !isPuzzle) { setError(t('dashboard.submit.errorMinKeys')); return }
+		const invalid = parsedKeys.filter(k => { const c = k.startsWith('0x') ? k.slice(2) : k; return !/^[0-9a-fA-F]{64}$/.test(c) })
+		if (invalid.length > 0) { setError(t('dashboard.submit.errorHexFormat')); return }
 		try {
 			setSubmitting(true)
 			const headerValue = credentialInput.trim()
-			if (!headerValue) { throw new Error('Missing pool token') }
+			if (!headerValue) throw new Error('Missing pool token')
 			const r = await fetch('/api/block/submit', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', 'pool-token': headerValue },
-				body: JSON.stringify({ privateKeys: limited, blockId }),
+				body: JSON.stringify({ privateKeys: parsedKeys, blockId }),
 			})
 			const j = await r.json().catch(() => ({}))
-			if (!r.ok) {
-				throw new Error(String(j?.error || 'Failed to submit block'))
-			}
+			if (!r.ok) throw new Error(String(j?.error || 'Failed to submit block'))
 			setKeysText('')
 			try { router.refresh() } catch { }
 		} catch (err) {
@@ -98,40 +93,68 @@ export default function BlockSolutionSubmit({ blockId, onParsedKeysChange, puzzl
 
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4">
-			<div className="space-y-2">
-				<label className="block text-xs text-gray-600">Pool Token</label>
-				<Input value={credentialInput} onChange={e => setCredentialInput(e.target.value)} placeholder="Enter your pool token" className="font-mono text-sm" />
-			</div>
-			<div className="flex items-center justify-between gap-2">
-				<div className="flex items-center gap-2">
-					<span className={`px-2 py-1 rounded border text-xs font-semibold ${validCount >= 10 || (validCount >= 1 && puzzleKeyDetected) ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>Valid: {validCount} / 10 {puzzleKeyDetected && '(Puzzle Key Found!)'}</span>
-					<span className="px-2 py-1 rounded bg-gray-100 border text-xs text-gray-700">Parsed: {parsedKeys.length}</span>
+			<div className="space-y-1.5">
+				<label className="block text-[12px] font-medium" style={{ color: '#9a9892' }}>{t('dashboard.session.poolToken')}</label>
+				<div className="volt-input-wrap">
+					<input
+						className="w-full bg-transparent font-mono text-[13px] outline-none"
+						style={{ color: '#f4f3ee' }}
+						value={credentialInput}
+						onChange={e => setCredentialInput(e.target.value)}
+						placeholder={t('dashboard.token.placeholder')}
+					/>
 				</div>
-				<Button type="button" variant="outline" onClick={handlePaste} className="inline-flex items-center gap-1">
-					<ClipboardPaste className="h-4 w-4" /> Paste
-				</Button>
 			</div>
 
-			<label className="block text-xs text-gray-600">Private Keys (10 required, hex format) - Or just 1 if it matches puzzle key</label>
-			<textarea
-				value={keysText}
-				onChange={e => setKeysText(e.target.value)}
-				className="w-full min-h-[260px] px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-600"
-				placeholder="Paste one key per line, or separated by spaces/commas."
-			/>
-
-			<div className="flex flex-wrap gap-3 pt-2">
-				<Button type="submit" disabled={submitting || !canSubmit} className="bg-purple-600 text-white hover:bg-purple-700 font-semibold inline-flex items-center gap-2">
-					{submitting ? (<><RefreshCw className="h-4 w-4 animate-spin" /> Submitting...</>) : 'Submit Keys'}
-				</Button>
-				<Button type="button" onClick={handleExtractHexKeys} variant='outline' className="text-gray-700 hover:bg-gray-200">Extract 0x Keys</Button>
-				<Button type="button" onClick={() => setKeysText('')} variant='outline' className="text-red-600 border-red-400 hover:bg-red-50 inline-flex items-center gap-1"><XCircle className='w-4 h-4' /> Clear All</Button>
+			<div className="flex items-center justify-between gap-2 flex-wrap">
+				<div className="flex items-center gap-2 flex-wrap">
+					<span className={validCount >= 10 || (validCount >= 1 && puzzleKeyDetected) ? 'volt-badge-success' : 'volt-badge-danger'}>
+						{t('dashboard.submit.validCount').replace('{n}', `${validCount}`)} {puzzleKeyDetected && t('dashboard.submit.puzzleKeyFound')}
+					</span>
+					<span className="volt-badge-neutral">{t('dashboard.submit.parsed')} {parsedKeys.length}</span>
+				</div>
+				<button type="button" onClick={handlePaste} className="volt-btn-ghost text-[12px] inline-flex items-center gap-1 px-3">
+					<ClipboardPaste className="h-4 w-4" /> {t('dashboard.submit.paste')}
+				</button>
 			</div>
+
+			<div className="space-y-1.5">
+				<label className="block text-[12px] font-medium" style={{ color: '#9a9892' }}>
+					{t('dashboard.submit.label')}
+				</label>
+				<textarea
+					value={keysText}
+					onChange={e => setKeysText(e.target.value)}
+					className="w-full min-h-64 px-3 py-2 rounded-xl text-[12px] font-mono outline-none resize-y"
+					style={{ background: '#131313', border: '1px solid #262624', color: '#f4f3ee' }}
+					placeholder={t('dashboard.submit.placeholder')}
+				/>
+			</div>
+
+			<div className="flex flex-wrap gap-3 pt-1">
+				<button
+					type="submit"
+					disabled={submitting || !canSubmit}
+					className="volt-btn-primary inline-flex items-center gap-2"
+					style={submitting || !canSubmit ? { opacity: 0.5, pointerEvents: 'none' } : {}}
+				>
+					{submitting ? (<><RefreshCw className="h-4 w-4 animate-spin" /> {t('dashboard.submit.submitting')}</>) : t('dashboard.submit.submitKeys')}
+				</button>
+				<button type="button" onClick={handleExtractHexKeys} className="volt-btn-ghost text-[13px] px-3">{t('dashboard.submit.extractHex')}</button>
+				<button
+					type="button"
+					onClick={() => setKeysText('')}
+					className="volt-btn-danger inline-flex items-center gap-1 text-[13px] px-3"
+				>
+					<XCircle className="w-4 h-4" /> {t('dashboard.submit.clear')}
+				</button>
+			</div>
+
 			{error && (
-				<p className='text-red-600 text-sm pt-2 inline-flex items-center gap-1'><XCircle className='w-4 h-4' /> {error}</p>
+				<div className="rounded-xl p-3 flex items-center gap-2 text-[13px]" style={{ background: '#3a1512', border: '1px solid rgba(240,85,74,0.3)', color: '#f0554a' }}>
+					<XCircle className="w-4 h-4 shrink-0" /> {error}
+				</div>
 			)}
-
-
 		</form>
 	)
 }

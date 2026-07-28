@@ -1,21 +1,24 @@
-'use client';
+﻿'use client';
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useTranslation } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { formatNumber } from '@/lib/utils';
 import { formatCompactHexRange, isValidBitcoinAddress } from '@/lib/formatRange';
-import { Zap, Target, Clock, Bitcoin, Copy, BookOpen, Eye, EyeOff, Coins, Key, CheckCircle2, ArrowRight, XCircle, RotateCw, LogOut, Award, Chromium, Gpu } from 'lucide-react';
+import {
+	Zap, Target, Clock, Bitcoin, Copy, BookOpen, Eye, EyeOff,
+	Coins, Key, CheckCircle2, ArrowRight, XCircle, RotateCw,
+	LogOut, Award, Cpu, Monitor,
+} from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import BrowserMiner from '@/components/BrowserMiner';
+import { toast } from 'sonner';
 
+/* ── Types ─────────────────────────────────────────────────────────── */
 interface UserStats {
 	token: string;
 	bitcoinAddress: string;
@@ -56,7 +59,87 @@ interface HistoryBlock {
 	hexRangeEnd?: string;
 }
 
+/* ── Helpers ────────────────────────────────────────────────────────── */
+type TFn = (key: string) => string
+
+function formatAgo(dateStr: string | undefined, t: TFn): string {
+	if (!dateStr) return 'N/A';
+	const s = Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000));
+	if (s < 60) return t('common.timeAgo.s').replace('{n}', `${s}`);
+	const m = Math.floor(s / 60);
+	if (m < 60) return t('common.timeAgo.min').replace('{n}', `${m}`);
+	const h = Math.floor(m / 60);
+	if (h < 24) return t('common.timeAgo.h').replace('{n}', `${h}`);
+	return t('common.timeAgo.d').replace('{n}', `${Math.floor(h / 24)}`);
+}
+
+function formatUntil(dateStr: string | undefined, t: TFn): string {
+	if (!dateStr) return 'N/A';
+	const diff = new Date(dateStr).getTime() - Date.now();
+	const s = Math.max(0, Math.floor(Math.abs(diff) / 1000));
+	if (diff <= 0) return formatAgo(dateStr, t);
+	if (s < 60) return t('common.timeIn.s').replace('{n}', `${s}`);
+	const m = Math.floor(s / 60);
+	if (m < 60) return t('common.timeIn.m').replace('{n}', `${m}`);
+	const h = Math.floor(m / 60);
+	if (h < 24) return t('common.timeIn.h').replace('{n}', `${h}`);
+	return t('common.timeIn.d').replace('{n}', `${Math.floor(h / 24)}`);
+}
+
+function formatLastUpdated(ts: number | null, t: TFn): string {
+	if (!ts) return '—';
+	return formatAgo(new Date(ts).toISOString(), t);
+}
+
+function formatRangePowerLabel(start?: string, end?: string): string {
+	try {
+		if (!start || !end) return '';
+		const diffBI = BigInt(end) - BigInt(start);
+		if (diffBI <= 0n) return '';
+		const diffNum = Number(diffBI);
+		if (!Number.isFinite(diffNum) || diffNum <= 0) return `2^${diffBI.toString(2).length - 1}`;
+		return `2^${Math.log2(diffNum).toFixed(2)}`;
+	} catch { return ''; }
+}
+
+function formatKeysCountLabel(start?: string, end?: string): string {
+	try {
+		if (!start || !end) return '';
+		const len = Number(BigInt(end) - BigInt(start));
+		if (!Number.isFinite(len) || len <= 0) return '';
+		const units = [{ l: 'P', v: 1e15 }, { l: 'T', v: 1e12 }, { l: 'B', v: 1e9 }, { l: 'M', v: 1e6 }, { l: 'K', v: 1e3 }];
+		for (const u of units) if (len >= u.v) return `≈ ${(len / u.v).toFixed(2)}${u.l}`;
+		return `≈ ${len.toFixed(0)}`;
+	} catch { return ''; }
+}
+
+function formatTotalKeysLabel(s?: string): string {
+	if (!s) return '0.00 Keys';
+	try {
+		const n = Number(BigInt(s));
+		let unit = 'Keys', num = n;
+		if (n >= 1e15) { unit = 'PKeys'; num = n / 1e15; }
+		else if (n >= 1e12) { unit = 'TKeys'; num = n / 1e12; }
+		else if (n >= 1e9) { unit = 'BKeys'; num = n / 1e9; }
+		else if (n >= 1e6) { unit = 'MKeys'; num = n / 1e6; }
+		else if (n >= 1e3) { unit = 'KKeys'; num = n / 1e3; }
+		return `${num.toFixed(2)} ${unit}`;
+	} catch { return '0.00 Keys'; }
+}
+
+function formatHHMMSS(seconds?: number): string {
+	if (!seconds || seconds <= 0) return '00:00:00';
+	const h = Math.floor(seconds / 3600);
+	const m = Math.floor((seconds % 3600) / 60);
+	const s = Math.floor(seconds % 60);
+	return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+/* ── Component ──────────────────────────────────────────────────────── */
 export default function UserDashboard() {
+	const { t } = useTranslation()
+	const tRef = useRef(t)
+	useEffect(() => { tRef.current = t }, [t])
 	const router = useRouter();
 	const [userStats, setUserStats] = useState<UserStats | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -68,7 +151,6 @@ export default function UserDashboard() {
 	const [bitcoinAddress, setBitcoinAddress] = useState('');
 	const [bitcoinAddressError, setBitcoinAddressError] = useState('');
 	const [manualTokenInput, setManualTokenInput] = useState('');
-	const [, setTimeRemaining] = useState<string>('');
 	const [submitting, setSubmitting] = useState(false);
 	const [checkworkAddresses, setCheckworkAddresses] = useState<string[]>([]);
 	const [avgSpeedBKeys, setAvgSpeedBKeys] = useState<string>('0.00');
@@ -82,206 +164,55 @@ export default function UserDashboard() {
 	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 	const [poolDist, setPoolDist] = useState<DistInfo | null>(null);
 	const [usdPrice, setUsdPrice] = useState<number | null>(null);
+	const [puzzleMeta, setPuzzleMeta] = useState<{
+		address?: string | null;
+		puzzleStart?: string;
+		puzzleEnd?: string;
+		startExp?: number;
+		endExp?: number;
+	} | null>(null);
+	const [puzzleLoading, setPuzzleLoading] = useState(true);
+	const [noPuzzle, setNoPuzzle] = useState(false);
 
-	function formatLastUpdated(ts: number | null): string {
-		if (!ts) return '—';
-		const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-		if (diff < 60) return `${diff}s ago`;
-		const m = Math.floor(diff / 60);
-		if (m < 60) return `${m}m ago`;
-		const h = Math.floor(m / 60);
-		if (h < 24) return `${h}h ago`;
-		const d = Math.floor(h / 24);
-		return `${d}d ago`;
-	}
-
-	useEffect(() => {
-		(async () => {
-			try {
-				const token = typeof window !== 'undefined' ? localStorage.getItem('pool-token') : '';
-				if (!token) return;
-				const r = await fetch('/api/pool/distribution', { headers: { 'pool-token': token } });
-				if (!r.ok) return;
-				const j: DistInfo = await r.json();
-				setPoolDist(j);
-			} catch { }
-		})();
-	}, []);
-
-	useEffect(() => {
-		(async () => {
-			try {
-				const info = await fetch('/api/puzzle/info', { cache: 'no-store' });
-				if (!info.ok) return;
-				const j = await info.json();
-				const btc = Number(j?.balanceBtc || 0);
-				const usd = Number(j?.balanceUsd || 0);
-				if (btc > 0 && usd > 0) setUsdPrice(usd / btc);
-			} catch { }
-		})();
-	}, []);
-	const parsedKeys = useMemo(() => keysText
-		.split(/\s|,|;|\n|\r/)
-		.map(s => s.trim())
-		.filter(s => s.length > 0), [keysText]);
+	const parsedKeys = useMemo(() =>
+		keysText.split(/[\s,;\n\r]+/).map(s => s.trim()).filter(Boolean),
+		[keysText]
+	);
 	const validCount = useMemo(() => parsedKeys.filter(k => {
 		const clean = k.startsWith('0x') ? k.slice(2) : k;
 		return /^[0-9a-fA-F]{64}$/.test(clean);
 	}).length, [parsedKeys]);
 	const canSubmit = validCount >= 10 && parsedKeys.length >= 10;
 
-	const formatAgo = (dateStr?: string) => {
-		if (!dateStr) return 'N/A';
-		const t = new Date(dateStr).getTime();
-		const now = Date.now();
-		const s = Math.max(0, Math.floor((now - t) / 1000));
-		if (s < 60) return `${s}s ago`;
-		const m = Math.floor(s / 60);
-		if (m < 60) return `${m}m ago`;
-		const h = Math.floor(m / 60);
-		if (h < 24) return `${h}h ago`;
-		const d = Math.floor(h / 24);
-		return `${d}d ago`;
-	};
-
-	const formatUntil = (dateStr?: string) => {
-		if (!dateStr) return 'N/A';
-		const t = new Date(dateStr).getTime();
-		const now = Date.now();
-		const diff = t - now;
-		const s = Math.max(0, Math.floor(Math.abs(diff) / 1000));
-		if (diff <= 0) {
-			if (s < 60) return `${s}s ago`;
-			const m = Math.floor(s / 60);
-			if (m < 60) return `${m}m ago`;
-			const h = Math.floor(m / 60);
-			if (h < 24) return `${h}h ago`;
-			const d = Math.floor(h / 24);
-			return `${d}d ago`;
-		} else {
-			if (s < 60) return `in ${s}s`;
-			const m = Math.floor(s / 60);
-			if (m < 60) return `in ${m}m`;
-			const h = Math.floor(m / 60);
-			if (h < 24) return `in ${h}h`;
-			const d = Math.floor(h / 24);
-			return `in ${d}d`;
-		}
-	};
-
-	const handleExtractHexKeys = () => {
-		const text = keysText || '';
-		const out = new Set<string>();
-		for (const m of text.matchAll(/(?:0x)?([0-9a-fA-F]{64})/g)) {
-			out.add(`0x${m[1]}`);
-		}
-		for (const m of text.matchAll(/(?:0x)?(?:[0-9a-fA-F]{2}[ \t:\-]?){32}/g)) {
-			const clean = m[0].replace(/^0x/i, '').replace(/[^0-9a-fA-F]/g, '');
-			if (clean.length === 64) out.add(`0x${clean}`);
-		}
-		setKeysText(Array.from(out).join('\n'));
-	};
-
-	const generateToken = async () => {
-		try {
-			setLoading(true);
-			setError(null);
-
-			if (!bitcoinAddress) {
-				setBitcoinAddressError('Please enter a Bitcoin address');
-				setLoading(false);
-				return;
-			}
-
-			if (!isValidBitcoinAddress(bitcoinAddress)) {
-				setBitcoinAddressError('Invalid Bitcoin address format');
-				setLoading(false);
-				return;
-			}
-
-			const response = await fetch('/api/token/generate', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ bitcoinAddress }),
-			});
-
-			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.error || 'Failed to generate token');
-			}
-
-			const data = await response.json();
-			localStorage.setItem('pool-token', data.token);
-			await fetchUserStats();
-			router.replace('/dashboard');
-			router.refresh();
-		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to generate token');
-			setLoading(false);
-		}
-	};
-
-	const applyManualToken = async () => {
-		if (!manualTokenInput.trim()) {
-			setError('Please enter a valid token');
-			return;
-		}
-
-		localStorage.setItem('pool-token', manualTokenInput.trim());
-		setManualTokenInput('');
-		await fetchUserStats();
-		router.replace('/dashboard');
-		router.refresh();
-	};
-
-	const logout = () => {
-		localStorage.removeItem('pool-token');
-		localStorage.removeItem('pool-user-stats');
-		setUserStats(null);
-		setError(null);
-		setBitcoinAddress('');
-		setManualTokenInput('');
-	};
-
+	/* ── Fetch user stats ─────────────────────────────────────────── */
 	const inFlightRef = useRef(false);
 	const controllerRef = useRef<AbortController | undefined>(undefined);
 	const userStatsRef = useRef<UserStats | null>(null);
 	const CACHE_KEY = 'pool-user-stats';
-	const fetchUserStats = useCallback(async () => {
-		try {
-			if (!userStatsRef.current) {
-				setLoading(true);
-			}
-			if (inFlightRef.current) return;
-			inFlightRef.current = true;
-			setError(null);
-			const token = localStorage.getItem('pool-token');
 
-			if (!token) {
-				setLoading(false);
-				setUserStats(null);
-				return;
-			}
+	const fetchUserStats = useCallback(async () => {
+		if (inFlightRef.current) return;
+		inFlightRef.current = true;
+		if (!userStatsRef.current) setLoading(true);
+		setError(null);
+		try {
+			const token = localStorage.getItem('pool-token');
+			if (!token) { setLoading(false); setUserStats(null); return; }
 
 			const controller = new AbortController();
 			controllerRef.current = controller;
 			const response = await fetch('/api/user/stats', {
-				headers: {
-					'pool-token': token
-				},
+				headers: { 'pool-token': token },
 				cache: 'no-store',
-				signal: controller.signal
+				signal: controller.signal,
 			});
 
 			if (!response.ok) {
 				if (response.status === 401 || response.status === 403) {
-					// Token is invalid or expired, clear it and show token generation UI
 					localStorage.removeItem('pool-token');
 					localStorage.removeItem(CACHE_KEY);
 					setUserStats(null);
-					setError('Your token has expired or is invalid. Please generate a new token or enter an existing one.');
+					setError(tRef.current('dashboard.auth.expired'));
 				} else {
 					throw new Error('Failed to fetch user stats');
 				}
@@ -289,8 +220,6 @@ export default function UserDashboard() {
 			}
 
 			const data = await response.json();
-
-			// Garantir que os campos estejam no formato correto
 			if (data.activeBlock) {
 				data.activeBlock = {
 					...data.activeBlock,
@@ -298,27 +227,18 @@ export default function UserDashboard() {
 					endRange: data.activeBlock.endRange || data.activeBlock.hexRangeEnd || '',
 				};
 			}
-
-			// Coerce numeric fields
 			data.totalCredits = Number(data.totalCredits ?? 0);
 			data.availableCredits = Number(data.availableCredits ?? 0);
 
-			const prev = userStatsRef.current;
-			const next = data as UserStats;
-			const prevStr = prev ? JSON.stringify(prev) : '';
-			const nextStr = JSON.stringify(next);
-			if (prevStr !== nextStr) {
-				setUserStats(next);
-				userStatsRef.current = next;
+			const nextStr = JSON.stringify(data);
+			if (JSON.stringify(userStatsRef.current) !== nextStr) {
+				setUserStats(data);
+				userStatsRef.current = data;
 				localStorage.setItem(CACHE_KEY, nextStr);
 			}
 			setLastUpdated(Date.now());
-			setError(null);
 		} catch (err) {
-			if (typeof err === 'object' && err && 'name' in err && (err as { name: string }).name === 'AbortError') {
-				return;
-			}
-			console.error('Error fetching user stats:', err);
+			if (typeof err === 'object' && err && 'name' in err && (err as { name: string }).name === 'AbortError') return;
 			setError(err instanceof Error ? err.message : 'Failed to load user statistics');
 		} finally {
 			inFlightRef.current = false;
@@ -327,6 +247,7 @@ export default function UserDashboard() {
 		}
 	}, []);
 
+	/* ── Bootstrap: load cache, then fetch fresh ─────────────────── */
 	useEffect(() => {
 		const token = localStorage.getItem('pool-token');
 		const raw = localStorage.getItem(CACHE_KEY);
@@ -340,391 +261,58 @@ export default function UserDashboard() {
 				setLoading(false);
 			} catch { }
 		}
-		// Always fetch fresh stats on mount regardless of cache
 		fetchUserStats();
 	}, [fetchUserStats]);
 
-	const assignNewBlock = async () => {
-		try {
-			setAssigningBlock(true);
-			const token = localStorage.getItem('pool-token');
-
-			if (!token) {
-				throw new Error('No token found. Please generate a token first.');
-			}
-
-			const response = await fetch(`/api/block?length=${encodeURIComponent(blockLength)}`, {
-				method: 'GET',
-				headers: {
-					'pool-token': token,
-					'Content-Type': 'application/json',
-				},
-				cache: 'no-store',
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to assign new block');
-			}
-
-			const data = await response.json();
-			console.log('New block assigned:', data);
-			if (Array.isArray(data.checkwork_addresses)) {
-				setCheckworkAddresses(data.checkwork_addresses);
-			}
-
-			// Refresh user stats
-			fetchUserStats();
-		} catch (err) {
-			console.error('Error assigning new block:', err);
-			setError(err instanceof Error ? err.message : 'Failed to assign new block');
-		} finally {
-			setAssigningBlock(false);
-		}
-	};
-
-	const formatRangePowerLabel = (start?: string, end?: string): string => {
-		try {
-			if (!start || !end) return '';
-			const diffBI = BigInt(end) - BigInt(start);
-			if (diffBI <= 0n) return '';
-			const diffNum = Number(diffBI);
-			if (!Number.isFinite(diffNum) || diffNum <= 0) {
-				const expInt = (diffBI.toString(2).length - 1);
-				return `2^${expInt}`;
-			}
-			const expDec = Math.log2(diffNum);
-			return `2^${expDec.toFixed(2)}`;
-		} catch {
-			return '';
-		}
-	};
-
-	const formatKeysCountLabel = (start?: string, end?: string): string => {
-		try {
-			if (!start || !end) return '';
-			const lenBI = BigInt(end) - BigInt(start);
-			if (lenBI <= 0n) return '';
-			const lenNum = Number(lenBI);
-			if (!Number.isFinite(lenNum) || lenNum <= 0) return '';
-			const units = [
-				{ label: 'P', value: 1e15 },
-				{ label: 'T', value: 1e12 },
-				{ label: 'B', value: 1e9 },
-				{ label: 'M', value: 1e6 },
-				{ label: 'K', value: 1e3 },
-			];
-			for (const u of units) {
-				if (lenNum >= u.value) {
-					return `≈ ${(lenNum / u.value).toFixed(2)}${u.label}`;
-				}
-			}
-			return `≈ ${lenNum.toFixed(0)}`;
-		} catch {
-			return '';
-		}
-	};
-
-	const formatTotalKeysLabel = (s?: string): string => {
-		if (!s) return '0.00 Keys';
-		try {
-			const bi = BigInt(s);
-			const n = Number(bi);
-			let unit = 'Keys';
-			let num = n;
-			if (n >= 1e15) { unit = 'PKeys'; num = n / 1e15; }
-			else if (n >= 1e12) { unit = 'TKeys'; num = n / 1e12; }
-			else if (n >= 1e9) { unit = 'BKeys'; num = n / 1e9; }
-			else if (n >= 1e6) { unit = 'MKeys'; num = n / 1e6; }
-			else if (n >= 1e3) { unit = 'KKeys'; num = n / 1e3; }
-			return `${num.toFixed(2)} ${unit}`;
-		} catch {
-			return '0.00 Keys';
-		}
-	};
-
-	const formatHHMMSS = (seconds?: number): string => {
-		if (!seconds || seconds <= 0) return '00:00:00';
-		const hrs = Math.floor(seconds / 3600);
-		const mins = Math.floor((seconds % 3600) / 60);
-		const secs = Math.floor(seconds % 60);
-		return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-	};
-
-	const copyAddress = async () => {
-		if (userStats?.bitcoinAddress) {
-			try {
-				await navigator.clipboard.writeText(userStats.bitcoinAddress);
-				setCopiedAddress(true);
-				setTimeout(() => setCopiedAddress(false), 1500);
-			} catch (err) {
-				console.error('Failed to copy address:', err);
-			}
-		}
-	};
-
-	const copyToken = async () => {
-		if (userStats?.token) {
-			try {
-				await navigator.clipboard.writeText(userStats.token);
-				setCopiedToken(true);
-				setTimeout(() => setCopiedToken(false), 1500);
-			} catch (err) {
-				console.error('Failed to copy token:', err);
-			}
-		}
-	};
-
-	const handleManualTokenSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
-		await applyManualToken();
-	};
-
-
-
-	const handleSubmitBlock = async (e: React.FormEvent) => {
-		e.preventDefault();
-
-		if (!userStats?.activeBlock) {
-			setError('No active block to submit');
-			return;
-		}
-
-		const parsed = keysText
-			.split(/\s|,|;|\n|\r/)
-			.map(s => s.trim())
-			.filter(s => s.length > 0);
-		const limited = parsed.slice(0, 30);
-		if (limited.length < 10) {
-			setError('Informe pelo menos 10 private keys.');
-			return;
-		}
-		const invalid = limited.filter(k => {
-			const clean = k.startsWith('0x') ? k.slice(2) : k;
-			return !/^[0-9a-fA-F]{64}$/.test(clean);
-		});
-		if (invalid.length > 0) {
-			setError('Todas as chaves devem ter 64 caracteres hex (aceita 0x).');
-			return;
-		}
-
-		try {
-			setSubmitting(true);
-			setError(null);
-
-			const token = localStorage.getItem('pool-token');
-			if (!token) {
-				throw new Error('No token found');
-			}
-
-			const response = await fetch('/api/block/submit', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'pool-token': token,
-				},
-				body: JSON.stringify({
-					privateKeys: limited,
-					blockId: userStats.activeBlock.id
-				}),
-			});
-
-			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.error || 'Failed to submit block');
-			}
-
-			const data = await response.json();
-
-			alert(`Block submitted successfully! Credits awarded: ${data.creditsAwarded}`);
-
-			setKeysText('');
-			await fetchUserStats();
-
-		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to submit block');
-		} finally {
-			setSubmitting(false);
-		}
-	};
-
-	const generateNewToken = async () => {
-		// Se usuário está logado, gerar novo token mantendo o mesmo bitcoinAddress
-		if (userStats?.bitcoinAddress) {
-			try {
-				setLoading(true);
-				setError(null);
-
-				const response = await fetch('/api/token/generate', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({ bitcoinAddress: userStats.bitcoinAddress }),
-				});
-
-				if (!response.ok) {
-					throw new Error('Failed to generate new token');
-				}
-
-				const data = await response.json();
-
-				// Atualizar o token no localStorage
-				localStorage.setItem('pool-token', data.token);
-
-				// Atualizar o token no estado
-				setUserStats(prev => prev ? { ...prev, token: data.token } : null);
-
-				// Recarregar as estatísticas
-				await fetchUserStats();
-				router.replace('/dashboard');
-				router.refresh();
-
-			} catch (err) {
-				setError(err instanceof Error ? err.message : 'Failed to generate new token');
-				setLoading(false);
-			}
-		} else {
-			// Se não há usuário logado, usar a função original
-			await generateToken();
-		}
-	};
-
-	const handleLogout = () => {
-		logout();
-	};
-
-	const tickRef = useRef<number | undefined>(undefined);
+	/* ── Poll every 30 s ──────────────────────────────────────────── */
 	useEffect(() => {
-		fetchUserStats();
-		const scheduleNext = () => {
-			tickRef.current = window.setTimeout(() => {
-				fetchUserStats();
-				scheduleNext();
-			}, 30000);
+		const tickRef = { current: undefined as ReturnType<typeof setTimeout> | undefined };
+		const schedule = () => {
+			tickRef.current = setTimeout(() => { fetchUserStats(); schedule(); }, 30000);
 		};
-		scheduleNext();
-		const onFocus = () => { fetchUserStats(); };
+		schedule();
+		const onFocus = () => fetchUserStats();
 		const onVisibility = () => { if (document.visibilityState === 'visible') fetchUserStats(); };
 		window.addEventListener('focus', onFocus);
 		document.addEventListener('visibilitychange', onVisibility);
 		return () => {
+			clearTimeout(tickRef.current);
 			window.removeEventListener('focus', onFocus);
 			document.removeEventListener('visibilitychange', onVisibility);
-			if (tickRef.current) clearTimeout(tickRef.current);
-			if (controllerRef.current) controllerRef.current.abort();
+			controllerRef.current?.abort();
 		};
 	}, [fetchUserStats]);
 
-	// Busca os checkwork addresses do bloco ativo (caso exista)
+	/* ── Pool distribution ────────────────────────────────────────── */
 	useEffect(() => {
-		const fetchActiveBlockDetails = async () => {
-			try {
-				const token = localStorage.getItem('pool-token');
-				if (!token || !userStats?.activeBlock?.id) {
-					setCheckworkAddresses([]);
-					return;
-				}
-				const res = await fetch('/api/block?only=true', {
-					method: 'GET',
-					headers: { 'pool-token': token },
-					cache: 'no-store',
-				});
-				if (!res.ok) return;
-				const data = await res.json();
-				if (Array.isArray(data.checkwork_addresses)) {
-					setCheckworkAddresses(data.checkwork_addresses);
-				}
-			} catch (err) {
-				console.error('Erro ao buscar bloco ativo:', err);
-			}
-		};
-		fetchActiveBlockDetails();
-	}, [userStats?.activeBlock?.id]);
-
-	// Calcula velocidade média (BKeys/s) e tempo médio de conclusão (últimos 10)
-	useEffect(() => {
-		const computeAvgSpeed = async () => {
+		(async () => {
 			try {
 				const token = localStorage.getItem('pool-token');
 				if (!token) return;
-				const res = await fetch('/api/user/history', {
-					headers: { 'pool-token': token },
-					cache: 'no-store',
-				});
-				if (!res.ok) return;
-				const history = await res.json();
-				const allCompleted = (history.blocks || []).filter((b: HistoryBlock) => b.status === 'COMPLETED' && b.assignedAt && (b.completedAt || b.solution?.createdAt));
-				// Ordenar por data de conclusão (solution.createdAt ou completedAt) decrescente
-				const sorted = allCompleted.sort((a: HistoryBlock, b: HistoryBlock) => {
-					const ad = new Date(a.completedAt ?? a.solution?.createdAt ?? a.assignedAt!).getTime();
-					const bd = new Date(b.completedAt ?? b.solution?.createdAt ?? b.assignedAt!).getTime();
-					return bd - ad;
-				});
-				const completed = sorted.slice(0, 10);
-				if (completed.length === 0) {
-					setAvgSpeedBKeys('0.00');
-					setAvgBlockDuration('—');
-					return;
-				}
-				let totalSeconds = 0;
-				let totalSizeBI = 0n;
-				for (const b of completed) {
-					const startMs = new Date(b.assignedAt as string).getTime();
-					const endMs = new Date(b.completedAt ?? b.solution?.createdAt ?? b.assignedAt as string).getTime();
-					const durSec = Math.max(1, Math.floor((endMs - startMs) / 1000));
-					totalSeconds += durSec;
-					if (b.hexRangeStart && b.hexRangeEnd) {
-						try {
-							const startBI = BigInt(b.hexRangeStart);
-							const endBI = BigInt(b.hexRangeEnd);
-							const sizeBI = endBI >= startBI ? (endBI - startBI + 1n) : 0n;
-							totalSizeBI += sizeBI;
-						} catch { }
-					}
-				}
-				const totalSize = Number(totalSizeBI);
-				const kps = totalSize / Math.max(1, totalSeconds);
-				let unit = 'Keys/s';
-				let num = kps;
-				if (kps >= 1e15) { unit = 'PKeys/s'; num = kps / 1e15; }
-				else if (kps >= 1e12) { unit = 'TKeys/s'; num = kps / 1e12; }
-				else if (kps >= 1e9) { unit = 'BKeys/s'; num = kps / 1e9; }
-				else if (kps >= 1e6) { unit = 'MKeys/s'; num = kps / 1e6; }
-				else if (kps >= 1e3) { unit = 'KKeys/s'; num = kps / 1e3; }
-				setAvgSpeedBKeys(`${num.toFixed(2)} ${unit}`);
-				const avgSeconds = Math.max(1, Math.floor(totalSeconds / completed.length));
-				const hours = Math.floor(avgSeconds / 3600);
-				const minutes = Math.floor((avgSeconds % 3600) / 60);
-				const seconds = avgSeconds % 60;
-				const label = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-				setAvgBlockDuration(label);
-			} catch (err) {
-				console.error('Erro ao calcular velocidade média:', err);
-				setAvgSpeedBKeys('0.00');
-				setAvgBlockDuration('—');
-			}
-		};
-		computeAvgSpeed();
-	}, [userStats?.completedBlocks]);
+				const r = await fetch('/api/pool/distribution', { headers: { 'pool-token': token } });
+				if (!r.ok) return;
+				setPoolDist(await r.json());
+			} catch { }
+		})();
+	}, []);
 
+	/* ── BTC price ────────────────────────────────────────────────── */
 	useEffect(() => {
-		let interval: NodeJS.Timeout | undefined;
-		const expiresAt = userStats?.activeBlock?.expiresAt;
-		if (expiresAt) {
-			const updateRel = () => setTimeRemaining(formatUntil(expiresAt));
-			updateRel();
-			interval = setInterval(updateRel, 30000);
-		} else {
-			setTimeRemaining('');
-		}
-		return () => { if (interval) clearInterval(interval); };
-	}, [userStats?.activeBlock?.expiresAt]);
+		(async () => {
+			try {
+				const info = await fetch('/api/puzzle/info', { cache: 'no-store' });
+				if (!info.ok) return;
+				const j = await info.json();
+				const btc = Number(j?.balanceBtc || 0);
+				const usd = Number(j?.balanceUsd || 0);
+				if (btc > 0 && usd > 0) setUsdPrice(usd / btc);
+			} catch { }
+		})();
+	}, []);
 
-	const [puzzleMeta, setPuzzleMeta] = useState<{ address?: string | null; puzzleStart?: string; puzzleEnd?: string; startExp?: number; endExp?: number; maxExp?: number } | null>(null);
-	const [puzzleLoading, setPuzzleLoading] = useState(true);
-	const [noPuzzle, setNoPuzzle] = useState(false);
+	/* ── Puzzle metadata ──────────────────────────────────────────── */
 	useEffect(() => {
-		const fetchPuzzleMeta = async () => {
+		(async () => {
 			try {
 				setPuzzleLoading(true);
 				const res = await fetch('/api/pool/overview');
@@ -732,32 +320,191 @@ export default function UserDashboard() {
 				if (!res.ok) return;
 				const data = await res.json();
 				const m = data.meta || {};
-				const bitLen = (hex?: string) => {
-					if (!hex) return undefined;
-					try { const bi = BigInt(hex); return bi.toString(2).length; } catch { return undefined; }
-				};
+				const bitLen = (hex?: string) => { try { return hex ? BigInt(hex).toString(2).length : undefined; } catch { return undefined; } };
 				setPuzzleMeta({
 					address: m.address ?? null,
 					puzzleStart: m.puzzleStart,
 					puzzleEnd: m.puzzleEnd,
-					startExp: typeof bitLen(m.puzzleStart) === 'number' ? (bitLen(m.puzzleStart)! - 1) : undefined,
+					startExp: bitLen(m.puzzleStart) ? bitLen(m.puzzleStart)! - 1 : undefined,
 					endExp: typeof m.maxExp === 'number' ? m.maxExp : bitLen(m.puzzleEnd),
-					maxExp: typeof m.maxExp === 'number' ? m.maxExp : undefined,
 				});
-			} catch { }
-			finally { setPuzzleLoading(false); }
-		};
-		fetchPuzzleMeta();
+			} catch { } finally { setPuzzleLoading(false); }
+		})();
 	}, []);
 
-	if (loading) {
+	/* ── Checkwork addresses ──────────────────────────────────────── */
+	useEffect(() => {
+		(async () => {
+			try {
+				const token = localStorage.getItem('pool-token');
+				if (!token || !userStats?.activeBlock?.id) { setCheckworkAddresses([]); return; }
+				const res = await fetch('/api/block?only=true', { headers: { 'pool-token': token }, cache: 'no-store' });
+				if (!res.ok) return;
+				const data = await res.json();
+				if (Array.isArray(data.checkwork_addresses)) setCheckworkAddresses(data.checkwork_addresses);
+			} catch { }
+		})();
+	}, [userStats?.activeBlock?.id]);
+
+	/* ── Average speed ────────────────────────────────────────────── */
+	useEffect(() => {
+		(async () => {
+			try {
+				const token = localStorage.getItem('pool-token');
+				if (!token) return;
+				const res = await fetch('/api/user/history', { headers: { 'pool-token': token }, cache: 'no-store' });
+				if (!res.ok) return;
+				const history = await res.json();
+				const completed = (history.blocks || [] as HistoryBlock[])
+					.filter((b: HistoryBlock) => b.status === 'COMPLETED' && b.assignedAt && (b.completedAt || b.solution?.createdAt))
+					.sort((a: HistoryBlock, b: HistoryBlock) => {
+						const ad = new Date(a.completedAt ?? a.solution?.createdAt ?? a.assignedAt!).getTime();
+						const bd = new Date(b.completedAt ?? b.solution?.createdAt ?? b.assignedAt!).getTime();
+						return bd - ad;
+					})
+					.slice(0, 10);
+
+				if (!completed.length) { setAvgSpeedBKeys('0.00'); setAvgBlockDuration('—'); return; }
+
+				let totalSeconds = 0;
+				let totalSizeBI = 0n;
+				for (const b of completed) {
+					const dur = Math.max(1, Math.floor((new Date(b.completedAt ?? b.solution?.createdAt ?? b.assignedAt!).getTime() - new Date(b.assignedAt!).getTime()) / 1000));
+					totalSeconds += dur;
+					if (b.hexRangeStart && b.hexRangeEnd) {
+						try {
+							const sz = BigInt(b.hexRangeEnd) - BigInt(b.hexRangeStart);
+							if (sz > 0n) totalSizeBI += sz;
+						} catch { }
+					}
+				}
+
+				const kps = Number(totalSizeBI) / Math.max(1, totalSeconds);
+				let unit = 'Keys/s', num = kps;
+				if (kps >= 1e15) { unit = 'PKeys/s'; num = kps / 1e15; }
+				else if (kps >= 1e12) { unit = 'TKeys/s'; num = kps / 1e12; }
+				else if (kps >= 1e9) { unit = 'BKeys/s'; num = kps / 1e9; }
+				else if (kps >= 1e6) { unit = 'MKeys/s'; num = kps / 1e6; }
+				else if (kps >= 1e3) { unit = 'KKeys/s'; num = kps / 1e3; }
+				setAvgSpeedBKeys(`${num.toFixed(2)} ${unit}`);
+
+				const avg = Math.max(1, Math.floor(totalSeconds / completed.length));
+				setAvgBlockDuration(formatHHMMSS(avg));
+			} catch { }
+		})();
+	}, [userStats?.completedBlocks]);
+
+	/* ── Actions ──────────────────────────────────────────────────── */
+	const generateToken = useCallback(async (address?: string) => {
+		const addr = address ?? bitcoinAddress;
+		if (!addr) { setBitcoinAddressError(tRef.current('dashboard.auth.enterAddress')); return; }
+		if (!isValidBitcoinAddress(addr)) { setBitcoinAddressError(tRef.current('dashboard.auth.invalidAddress')); return; }
+		try {
+			setLoading(true); setError(null);
+			const response = await fetch('/api/token/generate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ bitcoinAddress: addr }),
+			});
+			if (!response.ok) { const d = await response.json(); throw new Error(d.error || 'Failed to generate token'); }
+			const data = await response.json();
+			localStorage.setItem('pool-token', data.token);
+			await fetchUserStats();
+			router.replace('/dashboard');
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'Failed to generate token');
+			setLoading(false);
+		}
+	}, [bitcoinAddress, fetchUserStats, router]);
+
+	const applyManualToken = useCallback(async () => {
+		if (!manualTokenInput.trim()) { setError(tRef.current('dashboard.auth.enterToken')); return; }
+		localStorage.setItem('pool-token', manualTokenInput.trim());
+		setManualTokenInput('');
+		await fetchUserStats();
+	}, [manualTokenInput, fetchUserStats]);
+
+	const logout = useCallback(() => {
+		localStorage.removeItem('pool-token');
+		localStorage.removeItem(CACHE_KEY);
+		setUserStats(null); setError(null); setBitcoinAddress(''); setManualTokenInput('');
+		userStatsRef.current = null;
+	}, []);
+
+	const assignNewBlock = useCallback(async () => {
+		try {
+			setAssigningBlock(true);
+			const token = localStorage.getItem('pool-token');
+			if (!token) throw new Error('No token found. Please generate a token first.');
+			const res = await fetch(`/api/block?length=${encodeURIComponent(blockLength)}`, {
+				headers: { 'pool-token': token },
+				cache: 'no-store',
+			});
+			if (!res.ok) throw new Error('Failed to assign new block');
+			const data = await res.json();
+			if (Array.isArray(data.checkwork_addresses)) setCheckworkAddresses(data.checkwork_addresses);
+			await fetchUserStats();
+			toast.success(tRef.current('dashboard.work.newBlockAssigned'));
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Failed to assign new block';
+			toast.error(msg);
+		} finally {
+			setAssigningBlock(false);
+		}
+	}, [blockLength, fetchUserStats]);
+
+	const handleSubmitBlock = useCallback(async (e: React.FormEvent) => {
+		e.preventDefault();
+		if (!userStats?.activeBlock) { toast.error(tRef.current('dashboard.work.noActiveBlockToSubmit')); return; }
+
+		const limited = parsedKeys.slice(0, 30);
+		if (limited.length < 10) { toast.error(tRef.current('dashboard.work.submitMinKeys')); return; }
+		const invalid = limited.filter(k => !/^(0x)?[0-9a-fA-F]{64}$/.test(k));
+		if (invalid.length > 0) { toast.error(tRef.current('dashboard.submit.hexError')); return; }
+
+		try {
+			setSubmitting(true); setError(null);
+			const token = localStorage.getItem('pool-token');
+			if (!token) throw new Error('No token found');
+			const response = await fetch('/api/block/submit', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'pool-token': token },
+				body: JSON.stringify({ privateKeys: limited, blockId: userStats.activeBlock.id }),
+			});
+			if (!response.ok) { const d = await response.json(); throw new Error(d.error || 'Failed to submit block'); }
+			const data = await response.json();
+			toast.success(tRef.current('dashboard.submit.blockSubmitted').replace('{n}', `${data.creditsAwarded}`));
+			setKeysText('');
+			await fetchUserStats();
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Failed to submit block';
+			toast.error(msg);
+			setError(msg);
+		} finally {
+			setSubmitting(false);
+		}
+	}, [userStats?.activeBlock, parsedKeys, fetchUserStats]);
+
+	const handleExtractHexKeys = useCallback(() => {
+		const out = new Set<string>();
+		for (const m of keysText.matchAll(/(?:0x)?([0-9a-fA-F]{64})/g)) out.add(`0x${m[1]}`);
+		setKeysText(Array.from(out).join('\n'));
+	}, [keysText]);
+
+	const copyText = useCallback(async (text: string, onSuccess: () => void) => {
+		try { await navigator.clipboard.writeText(text); onSuccess(); } catch { }
+	}, []);
+
+	/* ── Loading / Error / No-puzzle states ──────────────────────── */
+	if (loading && !userStats) {
 		return (
-			<div className="min-h-screen bg-white text-black">
-				<div className="flex items-center justify-center py-20">
-					<div className="text-center">
-						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
-						<p className="text-gray-600">Loading dashboard...</p>
-					</div>
+			<div className="min-h-screen bg-volt-bg flex items-center justify-center">
+				<div className="text-center volt-fade-in">
+					<div
+						className="w-12 h-12 rounded-full border-2 border-transparent mx-auto mb-4"
+						style={{ borderTopColor: '#fc5c04', animation: 'voltSpin 700ms linear infinite' }}
+					/>
+					<p className="text-[13px]" style={{ color: '#5c5a55' }}>{t('dashboard.loading')}</p>
 				</div>
 			</div>
 		);
@@ -765,713 +512,541 @@ export default function UserDashboard() {
 
 	if (noPuzzle) {
 		return (
-			<div className="min-h-screen bg-white text-black">
-				<div className="max-w-4xl mx-auto px-4 py-8">
+			<div className="min-h-screen bg-volt-bg">
+				<div className="max-w-3xl mx-auto px-4 sm:px-7 py-12">
 					<PuzzleConfigNotice />
 				</div>
 			</div>
 		);
 	}
 
-	if (!userStats || error?.includes('token') || error?.includes('Token')) {
+	/* ── Login / token page ───────────────────────────────────────── */
+	if (!userStats || error?.toLowerCase().includes('token')) {
 		return (
-			<div className="min-h-screen bg-white text-black">
-				<div className="max-w-4xl mx-auto px-4 py-8">
-					<div className="text-center mb-8">
-						<h1 className="text-3xl font-bold mb-4 text-black">User Dashboard</h1>
-						<p className="text-gray-600">
-							{error?.includes('token') || error?.includes('Token')
-								? error
-								: 'You need a token to access the dashboard'
-							}
-						</p>
+			<div className="min-h-screen bg-volt-bg volt-fade-in">
+				<div className="max-w-3xl mx-auto px-4 sm:px-7 py-12">
+					<div className="text-center mb-10">
+						<div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#fc5c04' }}>
+							{t('dashboard.auth.title')}
+						</div>
+						<h1 className="text-[30px] font-semibold mb-2" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>
+							{t('dashboard.auth.subtitle')}
+						</h1>
+						{error && (
+							<p className="text-[13px] mt-2" style={{ color: '#f0554a' }}>{error}</p>
+						)}
+						{!error && (
+							<p className="text-[13px]" style={{ color: '#9a9892' }}>{t('dashboard.auth.needToken')}</p>
+						)}
 					</div>
 
-					<div className="grid md:grid-cols-2 gap-8">
-						{/* Inserir Token Manual */}
-						<Card className="bg-white border-gray-200 shadow-sm">
-							<CardHeader>
-								<CardTitle className="text-black">Enter Token</CardTitle>
-								<CardDescription className="text-gray-600">
-									Paste your existing token here
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<form onSubmit={handleManualTokenSubmit} className="space-y-4">
-									<input
-										type="text"
-										value={manualTokenInput}
-										onChange={(e) => setManualTokenInput(e.target.value)}
-										placeholder="Paste your token here..."
-										className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
-									/>
-									<Button
-										type="submit"
-										className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-										disabled={!manualTokenInput.trim()}
-									>
-										Load Dashboard
-									</Button>
+					<div className="grid md:grid-cols-2 gap-5 mb-6">
+						{/* Enter existing token */}
+						<div className="volt-card">
+							<div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid #262624' }}>
+								<div className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-1" style={{ color: '#fc5c04' }}>{t('dashboard.token.existing')}</div>
+								<div className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.token.enterToken')}</div>
+								<p className="text-[13px] mt-1" style={{ color: '#5c5a55' }}>{t('dashboard.token.description')}</p>
+							</div>
+							<div className="px-6 py-5">
+								<form onSubmit={e => { e.preventDefault(); applyManualToken(); }} className="space-y-3">
+									<div className="volt-input-wrap">
+										<input
+											type="text"
+											value={manualTokenInput}
+											onChange={e => setManualTokenInput(e.target.value)}
+											placeholder={t('dashboard.token.placeholder')}
+										/>
+									</div>
+									<button type="submit" className="volt-btn-primary w-full" disabled={!manualTokenInput.trim()}>
+										{t('dashboard.token.load')}
+									</button>
 								</form>
-							</CardContent>
-						</Card>
+							</div>
+						</div>
 
-						{/* Gerar Novo Token */}
-						<Card className="bg-white border-gray-200 shadow-sm">
-							<CardHeader>
-								<CardTitle className="text-black">New Token</CardTitle>
-								<CardDescription className="text-gray-600">
-									Enter your Bitcoin address and generate a new token
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<div className="space-y-4">
+						{/* Generate new token */}
+						<div className="volt-card">
+							<div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid #262624' }}>
+								<div className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-1" style={{ color: '#fc5c04' }}>{t('dashboard.newToken.badge')}</div>
+								<div className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.newToken.title')}</div>
+								<p className="text-[13px] mt-1" style={{ color: '#5c5a55' }}>{t('dashboard.newToken.description')}</p>
+							</div>
+							<div className="px-6 py-5 space-y-3">
+								<div className="volt-input-wrap">
 									<input
 										type="text"
 										value={bitcoinAddress}
-										onChange={(e) => setBitcoinAddress(e.target.value)}
-										placeholder="Enter your Bitcoin address..."
-										className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+										onChange={e => { setBitcoinAddress(e.target.value); setBitcoinAddressError(''); }}
+										placeholder={t('dashboard.newToken.placeholder')}
 									/>
-									{bitcoinAddressError && (
-										<p className="text-red-500 text-sm">{bitcoinAddressError}</p>
-									)}
-									<Button
-										onClick={generateNewToken}
-										className="w-full bg-blue-500 hover:bg-blue-600 text-white"
-										disabled={loading}
-									>
-										{loading ? 'Generating...' : 'Generate New Token'}
-									</Button>
 								</div>
-							</CardContent>
-						</Card>
-					</div>
-
-					{/* Informações do Puzzle */}
-					<Card className="bg-white border-gray-200 shadow-sm mt-8">
-						<CardHeader>
-							<CardTitle className="text-black flex items-center gap-2">
-								<Bitcoin className="h-5 w-5 text-blue-500" />
-								Puzzle Data Information
-							</CardTitle>
-							<CardDescription className="text-gray-600">
-								Current Bitcoin puzzle configuration
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-4">
-							<div className="grid md:grid-cols-1 gap-4">
-								<div>
-									<label className="text-gray-700 text-sm font-medium">Bitcoin Address</label>
-									<div className="text-gray-800 font-mono text-sm break-all bg-gray-50 p-3 rounded-lg border border-gray-200 mt-1">
-										{puzzleMeta?.address || 'Not configured'}
-									</div>
-								</div>
-
-								<div>
-									<label className="text-gray-700 text-sm font-medium">Key Range (Bits)</label>
-									<div className="text-gray-800 font-mono text-sm break-all bg-gray-50 p-3 rounded-lg border border-gray-200 mt-1">
-										{(puzzleMeta?.startExp !== undefined && puzzleMeta?.endExp !== undefined) ? `2^${puzzleMeta.startExp}…2^${puzzleMeta.endExp}` : 'Not available'}
-									</div>
-								</div>
-
-								{userStats?.activeBlock && (
-									<div className="flex items-center justify-between">
-										<div className="text-sm text-gray-700">
-											<span className="font-mono text-gray-800">{userStats.activeBlock.startRange}</span>
-											<span className="mx-1 text-gray-400">→</span>
-											<span className="font-mono text-gray-800">{userStats.activeBlock.endRange}</span>
-										</div>
-										<div className="px-2 py-1 rounded bg-white border text-xs text-gray-700">
-											{formatRangePowerLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)} • {formatKeysCountLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)}
-										</div>
-									</div>
+								{bitcoinAddressError && (
+									<p className="text-[12px] flex items-center gap-1" style={{ color: '#f0554a' }}>
+										<XCircle className="w-3.5 h-3.5" /> {bitcoinAddressError}
+									</p>
 								)}
-								<div>
-									<label className="text-gray-700 text-sm font-medium">Start Range</label>
-									<div className="text-gray-800 font-mono text-sm break-all bg-gray-50 p-3 rounded-lg border border-gray-200 mt-1">
-										{formatCompactHexRange(puzzleMeta?.puzzleStart || '0')}
-									</div>
-								</div>
-								<div>
-									<label className="text-gray-700 text-sm font-medium">End Range</label>
-									<div className="text-gray-800 font-mono text-sm break-all bg-gray-50 p-3 rounded-lg border border-gray-200 mt-1">
-										{formatCompactHexRange(puzzleMeta?.puzzleEnd || '0')}
-									</div>
-								</div>
+								<button onClick={() => generateToken()} className="volt-btn-primary w-full" disabled={loading}>
+									{loading ? t('dashboard.newToken.generating') : t('dashboard.newToken.generate')}
+								</button>
 							</div>
-						</CardContent>
-					</Card>
-
-					<div className="mt-6">
-						{puzzleLoading ? (
-							<div className="bg-white border border-gray-200 rounded-md p-4 animate-pulse">
-								<div className="h-6 w-40 bg-gray-200 rounded mb-2" />
-								<div className="h-4 w-64 bg-gray-200 rounded" />
-							</div>
-						) : (
-							<PuzzleInfoCard variant="dashboard" />
-						)}
+						</div>
 					</div>
+
+					{/* Puzzle info preview */}
+					<div className="volt-card mb-6">
+						<div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid #262624' }}>
+							<div className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-1" style={{ color: '#fc5c04' }}>{t('dashboard.puzzle.title')}</div>
+							<div className="flex items-center gap-2">
+								<Bitcoin className="h-4 w-4" style={{ color: '#fc5c04' }} />
+								<span className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>
+									{t('dashboard.puzzle.subtitle')}
+								</span>
+							</div>
+						</div>
+						<div className="px-6 py-5 space-y-3">
+							<div>
+								<label className="text-[12.5px] font-semibold block mb-1" style={{ color: '#9a9892' }}>{t('dashboard.puzzle.bitcoinAddress')}</label>
+								<div className="rounded-[10px] p-3 font-mono text-[12px]" style={{ background: '#191919', border: '1px solid #262624', color: '#f4f3ee' }}>
+									{puzzleMeta?.address || t('dashboard.puzzle.notConfigured')}
+								</div>
+							</div>
+							<div>
+								<label className="text-[12.5px] font-semibold block mb-1" style={{ color: '#9a9892' }}>{t('dashboard.puzzle.keyRange')}</label>
+								<div className="rounded-[10px] p-3 font-mono text-[12px]" style={{ background: '#191919', border: '1px solid #262624', color: '#f4f3ee' }}>
+									{puzzleMeta?.startExp !== undefined && puzzleMeta?.endExp !== undefined
+										? `2^${puzzleMeta.startExp} … 2^${puzzleMeta.endExp}`
+										: t('dashboard.puzzle.notAvailable')}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{!puzzleLoading && <PuzzleInfoCard variant="dashboard" />}
 				</div>
 			</div>
 		);
 	}
 
-	if (error && !error.includes('No token found')) {
-		return (
-			<div className="min-h-screen bg-white text-black">
-				<div className="flex items-center justify-center py-20">
-					<div className="max-w-md mx-auto">
-						<Card className="bg-white border-gray-200 shadow-sm">
-							<CardHeader>
-								<CardTitle className="text-black">Token Issue</CardTitle>
-								<CardDescription className="text-gray-600">{error}</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<div className="flex gap-3">
-									<Button onClick={fetchUserStats} className="bg-blue-500 hover:bg-blue-600 text-white">Try Again</Button>
-									<Button onClick={handleLogout} variant="destructive" className="bg-red-500 hover:bg-red-600 text-white">Clear Data</Button>
-								</div>
-							</CardContent>
-						</Card>
-					</div>
-				</div>
-			</div>
-		);
-	}
+	/* ── Main dashboard ───────────────────────────────────────────── */
+	const completionRate = userStats.totalBlocks > 0
+		? Math.round((userStats.completedBlocks / userStats.totalBlocks) * 100)
+		: 0;
 
-	if (!userStats) {
-		return (
-			<div className="min-h-screen bg-white text-black">
-				<div className="flex items-center justify-center py-20">
-					<div className="text-center">
-						<p className="text-gray-600">No data available</p>
-					</div>
-				</div>
-			</div>
-		);
+	const statCards = [
+		{ label: t('dashboard.stats.totalBlocks'), value: formatNumber(userStats.totalBlocks), sub: t('dashboard.stats.completed').replace('{n}', `${userStats.completedBlocks}`), icon: Target, color: '#fc5c04' },
+		{ label: t('dashboard.stats.availableCredits'), value: userStats.availableCredits.toFixed(3), sub: t('dashboard.stats.total').replace('{n}', `${userStats.totalCredits.toFixed(3)}`), icon: Coins, color: '#3ddc84' },
+		{ label: t('dashboard.stats.estimatedPayout'), value: poolDist ? `${poolDist.expectedRewardBtc.toFixed(6)} BTC` : '…', sub: poolDist ? t('dashboard.stats.share').replace('{n}', `${poolDist.userSharePercent.toFixed(2)}`) : t('dashboard.stats.loading'), icon: Award, color: '#fc5c04' },
+		{ label: t('dashboard.stats.pendingBlocks'), value: String(userStats.pendingBlocks), sub: t('dashboard.stats.awaitingCompletion'), icon: Clock, color: '#9a9892' },
+		{ label: t('dashboard.stats.completionRate'), value: `${completionRate}%`, sub: t('dashboard.stats.successPercentage'), icon: Zap, color: completionRate >= 80 ? '#3ddc84' : '#fc5c04' },
+		{ label: t('dashboard.stats.averageSpeed'), value: avgSpeedBKeys, sub: t('dashboard.stats.avgDuration').replace('{n}', avgBlockDuration), icon: Zap, color: '#fc5c04' },
+		{ label: t('dashboard.stats.totalValidated'), value: formatTotalKeysLabel(userStats.totalKeysValidated), sub: t('dashboard.stats.totalTime').replace('{n}', formatHHMMSS(userStats.totalTimeSpentSeconds)), icon: CheckCircle2, color: '#3ddc84' },
+	];
+
+	if (poolDist && usdPrice && poolDist.expectedRewardBtc > 0) {
+		statCards[2].sub += ` ≈ $${(poolDist.expectedRewardBtc * usdPrice).toFixed(2)}`;
 	}
 
 	return (
-		<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-				<div className="flex items-center justify-end gap-3">
-					<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200">
-						<Clock className="h-4 w-4 text-blue-600" />
-						<span className="text-xs font-semibold text-blue-700">Last Updated</span>
-						<Badge variant="outline" className="text-[10px] font-bold border-blue-300 text-blue-700 bg-white">
-							{formatLastUpdated(lastUpdated)}
-						</Badge>
-					</div>
-					<Button variant="outline" onClick={() => fetchUserStats()} className="text-gray-700">Refresh</Button>
-				</div>
-			</div>
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+		<div className="min-h-screen bg-volt-bg text-volt-text volt-fade-in">
+			<div className="max-w-7xl mx-auto px-4 sm:px-7 pt-5">
 
-				{/* User Info & Actions (Seção de Perfil/Token) */}
-				<Card className="mb-8 shadow-md border-gray-200">
-					<CardHeader className="border-b pb-4">
-						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-							<div className="flex items-center gap-3">
-								<div className="p-3 bg-blue-100 rounded-full">
-									<Key className="h-6 w-6 text-blue-600" />
-								</div>
-								<div>
-									<CardTitle className="text-2xl font-bold text-gray-900">Pool User Session</CardTitle>
-									<CardDescription className="text-gray-600">Your unique identifier and associated Bitcoin address.</CardDescription>
-								</div>
+				{/* Top bar */}
+				<div className="flex items-center justify-end gap-3 mb-6">
+					<div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11.5px]" style={{ background: '#191919', border: '1px solid #262624', color: '#9a9892' }}>
+						<Clock className="h-3.5 w-3.5" />
+						{t('dashboard.updated').replace('{n}', formatLastUpdated(lastUpdated, t))}
+					</div>
+					<button onClick={fetchUserStats} className="volt-btn-ghost text-[13px] px-3 py-1.5">
+						{t('common.refresh')}
+					</button>
+				</div>
+
+				{/* User session card */}
+				<div className="volt-card mb-6">
+					<div className="px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" style={{ borderBottom: '1px solid #262624' }}>
+						<div className="flex items-center gap-3">
+							<div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(252,92,4,0.1)', border: '1px solid rgba(252,92,4,0.15)' }}>
+								<Key className="h-5 w-5" style={{ color: '#fc5c04' }} />
 							</div>
-							<div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
-								<Button
-									onClick={() => router.push('/dashboard/transfer')}
-									className="bg-green-600 hover:bg-green-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
-									disabled={loading}
-								>
-									<Coins className='h-4 w-4' /> Transfer Credits
-								</Button>
-								<Button
-									onClick={() => router.push('/dashboard/redeem')}
-									className="bg-purple-600 hover:bg-purple-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
-									disabled={loading}
-								>
-									<Award className='h-4 w-4' /> Redeem Reward
-								</Button>
-								<Button
-									onClick={generateNewToken}
-									className="bg-blue-600 hover:bg-blue-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
-									disabled={loading}
-								>
-									<RotateCw className='h-4 w-4' /> Rotate Token
-								</Button>
-								<Button
-									onClick={handleLogout}
-									className="bg-red-600 hover:bg-red-700 text-white font-semibold inline-flex items-center gap-2 w-full sm:w-auto"
-								>
-									<LogOut className='h-4 w-4' /> Log Out
-								</Button>
+							<div>
+								<div className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#fc5c04' }}>{t('dashboard.session.title')}</div>
+								<div className="text-[18px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>
+									{t('dashboard.session.subtitle')}
+								</div>
 							</div>
 						</div>
-					</CardHeader>
-					<CardContent className='pt-6'>
-						<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-							{/* Linha do Bitcoin Address */}
-							<div className="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg">
-								<Bitcoin className="h-5 w-5 text-green-600 mr-3 shrink-0" />
-								<div className='1 min-w-0'>
-									<p className="text-xs text-gray-600 font-medium">Bitcoin Address (Payout)</p>
-									<span className="text-sm font-mono text-gray-800 break-all">{userStats.bitcoinAddress || 'N/A'}</span>
-								</div>
-								<button type="button" className="ml-2 bg-transparent hover:bg-gray-200 p-2 rounded-full" onClick={copyAddress}>
-									{copiedAddress ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-gray-600" />}
+						<div className="flex flex-wrap gap-2">
+							<button onClick={() => router.push('/dashboard/transfer')} className="volt-btn-ghost text-[13px]">
+								<Coins className="h-4 w-4" style={{ color: '#3ddc84' }} /> {t('dashboard.session.transfer')}
+							</button>
+							<button onClick={() => router.push('/dashboard/redeem')} className="volt-btn-ghost text-[13px]">
+								<Award className="h-4 w-4" style={{ color: '#fc5c04' }} /> {t('dashboard.session.redeem')}
+							</button>
+							<button onClick={() => generateToken(userStats.bitcoinAddress)} className="volt-btn-ghost text-[13px]">
+								<RotateCw className="h-4 w-4" /> {t('dashboard.session.rotate')}
+							</button>
+							<button onClick={logout} className="volt-btn-danger text-[13px]">
+								<LogOut className="h-4 w-4" /> {t('dashboard.session.logout')}
+							</button>
+						</div>
+					</div>
+					<div className="px-6 py-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+						{/* Bitcoin address */}
+						<div className="flex items-center gap-3 p-3 rounded-[10px]" style={{ background: '#191919', border: '1px solid #262624' }}>
+							<Bitcoin className="h-4 w-4 shrink-0" style={{ color: '#fc5c04' }} />
+							<div className="flex-1 min-w-0">
+								<p className="text-[11px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: '#5c5a55' }}>{t('dashboard.session.bitcoinAddress')}</p>
+								<span className="text-[13px] font-mono break-all" style={{ color: '#f4f3ee' }}>{userStats.bitcoinAddress || 'N/A'}</span>
+							</div>
+							<button
+								type="button"
+								className="volt-btn-ghost p-2 rounded-full shrink-0"
+								onClick={() => copyText(userStats.bitcoinAddress, () => { setCopiedAddress(true); setTimeout(() => setCopiedAddress(false), 1500); })}
+							>
+								{copiedAddress ? <CheckCircle2 className="h-4 w-4" style={{ color: '#3ddc84' }} /> : <Copy className="h-4 w-4" style={{ color: '#9a9892' }} />}
+							</button>
+						</div>
+						{/* Token */}
+						<div className="flex items-center gap-3 p-3 rounded-[10px]" style={{ background: '#191919', border: '1px solid #262624' }}>
+							<Key className="h-4 w-4 shrink-0" style={{ color: '#fc5c04' }} />
+							<div className="flex-1 min-w-0">
+								<p className="text-[11px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: '#5c5a55' }}>{t('dashboard.session.poolToken')}</p>
+								<span className="text-[13px] font-mono break-all" style={{ color: '#f4f3ee' }}>
+									{showFullToken ? userStats.token : `${userStats.token.substring(0, 12)}…`}
+								</span>
+							</div>
+							<div className="flex gap-1 shrink-0">
+								<button type="button" className="volt-btn-ghost p-2 rounded-full" onClick={() => setShowFullToken(v => !v)}>
+									{showFullToken ? <EyeOff className="h-4 w-4" style={{ color: '#9a9892' }} /> : <Eye className="h-4 w-4" style={{ color: '#9a9892' }} />}
+								</button>
+								<button type="button" className="volt-btn-ghost p-2 rounded-full" onClick={() => copyText(userStats.token, () => { setCopiedToken(true); setTimeout(() => setCopiedToken(false), 1500); })}>
+									{copiedToken ? <CheckCircle2 className="h-4 w-4" style={{ color: '#3ddc84' }} /> : <Copy className="h-4 w-4" style={{ color: '#9a9892' }} />}
 								</button>
 							</div>
-
-							{/* Linha do Token */}
-							<div className="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg">
-								<Key className="h-5 w-5 text-blue-600 mr-3 shrink-0" />
-								<div className='flex-1 min-w-0'>
-									<p className="text-xs text-gray-600 font-medium">Pool Token</p>
-									<span className="text-sm font-mono text-gray-800 break-all">
-										{showFullToken ? userStats.token : `${userStats.token.substring(0, 10)}...`}
-									</span>
-								</div>
-								<div className='flex ml-2'>
-									<button type="button" className="bg-transparent hover:bg-gray-200 p-2 rounded-full" onClick={() => setShowFullToken(!showFullToken)}>
-										{showFullToken ? <EyeOff className="h-4 w-4 text-gray-600" /> : <Eye className="h-4 w-4 text-gray-600" />}
-									</button>
-									<button type="button" className="bg-transparent hover:bg-gray-200 p-2 rounded-full" onClick={copyToken}>
-										{copiedToken ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-gray-600" />}
-									</button>
-								</div>
-							</div>
 						</div>
-					</CardContent>
-				</Card>
-
-				{/* Stats Overview */}
-				<h2 className="text-2xl font-bold text-gray-900 mb-4">Statistics Summary</h2>
-				{/* Grid ajustado para 6 colunas no LG para exibir todas as métricas */}
-				<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
-
-					{/* Total Blocks */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<CardTitle className="text-sm font-medium text-gray-600">Total Blocks</CardTitle>
-							<Target className="h-4 w-4 text-blue-500" />
-						</CardHeader>
-						<CardContent>
-							<div className="text-xl font-bold text-gray-900">{formatNumber(userStats.totalBlocks)}</div>
-							<p className="text-xs text-gray-600">{userStats.completedBlocks} completed</p>
-						</CardContent>
-					</Card>
-
-					{/* Total Credits */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<CardTitle className="text-sm font-medium text-gray-600">Total Credits</CardTitle>
-							<Coins className="h-4 w-4 text-blue-500" />
-						</CardHeader>
-						<CardContent>
-							<div className="text-xl font-bold text-gray-900">{userStats.totalCredits.toFixed(3)}</div>
-							<p className="text-xs text-gray-600">{userStats.availableCredits.toFixed(3)} available</p>
-						</CardContent>
-					</Card>
-
-					{/* Estimated Payout (25%) */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<CardTitle className="text-sm font-medium text-gray-600">Estimated Payout (25%)</CardTitle>
-							<Award className="h-4 w-4 text-purple-500" />
-						</CardHeader>
-						<CardContent>
-							{poolDist ? (
-								<div className="space-y-1">
-									<div className="text-xl font-bold text-gray-900">{poolDist.expectedRewardBtc.toFixed(8)} BTC</div>
-									<p className="text-xs text-gray-600">Share: {poolDist.userSharePercent.toFixed(2)}%</p>
-									<p className="text-xs text-gray-600">Puzzle Balance: {poolDist.balanceBtc.toFixed(8)} BTC</p>
-									{usdPrice && poolDist.expectedRewardBtc > 0 && (
-										<p className="text-xs text-gray-600">≈ ${(poolDist.expectedRewardBtc * usdPrice).toFixed(2)} USD</p>
-									)}
-								</div>
-							) : (
-								<p className="text-xs text-gray-600">Loading estimate…</p>
-							)}
-						</CardContent>
-					</Card>
-
-					{/* Pending Blocks */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<CardTitle className="text-sm font-medium text-gray-600">Pending Blocks</CardTitle>
-							<Clock className="h-4 w-4 text-blue-500" />
-						</CardHeader>
-						<CardContent>
-							<div className="text-xl font-bold text-gray-900">{userStats.pendingBlocks}</div>
-							<p className="text-xs text-gray-600">Awaiting completion</p>
-						</CardContent>
-					</Card>
-
-					{/* Completion Rate */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<CardTitle className="text-sm font-medium text-gray-600">Completion Rate</CardTitle>
-							<Zap className="h-4 w-4 text-blue-500" />
-						</CardHeader>
-						<CardContent>
-							<div className="text-xl font-bold text-gray-900">
-								{userStats && userStats.totalBlocks > 0
-									? Math.round((userStats.completedBlocks / userStats.totalBlocks) * 100)
-									: 0}%
-							</div>
-							<p className="text-xs text-gray-600">Success percentage</p>
-						</CardContent>
-					</Card>
-
-					{/* Average Speed */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<CardTitle className="text-sm font-medium text-gray-600">Average Speed</CardTitle>
-							<Zap className="h-4 w-4 text-blue-600" />
-						</CardHeader>
-						<CardContent>
-							<div className="text-xl font-bold text-gray-900">{avgSpeedBKeys}</div>
-							<p className="text-xs text-gray-600">Avg duration: {avgBlockDuration}</p>
-						</CardContent>
-					</Card>
-
-					{/* Total Validated */}
-					<Card className="shadow-sm border-gray-200">
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-							<CardTitle className="text-sm font-medium text-gray-600">Total Validated</CardTitle>
-							<CheckCircle2 className="h-4 w-4 text-green-600" />
-						</CardHeader>
-						<CardContent>
-							<div className="text-xl font-bold text-gray-900">{formatTotalKeysLabel(userStats.totalKeysValidated)}</div>
-							<p className="text-xs text-gray-600">Total time: {formatHHMMSS(userStats.totalTimeSpentSeconds)}</p>
-						</CardContent>
-					</Card>
+					</div>
 				</div>
 
-				<Tabs defaultValue="manual" className="mb-8">
-					<TabsList className="grid w-full grid-cols-2 max-w-[400px] mb-4 bg-gray-100 p-1 rounded-xl">
-						<TabsTrigger value="manual" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all duration-200"><Gpu className='w-5 h-5 mr-2' />Manual / GPU</TabsTrigger>
-						<TabsTrigger value="browser" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all duration-200"><Chromium className='w-5 h-5 mr-2' />Browser Mining</TabsTrigger>
-					</TabsList>
-					<TabsContent value="manual">
-						{/* Active Block & Submission */}
-						{/* Grid 2/3 (Detalhes do Bloco) + 1/3 (Submissão) */}
-						<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				{/* Stats grid */}
+				<h2 className="text-[19px] font-semibold mb-4" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.stats.title')}</h2>
+				<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+					{statCards.map(({ label, value, sub, icon: Icon, color }) => (
+						<div key={label} className="volt-card p-4 flex flex-col justify-between" style={{ minHeight: 105 }}>
+							<div className="flex items-center justify-between mb-2">
+								<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{label}</span>
+								<Icon className="h-4 w-4" style={{ color }} />
+							</div>
+							<div>
+								<div className="text-[22px] font-bold" style={{ fontFamily: 'var(--font-space-grotesk)', color, letterSpacing: '-0.02em' }}>
+									{value}
+								</div>
+								<p className="text-[11.5px] mt-0.5" style={{ color: '#5c5a55' }}>{sub}</p>
+							</div>
+						</div>
+					))}
+				</div>
 
-							{/* Coluna 1: Active Block Details & Request (2/3) */}
-							<div className='lg:col-span-2'>
-								<Card className="shadow-md border-gray-200 h-full">
-									<CardHeader className='border-b pb-4'>
-										<div className="flex items-center justify-between">
-											<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-												<Bitcoin className="h-5 w-5 text-blue-600" />
-												Active Work Block
-											</CardTitle>
-											{userStats.activeBlock ? (
-												<Button
-													type="button"
-													variant='outline'
-													className="inline-flex items-center gap-2 bg-white text-red-600 border-red-400 hover:bg-red-50 hover:text-red-700"
-													onClick={() => setConfirmDeleteOpen(true)}
-													disabled={deletingBlock}
-												>
-													<LogOut className='w-4 h-4' /> {deletingBlock ? 'Deleting...' : 'Delete Active Block'}
-												</Button>
-											) : null}
+				{/* Mining tabs */}
+				<Tabs defaultValue="manual" className="mb-8">
+					<TabsList className="grid grid-cols-2 max-w-xs mb-5 p-1 rounded-[10px]" style={{ background: '#191919', border: '1px solid #262624' }}>
+						<TabsTrigger value="manual" className="rounded-lg text-[13px] font-semibold data-[state=active]:bg-volt-accent data-[state=active]:text-volt-bg transition-all duration-150">
+							<Cpu className="w-4 h-4 mr-1.5" /> {t('dashboard.tabs.gpu')}
+						</TabsTrigger>
+						<TabsTrigger value="browser" className="rounded-lg text-[13px] font-semibold data-[state=active]:bg-volt-accent data-[state=active]:text-volt-bg transition-all duration-150">
+							<Monitor className="w-4 h-4 mr-1.5" /> {t('dashboard.tabs.browser')}
+						</TabsTrigger>
+					</TabsList>
+
+					<TabsContent value="manual">
+						<div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+							{/* Active block details */}
+							<div className="lg:col-span-2">
+								<div className="volt-card h-full">
+									<div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: '1px solid #262624' }}>
+										<div>
+											<div className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-1" style={{ color: '#fc5c04' }}>{t('dashboard.work.title')}</div>
+											<div className="flex items-center gap-2">
+												<Bitcoin className="h-4 w-4" style={{ color: '#fc5c04' }} />
+												<span className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.work.subtitle')}</span>
+											</div>
 										</div>
-										<CardDescription className='text-gray-600'>
-											{userStats.activeBlock ? 'Your current assigned key range and expiration time.' : 'No active block at the moment. Assign one below.'}
-										</CardDescription>
-									</CardHeader>
-									<CardContent className='pt-6'>
+										{userStats.activeBlock && (
+											<button
+												type="button"
+												className="volt-btn-danger text-[12px]"
+												onClick={() => setConfirmDeleteOpen(true)}
+												disabled={deletingBlock}
+											>
+												<LogOut className="w-3.5 h-3.5" /> {deletingBlock ? t('dashboard.work.deleting') : t('dashboard.work.release')}
+											</button>
+										)}
+									</div>
+									<div className="px-6 py-5">
 										{userStats.activeBlock ? (
 											<div className="space-y-4">
-												{/* Range e Contagem */}
-												<div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-													<div className="flex items-center justify-between text-gray-700 text-sm">
-														<div className='flex items-center'>
-															<span className="font-mono text-gray-800 break-all pr-2">{formatCompactHexRange(userStats.activeBlock.startRange)}</span>
-															<ArrowRight className='w-4 h-4 text-blue-600' />
-															<span className="font-mono text-gray-800 break-all pl-2">{formatCompactHexRange(userStats.activeBlock.endRange)}</span>
+												{/* Range */}
+												<div className="p-4 rounded-[10px]" style={{ background: 'rgba(252,92,4,0.06)', border: '1px solid rgba(252,92,4,0.15)' }}>
+													<div className="flex items-center justify-between gap-2">
+														<div className="flex items-center gap-2 min-w-0">
+															<span className="font-mono text-[12px] truncate" style={{ color: '#f4f3ee' }}>{formatCompactHexRange(userStats.activeBlock.startRange)}</span>
+															<ArrowRight className="w-4 h-4 shrink-0" style={{ color: '#fc5c04' }} />
+															<span className="font-mono text-[12px] truncate" style={{ color: '#f4f3ee' }}>{formatCompactHexRange(userStats.activeBlock.endRange)}</span>
 														</div>
-														<div className="px-3 py-1 rounded bg-white border text-xs font-semibold text-blue-600">
-															{formatRangePowerLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)}
-														</div>
+														<span className="volt-badge-accent shrink-0">
+															{formatRangePowerLabel(userStats.activeBlock.startRange, userStats.activeBlock.endRange)}
+														</span>
 													</div>
-													<p className='text-xs text-green-600 mt-2'>{formatKeysCountLabel(userStats?.activeBlock?.startRange, userStats?.activeBlock?.endRange)} keys in range</p>
+													<p className="text-[11.5px] mt-2" style={{ color: '#3ddc84' }}>
+														{formatKeysCountLabel(userStats.activeBlock.startRange, userStats.activeBlock.endRange)} {t('dashboard.work.keysInRange')}
+													</p>
 												</div>
 
-												<div className="flex items-center justify-between text-xs">
-													<div className="flex items-center gap-2">
-														<span className="text-gray-600 font-medium">Assigned</span>
-														<span className="font-semibold text-gray-800">{new Date(userStats.activeBlock.assignedAt).toLocaleString()}</span>
-														<Badge className="bg-gray-100 text-gray-800 border border-gray-300">
-															{formatAgo(userStats.activeBlock.assignedAt)}
-														</Badge>
-													</div>
-													<div className="flex items-center gap-2">
-														<span className="text-gray-600 font-medium">Expires</span>
-														{userStats.activeBlock.expiresAt && (
-															<>
-																<span className="font-semibold text-gray-800">{new Date(userStats.activeBlock.expiresAt).toLocaleString()}</span>
-																<Badge
-																	className={new Date(userStats.activeBlock.expiresAt).getTime() <= Date.now() ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-blue-100 text-blue-800 border border-blue-300'}
+												{/* Timestamps */}
+												<div className="flex items-center justify-between text-[11.5px] flex-wrap gap-2">
+													<span style={{ color: '#5c5a55' }}>
+														{t('dashboard.work.assigned')} <span style={{ color: '#9a9892' }}>{formatAgo(userStats.activeBlock.assignedAt, t)}</span>
+													</span>
+													<span style={{ color: '#5c5a55' }}>
+														{t('dashboard.work.expires')}{' '}
+														<span style={{ color: new Date(userStats.activeBlock.expiresAt).getTime() <= Date.now() ? '#f0554a' : '#9a9892' }}>
+															{formatUntil(userStats.activeBlock.expiresAt, t)}
+														</span>
+													</span>
+												</div>
+
+												{/* Checkwork */}
+												<div>
+													<h4 className="text-[12.5px] font-semibold mb-2" style={{ color: '#9a9892' }}>
+														{t('dashboard.work.checkworkAddresses')} ({checkworkAddresses.length})
+													</h4>
+													<div className="space-y-1.5 max-h-48 overflow-y-auto">
+														{checkworkAddresses.length > 0 ? checkworkAddresses.map((addr, idx) => (
+															<div key={idx} className="flex items-center justify-between rounded-xl px-3 py-1.5" style={{ background: '#191919', border: '1px solid #262624' }}>
+																<code className="text-[11.5px] font-mono break-all flex-1 pr-2" style={{ color: '#f4f3ee' }}>{addr}</code>
+																<button
+																	type="button"
+																	onClick={() => copyText(addr, () => { setCopiedIdx(idx); setTimeout(() => setCopiedIdx(null), 1500); })}
+																	className="shrink-0 ml-2"
+																	style={{ color: '#9a9892' }}
 																>
-																	{new Date(userStats.activeBlock.expiresAt).getTime() <= Date.now() ? formatAgo(userStats.activeBlock.expiresAt) : formatUntil(userStats.activeBlock.expiresAt)}
-																</Badge>
-															</>
+																	{copiedIdx === idx ? <CheckCircle2 className="w-3.5 h-3.5" style={{ color: '#3ddc84' }} /> : <Copy className="w-3.5 h-3.5" />}
+																</button>
+															</div>
+														)) : (
+															<p className="text-[12px]" style={{ color: '#5c5a55' }}>{t('dashboard.work.loadingCheckwork')}</p>
 														)}
 													</div>
-												</div>
-
-												{/* Endereços de Checkwork */}
-												<div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-													<h4 className="text-gray-800 font-semibold mb-3">Checkwork Addresses ({checkworkAddresses.length})</h4>
-													<div className="space-y-2 max-h-fit overflow-y-auto pr-2">
-														{checkworkAddresses.length > 0 ? (
-															checkworkAddresses.map((addr, idx) => (
-																<div key={idx} className="flex items-center justify-between bg-white border border-gray-200 rounded px-3 py-1.5">
-																	<code className="text-gray-800 text-xs break-all font-mono">{addr}</code>
-																	<button
-																		type="button"
-																		onClick={async () => {
-																			await navigator.clipboard.writeText(addr);
-																			setCopiedIdx(idx);
-																			setTimeout(() => setCopiedIdx(null), 1500);
-																		}}
-																		className="text-gray-600 hover:text-blue-600 text-xs inline-flex items-center gap-1 ml-2 shrink-0"
-																	>
-																		{copiedIdx === idx ? <CheckCircle2 className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
-																	</button>
-																</div>
-															))
-														) : (
-															<p className="text-gray-600 text-sm">Loading checkwork addresses...</p>
-														)}
-													</div>
-													<Button
-														type="button"
-														variant='outline'
-														className="mt-3 w-full inline-flex items-center justify-center gap-2 text-blue-600 border-blue-400 hover:bg-blue-50"
-														onClick={async () => {
-															await navigator.clipboard.writeText(checkworkAddresses.join('\n'));
-															setCopiedAll(true);
-															setTimeout(() => setCopiedAll(false), 1500);
-														}}
-													>
-														{copiedAll ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-														<span>{copiedAll ? 'Copied All Addresses!' : 'Copy All Addresses'}</span>
-													</Button>
+													{checkworkAddresses.length > 0 && (
+														<button
+															type="button"
+															className="volt-btn-ghost w-full mt-2 text-[13px]"
+															onClick={() => copyText(checkworkAddresses.join('\n'), () => { setCopiedAll(true); setTimeout(() => setCopiedAll(false), 1500); })}
+														>
+															{copiedAll ? <CheckCircle2 className="w-4 h-4" style={{ color: '#3ddc84' }} /> : <Copy className="w-4 h-4" />}
+															{copiedAll ? t('dashboard.work.copied') : t('dashboard.work.copyAll')}
+														</button>
+													)}
 												</div>
 											</div>
 										) : (
-											// Estado: Sem Bloco Ativo (Ação de Atribuir Bloco)
-											<div className="text-center py-8 bg-gray-50 border border-gray-200 rounded-lg">
-												<Bitcoin className="w-10 h-10 text-gray-500 mx-auto mb-4" />
-												<p className="text-gray-700 mb-4">You don’t have any active block at the moment. Request a new one.</p>
+											<div className="text-center py-10">
+												<Bitcoin className="w-10 h-10 mx-auto mb-3" style={{ color: '#3a3835' }} />
+												<p className="text-[13px] mb-5" style={{ color: '#9a9892' }}>{t('dashboard.work.noActiveBlock')}</p>
 												<div className="flex items-center justify-center gap-3 mb-4">
-													<label className="text-sm text-gray-600">Block length</label>
-													<select value={blockLength} onChange={(e) => setBlockLength(e.target.value)} className="px-3 py-2 border border-gray-300 rounded text-sm bg-white">
-														<option value="1T">1T</option>
-														<option value="10T">10T</option>
-														<option value="10B">10B</option>
-														<option value="100T">100T</option>
-													</select>
+													<label className="text-[13px]" style={{ color: '#9a9892' }}>{t('dashboard.work.blockSize')}</label>
+													<div className="volt-input-wrap" style={{ padding: '0 10px', borderRadius: 8 }}>
+														<select
+															value={blockLength}
+															onChange={e => setBlockLength(e.target.value)}
+															style={{ background: 'transparent', border: 'none', outline: 'none', padding: '8px 0', fontSize: 13, color: '#f4f3ee' }}
+														>
+															<option value="1T" style={{ background: '#191919' }}>1T</option>
+															<option value="10T" style={{ background: '#191919' }}>10T</option>
+															<option value="10B" style={{ background: '#191919' }}>10B</option>
+															<option value="100T" style={{ background: '#191919' }}>100T</option>
+														</select>
+													</div>
 												</div>
-												<Button
+												<button
 													onClick={assignNewBlock}
 													disabled={assigningBlock || puzzleLoading}
-													className="bg-green-600 text-white hover:bg-green-700 font-semibold"
+													className="volt-btn-primary"
 												>
-													{assigningBlock ? 'Assigning...' : 'Assign New Block'}
-												</Button>
+													{assigningBlock ? (
+														<><span className="w-4 h-4 rounded-full border-2 border-transparent inline-block" style={{ borderTopColor: '#0a0a0a', animation: 'voltSpin 700ms linear infinite' }} /> Assigning…</>
+													) : t('dashboard.work.assignNewBlock')}
+												</button>
 											</div>
 										)}
-									</CardContent>
-								</Card>
+									</div>
+								</div>
 							</div>
 
-							{/* Coluna 2: Private Key Submission (1/3) */}
-							<div className='lg:col-span-1'>
-								<Card className="shadow-md border-gray-200 h-full">
-									<CardHeader className='border-b pb-4'>
-										<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-											<Key className="h-5 w-5 text-purple-600" />
-											Solution Submission
-										</CardTitle>
-										<CardDescription className='text-gray-600'>Paste and submit your found private keys.</CardDescription>
-									</CardHeader>
-									<CardContent className='pt-6 h-full'>
-										<form onSubmit={handleSubmitBlock} className="space-y-4 h-full">
-											<div className="space-y-3 h-full flex flex-col">
-												<div className="flex items-center justify-between">
-													<div className="flex items-center gap-2">
-														{/* Status de Validação */}
-														<span className={`px-2 py-1 rounded border text-xs font-semibold ${validCount >= 10 ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>
-															Valid: {validCount} / 10
-														</span>
-														<span className="px-2 py-1 rounded bg-gray-100 border text-xs text-gray-700">Parsed: {parsedKeys.length}</span>
-													</div>
-													<button type="button" className="px-3 py-1 rounded-lg text-sm font-medium transition-colors bg-gray-200 hover:bg-gray-300 text-gray-800" onClick={async () => { try { const t = await navigator.clipboard.readText(); setKeysText(t); } catch { } }}>Paste</button>
+							{/* Key submission */}
+							<div className="lg:col-span-1">
+								<div className="volt-card h-full">
+									<div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid #262624' }}>
+										<div className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-1" style={{ color: '#fc5c04' }}>{t('dashboard.submit.title')}</div>
+										<div className="flex items-center gap-2">
+											<Key className="h-4 w-4" style={{ color: '#fc5c04' }} />
+											<span className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.submit.subtitle')}</span>
+										</div>
+										<p className="text-[13px] mt-1" style={{ color: '#5c5a55' }}>{t('dashboard.submit.pasteFoundKeys')}</p>
+									</div>
+									<div className="px-6 py-5 flex flex-col gap-4">
+										<form onSubmit={handleSubmitBlock} className="flex flex-col gap-3 h-full">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2">
+													<span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${validCount >= 10 ? 'volt-badge-success' : 'volt-badge-danger'}`}>
+														{t('dashboard.submit.validCount').replace('{n}', `${validCount}`)}
+													</span>
+													<span className="volt-badge-neutral text-[11px]">{t('dashboard.submit.parsed')} {parsedKeys.length}</span>
 												</div>
-
-												<label className="block text-xs text-gray-600">Private Keys (10 required, hex format)</label>
+												<button
+													type="button"
+													className="volt-btn-ghost text-[12px] px-3 py-1.5"
+													onClick={async () => { try { const clipText = await navigator.clipboard.readText(); setKeysText(clipText); } catch { } }}
+												>
+													{t('dashboard.submit.paste')}
+												</button>
+											</div>
+											<label className="text-[12.5px] font-semibold" style={{ color: '#9a9892' }}>{t('dashboard.submit.label')}</label>
+											<div className="volt-input-wrap" style={{ padding: '0', borderRadius: 10, alignItems: 'stretch' }}>
 												<textarea
 													value={keysText}
-													onChange={(e) => setKeysText(e.target.value)}
-													className="w-full flex-1 h-full min-h-[250px] px-3 py-2 border border-gray-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-purple-600"
-													placeholder="Paste one key per line, or separated by spaces/commas."
+													onChange={e => setKeysText(e.target.value)}
+													style={{ minHeight: 220, padding: '10px 12px', resize: 'vertical', fontFamily: 'var(--font-geist-mono)', fontSize: 12 }}
+													placeholder={t('dashboard.submit.placeholder')}
 													disabled={!userStats.activeBlock}
 												/>
-
-												<div className="flex flex-wrap gap-3 pt-2">
-													<Button
-														type="submit"
-														disabled={submitting || !canSubmit || !userStats.activeBlock}
-														className="bg-purple-600 text-white hover:bg-purple-700 font-semibold inline-flex items-center gap-2"
-													>
-														{submitting ? 'Submitting...' : 'Submit Keys'}
-													</Button>
-													<Button type="button" onClick={handleExtractHexKeys} variant='outline' className="text-gray-700 hover:bg-gray-200">Extract 0x Keys</Button>
-													<Button type="button" onClick={() => { setKeysText(''); }} variant='outline' className="text-red-600 border-red-400 hover:bg-red-50">Clear All</Button>
-												</div>
-												{error && !error.includes('token') && (
-													<p className='text-red-600 text-sm pt-2 inline-flex items-center gap-1'><XCircle className='w-4 h-4' /> {error}</p>
-												)}
 											</div>
+											<div className="flex flex-wrap gap-2">
+												<button type="submit" className="volt-btn-primary flex-1" disabled={submitting || !canSubmit || !userStats.activeBlock}>
+													{submitting ? (
+														<><span className="w-4 h-4 rounded-full border-2 border-transparent inline-block" style={{ borderTopColor: '#0a0a0a', animation: 'voltSpin 700ms linear infinite' }} /> {t('dashboard.submit.submitting')}</>
+													) : t('dashboard.submit.submitKeys')}
+												</button>
+											</div>
+											<div className="flex gap-2">
+												<button type="button" onClick={handleExtractHexKeys} className="volt-btn-ghost text-[12px] flex-1">{t('dashboard.submit.extractHex')}</button>
+												<button type="button" onClick={() => setKeysText('')} className="volt-btn-danger text-[12px] flex-1">{t('dashboard.submit.clear')}</button>
+											</div>
+											{error && !error.toLowerCase().includes('token') && (
+												<p className="text-[12px] flex items-center gap-1" style={{ color: '#f0554a' }}>
+													<XCircle className="w-3.5 h-3.5" /> {error}
+												</p>
+											)}
 										</form>
-									</CardContent>
-								</Card>
+									</div>
+								</div>
 							</div>
 						</div>
 					</TabsContent>
+
 					<TabsContent value="browser">
-						<BrowserMiner
-							puzzleAddress={puzzleMeta?.address || undefined}
-						// forceShowFoundKey={true} 
-						/>
+						<BrowserMiner puzzleAddress={puzzleMeta?.address || undefined} />
 					</TabsContent>
 				</Tabs>
 
-				{/* Quick Actions & Docs */}
-				<div className="max-w-7xl mx-auto">
-					<h2 className="text-2xl font-bold text-gray-900 mb-4">Quick Links</h2>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-						{/* Puzzle Configuration */}
-						<Card className="shadow-sm border-gray-200">
-							<CardHeader className='pb-3'>
-								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-									<Bitcoin className="h-5 w-5 text-blue-600" />
-									Puzzle Configuration
-								</CardTitle>
-								<CardDescription className='text-gray-600'>Current target address and key range.</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<div className='flex justify-between items-center'>
-									<p className='text-sm text-gray-700'>{puzzleMeta?.address ? 'Configured' : 'Not Configured'}</p>
-									<div className='px-3 py-1 rounded bg-gray-200 text-xs font-semibold text-gray-800'>
-										{puzzleMeta?.startExp && puzzleMeta?.endExp ? `2^${puzzleMeta.startExp}…2^${puzzleMeta.endExp}` : 'N/A'}
-									</div>
-								</div>
-							</CardContent>
-						</Card>
-
-						{/* Block History */}
-						<Card className="shadow-sm border-gray-200">
-							<CardHeader className='pb-3'>
-								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-									<Target className="h-5 w-5 text-blue-600" />
-									Block History
-								</CardTitle>
-								<CardDescription className='text-gray-600'>Visualize your past work blocks and results.</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<Link
-									href="/history"
-									className="inline-flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 font-semibold"
-								>
-									<span>View History</span>
-									<ArrowRight className="w-4 h-4" />
-								</Link>
-							</CardContent>
-						</Card>
-
-						{/* Documentation */}
-						<Card className="shadow-sm border-gray-200">
-							<CardHeader className='pb-3'>
-								<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-									<BookOpen className="h-5 w-5 text-blue-600" />
-									Documentation
-								</CardTitle>
-								<CardDescription className='text-gray-600'>Learn how to use the system and GPU tools efficiently.</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<Link
-									href="/docs/api"
-									className="inline-flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-all duration-200 font-semibold"
-								>
-									<span>View Docs</span>
-									<ArrowRight className="w-4 h-4" />
-								</Link>
-							</CardContent>
-						</Card>
+				{/* Quick links */}
+				<h2 className="text-[19px] font-semibold mb-4" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.quickLinks.title')}</h2>
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+					{[
+						{
+							icon: Bitcoin, title: t('dashboard.quickLinks.puzzleConfig'), desc: t('dashboard.quickLinks.puzzleConfigDesc'),
+							badge: puzzleMeta?.address ? t('dashboard.quickLinks.configured') : t('dashboard.quickLinks.notConfigured'),
+							badgeClass: puzzleMeta?.address ? 'volt-badge-success' : 'volt-badge-neutral',
+							extra: puzzleMeta?.startExp && puzzleMeta?.endExp ? `2^${puzzleMeta.startExp}…2^${puzzleMeta.endExp}` : 'N/A',
+						},
+					].map(({ icon: Icon, title, desc, badge, badgeClass, extra }) => (
+						<div key={title} className="volt-card p-5">
+							<div className="flex items-center gap-2 mb-2">
+								<Icon className="h-4 w-4" style={{ color: '#fc5c04' }} />
+								<span className="text-[15px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{title}</span>
+							</div>
+							<p className="text-[13px] mb-3" style={{ color: '#5c5a55' }}>{desc}</p>
+							<div className="flex items-center gap-2">
+								<span className={badgeClass}>{badge}</span>
+								<span className="volt-badge-neutral">{extra}</span>
+							</div>
+						</div>
+					))}
+					<div className="volt-card p-5">
+						<div className="flex items-center gap-2 mb-2">
+							<Target className="h-4 w-4" style={{ color: '#fc5c04' }} />
+							<span className="text-[15px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.quickLinks.history')}</span>
+						</div>
+						<p className="text-[13px] mb-3" style={{ color: '#5c5a55' }}>{t('dashboard.quickLinks.historyDesc')}</p>
+						<Link href="/history" className="volt-btn-primary text-[13px]">
+							{t('dashboard.quickLinks.viewHistory')} <ArrowRight className="w-3.5 h-3.5" />
+						</Link>
+					</div>
+					<div className="volt-card p-5">
+						<div className="flex items-center gap-2 mb-2">
+							<BookOpen className="h-4 w-4" style={{ color: '#fc5c04' }} />
+							<span className="text-[15px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.quickLinks.docs')}</span>
+						</div>
+						<p className="text-[13px] mb-3" style={{ color: '#5c5a55' }}>{t('dashboard.quickLinks.docsDesc')}</p>
+						<Link href="/docs/api" className="volt-btn-primary text-[13px]">
+							{t('dashboard.quickLinks.viewDocs')} <ArrowRight className="w-3.5 h-3.5" />
+						</Link>
 					</div>
 				</div>
-			</div >
+			</div>
 
-			{userStats.activeBlock ? (
-				<Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-					<DialogContent>
-						<DialogHeader>
-							<DialogTitle>Delete Active Block</DialogTitle>
-							<DialogDescription>
-								This will expire your current assignment and free you to request a new block. Proceed?
-							</DialogDescription>
-						</DialogHeader>
-						<DialogFooter>
-							<Button variant="outline" onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
-							<Button
-								variant="destructive"
+			{/* Delete block confirmation dialog */}
+			{confirmDeleteOpen && (
+				<div
+					className="fixed inset-0 z-100 flex items-center justify-center p-5"
+					style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(3px)' }}
+					onClick={e => { if (e.target === e.currentTarget) setConfirmDeleteOpen(false); }}
+				>
+					<div
+						className="w-full max-w-md volt-pop-in"
+						style={{ background: '#131313', border: '1px solid #262624', borderRadius: 18, boxShadow: '0 24px 60px rgba(0,0,0,0.6)', overflow: 'hidden' }}
+					>
+						<div className="px-6 pt-6 pb-4" style={{ borderBottom: '1px solid #262624' }}>
+							<h3 className="text-[18px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('dashboard.releaseDialog.title')}</h3>
+							<p className="text-[13px] mt-1" style={{ color: '#9a9892' }}>
+								{t('dashboard.releaseDialog.description')}
+							</p>
+						</div>
+						<div className="px-6 py-5 flex gap-3 justify-end">
+							<button className="volt-btn-ghost" onClick={() => setConfirmDeleteOpen(false)}>{t('dashboard.releaseDialog.cancel')}</button>
+							<button
+								className="volt-btn-danger"
 								disabled={deletingBlock}
 								onClick={async () => {
 									try {
-										setDeletingBlock(true);
-										setError(null);
+										setDeletingBlock(true); setError(null);
 										const token = localStorage.getItem('pool-token');
-										if (!token) {
-											throw new Error('No token found');
-										}
+										if (!token) throw new Error('No token found');
 										const r = await fetch('/api/block', { method: 'DELETE', headers: { 'pool-token': token } });
 										if (!r.ok) {
-											let msg = 'Failed to delete active block';
+											let msg = 'Failed to release block';
 											try { const d = await r.json(); if (d?.error) msg = d.error; } catch { }
 											throw new Error(msg);
 										}
-										setKeysText('');
-										setCheckworkAddresses([]);
+										setKeysText(''); setCheckworkAddresses([]);
 										await fetchUserStats();
 										setConfirmDeleteOpen(false);
+										toast.success(t('dashboard.releaseDialog.released'));
 									} catch (err) {
-										setError(err instanceof Error ? err.message : 'Failed to delete active block');
+										const msg = err instanceof Error ? err.message : 'Failed to release block';
+										toast.error(msg);
+										setError(msg);
 										setConfirmDeleteOpen(false);
-									} finally {
-										setDeletingBlock(false);
-									}
+									} finally { setDeletingBlock(false); }
 								}}
 							>
-								Delete
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-			) : null}
-
+								{deletingBlock ? t('dashboard.releaseDialog.releasing') : t('dashboard.releaseDialog.release')}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
-	)
+	);
 }

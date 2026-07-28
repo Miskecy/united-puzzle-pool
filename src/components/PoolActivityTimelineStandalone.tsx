@@ -2,6 +2,7 @@
 
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 type BlockItem = {
 	id: string
@@ -34,6 +35,7 @@ export default function PoolActivityTimelineStandalone({
 	isLoading?: boolean
 }) {
 	const router = useRouter()
+	const { t } = useTranslation()
 	const [nowTick, setNowTick] = useState<number>(() => Date.now())
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const [containerW, setContainerW] = useState(0)
@@ -91,15 +93,15 @@ export default function PoolActivityTimelineStandalone({
 
 	const fmtAgo = (dateStr?: string | null) => {
 		if (!dateStr) return '—'
-		const t = new Date(dateStr).getTime()
-		const s = Math.max(0, Math.floor((nowTick - t) / 1000))
-		if (s < 60) return `${s}s ago`
+		const ts = new Date(dateStr).getTime()
+		const s = Math.max(0, Math.floor((nowTick - ts) / 1000))
+		if (s < 60) return t('common.timeAgo.s').replace('{n}', `${s}`)
 		const m = Math.floor(s / 60)
-		if (m < 60) return `${m}min ago`
+		if (m < 60) return t('common.timeAgo.min').replace('{n}', `${m}`)
 		const h = Math.floor(m / 60)
-		if (h < 24) return `${h}h ago`
+		if (h < 24) return t('common.timeAgo.h').replace('{n}', `${h}`)
 		const d = Math.floor(h / 24)
-		return `${d}d ago`
+		return t('common.timeAgo.d').replace('{n}', `${d}`)
 	}
 
 	const parseHexBI = (hex: string) => BigInt(`0x${hex.replace(/^0x/, '')}`)
@@ -127,23 +129,23 @@ export default function PoolActivityTimelineStandalone({
 			{!loading && (
 				<>
 					<div className="absolute left-1/2 top-0 bottom-0 border-l-2 border-dashed border-gray-300" />
-					<div className="side-legend side-legend-left">Active</div>
-					<div className="side-legend side-legend-right">Validated</div>
+					<div className="side-legend side-legend-left">{t('activity.active')}</div>
+					<div className="side-legend side-legend-right">{t('activity.validated')}</div>
 				</>
 			)}
 			{loading && (
 				<div className="loading-overlay">
 					<div className="loading-box">
 						<div className="spinner" />
-						<span className="loading-text">Loading activity…</span>
+						<span className="loading-text">{t('activity.loading')}</span>
 					</div>
 				</div>
 			)}
 			<div ref={containerRef} className="timeline-row top-8">
 				{unified.map(item => {
 					const left = positions.get(item.id) ?? 0
-					const addr = item.puzzleAddress || item.bitcoinAddress || 'Unknown address'
-					const minerAddr = item.bitcoinAddress || 'Unknown address'
+					const addr = item.puzzleAddress || item.bitcoinAddress || t('activity.unknownAddress')
+					const minerAddr = item.bitcoinAddress || t('activity.unknownAddress')
 					const lenLabel = formatLenPrecise(binLength(item.hexRangeStart, item.hexRangeEnd))
 					const cls = item.state === 'active' ? 'block3d block3d-active' : 'block3d block3d-validated'
 					const totalMs = (() => {
@@ -186,7 +188,7 @@ export default function PoolActivityTimelineStandalone({
 								{item.state === 'active' ? <div className="time-fill" style={{ height: `${fillPct}%` }} /> : null}
 								{item.state === 'validated' ? <div className="duration-fill -z-10" style={{ height: `${durFillPct}%` }} /> : null}
 								<div className="block3d-body">
-									<div className="block3d-puzzle">{item.puzzleName || 'Puzzle'}</div>
+									<div className="block3d-puzzle">{item.puzzleName || t('activity.puzzle')}</div>
 									<div className="block3d-title">{addr.slice(0, 8)}...{addr.slice(-8)}</div>
 									<div className="block3d-miner">{minerAddr.slice(0, 8)}...{minerAddr.slice(-8)}</div>
 									<div className="block3d-range">{item.hexRangeStart.slice(0, 8)}...{item.hexRangeStart.slice(-4)} → {item.hexRangeEnd.slice(0, 8)}...{item.hexRangeEnd.slice(-4)}</div>
@@ -206,12 +208,12 @@ export default function PoolActivityTimelineStandalone({
         .full-bleed { width: 100vw; position: relative; left: 50%; transform: translateX(-50%); }
         .timeline-row { position: relative; height: 200px; overflow: hidden; }
         .side-legend { position: absolute; top: 6px; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 9999px; white-space: nowrap; }
-        .side-legend-left { left: calc(50% - 8px); transform: translateX(-100%); color: #666666; }
-        .side-legend-right { left: calc(50% + 8px); transform: translateX(0); color: #666666;  }
-        .loading-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 50; background: linear-gradient(to bottom right, rgba(255,255,255,0.85), rgba(255,255,255,0.7)); backdrop-filter: blur(2px); }
-        .loading-box { display: inline-flex; align-items: center; gap: 10px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 14px; box-shadow: 0 6px 18px rgba(59,130,246,0.12); }
-        .spinner { width: 22px; height: 22px; border: 3px solid #bfdbfe; border-top-color: #3b82f6; border-right-color: #93c5fd; border-radius: 50%; animation: spin .9s linear infinite; }
-        .loading-text { font-size: 13px; color: #1f2937; font-weight: 700; letter-spacing: .02em; }
+        .side-legend-left { left: calc(50% - 8px); transform: translateX(-100%); color: #5c5a55; }
+        .side-legend-right { left: calc(50% + 8px); transform: translateX(0); color: #5c5a55; }
+        .loading-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 50; background: rgba(10,10,10,0.6); backdrop-filter: blur(2px); }
+        .loading-box { display: inline-flex; align-items: center; gap: 10px; background: #131313; border: 1px solid #262624; border-radius: 12px; padding: 10px 16px; box-shadow: 0 6px 24px rgba(0,0,0,0.4); }
+        .spinner { width: 22px; height: 22px; border: 3px solid #2a2a28; border-top-color: #fc5c04; border-right-color: #ff7226; border-radius: 50%; animation: spin .9s linear infinite; }
+        .loading-text { font-size: 13px; color: #9a9892; font-weight: 600; letter-spacing: .02em; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .block3d { isolation: isolate; height: 180px; cursor: pointer; will-change: left, transform; }
         .block3d-content { position: relative; z-index: 1; height: 100%; border-radius: 8px; background: #ffffff; border: 1px solid #e5e7eb; box-shadow: 0 2px 4px rgba(0,0,0,.08); transition: transform .2s ease, box-shadow .2s ease; }

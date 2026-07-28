@@ -2,143 +2,70 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+import { useTranslation } from '@/contexts/LanguageContext';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Hash, Expand, Gauge, CheckCircle2, RotateCcw, BrickWallFire, Clock, Bitcoin, Key, PieChart, List as ListIcon, Blocks, Pickaxe } from 'lucide-react';
+import {
+	Hash, Gauge, CheckCircle2, RotateCcw, BrickWallFire,
+	Clock, PieChart, List as ListIcon, Blocks, Pickaxe, Activity,
+	TrendingUp, Users,
+} from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import BlocksTimeline from '@/components/BlocksTimeline';
 import PoolActivityTimelineStandalone from '@/components/PoolActivityTimelineStandalone';
 import PuzzleConfigNotice from '@/components/PuzzleConfigNotice';
 import ValidationHeatmap from '@/components/ValidationHeatmap';
 
-
-type BinStat = {
-	index: number;
-	startHex: string;
-	endHex: string;
-	total: number;
-	completed: number;
-	percent: number;
-};
-
+type BinStat = { index: number; startHex: string; endHex: string; total: number; completed: number; percent: number };
 type RecentBlock = {
-	id: string;
-	bitcoinAddress: string;
-	hexRangeStart: string;
-	hexRangeEnd: string;
-	hexRangeStartRaw?: string;
-	hexRangeEndRaw?: string;
-	createdAt?: string;
-	completedAt: string;
-	creditsAwarded: number;
+	id: string; bitcoinAddress: string;
+	hexRangeStart: string; hexRangeEnd: string;
+	hexRangeStartRaw?: string; hexRangeEndRaw?: string;
+	createdAt?: string; completedAt: string; creditsAwarded: number;
 };
 
-
-
-function parseHexBI(hex: string): bigint {
-	const clean = hex.replace(/^0x/, '');
-	return BigInt(`0x${clean}`);
-}
-
-function binLength(startHex: string, endHex: string): bigint {
-	const s = parseHexBI(startHex);
-	const e = parseHexBI(endHex);
-	return e >= s ? e - s : 0n;
-}
-
-function pow2Label(len: bigint): string {
-	if (len <= 0n) return '0';
-	const expCeil = len.toString(2).length;
-	return `2^${expCeil}`;
-}
-
-
-
-function formatTrillionsBI(n: bigint): string {
+function parseHexBI(hex: string): bigint { return BigInt(`0x${hex.replace(/^0x/, '')}`); }
+function binLength(s: string, e: string): bigint { const a = parseHexBI(s), b = parseHexBI(e); return b >= a ? b - a : 0n; }
+function pow2Label(len: bigint): string { return len <= 0n ? '0' : `2^${len.toString(2).length}`; }
+function formatT(n: bigint): string {
 	const T = 1_000_000_000_000n;
-	const tInt = n / T;
-	const rem = n % T;
-	const twoDec = (rem * 100n) / T;
-	const intStr = tInt.toString();
-	const withCommas = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-	return `${withCommas}.${twoDec.toString().padStart(2, '0')}T`;
+	const i = n / T, r = (n % T * 100n) / T;
+	return `${i.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${r.toString().padStart(2, '0')}T`;
 }
-
-function toBI(n: number): bigint {
-	if (!Number.isFinite(n)) return 0n;
-	const safe = Math.max(0, Math.floor(n));
-	return BigInt(safe);
-}
-
-
-
-function formatSpeedBI(totalLenBI: bigint, totalSeconds: number): string {
-	if (totalSeconds <= 0) return '—';
-	const scaled = (totalLenBI * 100n) / BigInt(totalSeconds);
-	const thresholds: Array<{ unit: string; divisor: bigint }> = [
-		{ unit: 'PKeys/s', divisor: 1_000_000_000_000_000n },
-		{ unit: 'TKeys/s', divisor: 1_000_000_000_000n },
-		{ unit: 'BKeys/s', divisor: 1_000_000_000n },
-		{ unit: 'MKeys/s', divisor: 1_000_000n },
-		{ unit: 'KKeys/s', divisor: 1_000n },
+function toBI(n: number): bigint { return BigInt(Math.max(0, Math.floor(n))); }
+function formatSpeedBI(len: bigint, secs: number): string {
+	if (secs <= 0) return '—';
+	const scaled = (len * 100n) / BigInt(secs);
+	const thr = [
+		{ u: 'PKeys/s', d: 1_000_000_000_000_000n }, { u: 'TKeys/s', d: 1_000_000_000_000n },
+		{ u: 'BKeys/s', d: 1_000_000_000n }, { u: 'MKeys/s', d: 1_000_000n }, { u: 'KKeys/s', d: 1_000n },
 	];
 	const kps = scaled / 100n;
-	let unit = 'Keys/s';
-	let divisor = 1n;
-	for (const t of thresholds) {
-		if (kps >= t.divisor) { unit = t.unit; divisor = t.divisor; break; }
+	let u = 'Keys/s', d = 1n;
+	for (const t of thr) { if (kps >= t.d) { u = t.u; d = t.d; break; } }
+	const v = scaled / d; return `${v / 100n}.${(v % 100n).toString().padStart(2, '0')} ${u}`;
+}
+function poolSpeed(recent: Array<{ hexRangeStartRaw?: string; hexRangeEndRaw?: string; createdAt?: string; completedAt: string }>): string {
+	let len = 0n, secs = 0;
+	for (const r of recent.slice(0, 10)) {
+		if (!r.hexRangeStartRaw || !r.hexRangeEndRaw || !r.completedAt || !r.createdAt) continue;
+		len += binLength(r.hexRangeStartRaw, r.hexRangeEndRaw);
+		secs += Math.max(1, Math.floor((new Date(r.completedAt).getTime() - new Date(r.createdAt).getTime()) / 1000));
 	}
-	const valTimes100 = scaled / divisor;
-	const intPart = valTimes100 / 100n;
-	const frac = valTimes100 % 100n;
-	return `${intPart.toString()}.${frac.toString().padStart(2, '0')} ${unit}`;
+	return formatSpeedBI(len, secs);
+}
+function categorizeLen(len: bigint): { label: string; color: string } {
+	const B = 1_000_000_000n, T = 1_000_000_000_000n;
+	if (len <= 10n * B) return { label: '≤10B', color: '#3ddc84' };
+	if (len <= 250n * B) return { label: '≤250B', color: '#3ddc84' };
+	if (len <= 1n * T) return { label: '≤1T', color: '#fc5c04' };
+	if (len <= 10n * T) return { label: '≤10T', color: '#fc5c04' };
+	if (len <= 20n * T) return { label: '≤20T', color: '#ff7226' };
+	if (len >= 100n * T) return { label: '≥100T+', color: '#f0554a' };
+	return { label: '20–100T', color: '#ff7226' };
 }
 
-function computePoolSpeed(recent: Array<{ hexRangeStartRaw?: string; hexRangeEndRaw?: string; createdAt?: string; completedAt: string }>): string {
-	const items = recent.slice(0, 10);
-	let totalLen = 0n;
-	let totalSeconds = 0;
-	for (const rb of items) {
-		if (!rb.hexRangeStartRaw || !rb.hexRangeEndRaw || !rb.completedAt || !rb.createdAt) continue;
-		const len = binLength(rb.hexRangeStartRaw, rb.hexRangeEndRaw);
-		const start = new Date(rb.createdAt).getTime();
-		const end = new Date(rb.completedAt).getTime();
-		const secs = Math.max(1, Math.floor((end - start) / 1000));
-		totalLen += len;
-		totalSeconds += secs;
-	}
-	if (totalSeconds <= 0) return '—';
-	return formatSpeedBI(totalLen, totalSeconds);
-}
-
-function computeTotalsT(bins: BinStat[]): string {
-	let totalBI = 0n;
-	let validatedBI = 0n;
-	for (const b of bins) {
-		const len = binLength(b.startHex, b.endHex);
-		totalBI += len;
-		validatedBI += toBI(b.completed);
-	}
-	const remainingBI = totalBI - validatedBI;
-	const remainingClamped = remainingBI < 0n ? 0n : remainingBI;
-	return `${formatTrillionsBI(validatedBI)} / ${formatTrillionsBI(remainingClamped)}`;
-}
-
-function adaptiveTextClass(s: string): string {
-	const len = s.length;
-	if (len <= 20) return 'text-xl';
-	if (len <= 28) return 'text-lg';
-	if (len <= 36) return 'text-base';
-	return 'text-sm';
-}
-
-
-
-// --- COMPONENTE PRINCIPAL ---
 export default function PoolOverviewPage() {
-	// ESTADO
+	const { t } = useTranslation();
 	const [bins, setBins] = useState<BinStat[]>([]);
 	const [meta, setMeta] = useState<{ binCount?: number; maxExp?: number; startExp?: number; endExp?: number; address?: string } | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -147,368 +74,274 @@ export default function PoolOverviewPage() {
 	const [recent, setRecent] = useState<RecentBlock[]>([]);
 	const [active, setActive] = useState<RecentBlock[]>([]);
 	const [miners, setMiners] = useState<Array<{ address: string; addressShort: string; tokenShort: string; avgSpeedLabel: string; validatedLabel: string; sharePercentLabel: string; totalBlocks: number }>>([]);
-
 	const [hoveredBlockCells, setHoveredBlockCells] = useState<number[]>([]);
-	const [nextPollInSec, setNextPollInSec] = useState<number>(30);
+	const [nextPollInSec, setNextPollInSec] = useState(30);
 	const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+	const [tab, setTab] = useState<'blocks' | 'miners'>('blocks');
 	const router = useRouter();
 
-	function formatLastUpdated(ts: number | null): string {
+	const fmtUpdated = (ts: number | null) => {
 		if (!ts) return '—';
-		const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-		if (diff < 60) return `${diff}s ago`;
-		const m = Math.floor(diff / 60);
-		if (m < 60) return `${m}m ago`;
-		const h = Math.floor(m / 60);
-		if (h < 24) return `${h}h ago`;
-		const d = Math.floor(h / 24);
-		return `${d}d ago`;
-	}
-
-
+		const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+		if (s < 60) return t('common.timeAgo.s').replace('{n}', `${s}`);
+		const m = Math.floor(s / 60); if (m < 60) return t('common.timeAgo.min').replace('{n}', `${m}`);
+		const h = Math.floor(m / 60); if (h < 24) return t('common.timeAgo.h').replace('{n}', `${h}`);
+		return t('common.timeAgo.d').replace('{n}', `${Math.floor(h / 24)}`);
+	};
 
 	useEffect(() => {
-		const load = async () => {
+		(async () => {
 			try {
 				setLoading(true);
 				const res = await fetch('/api/pool/overview');
-				if (res.status === 404) {
-					setNoPuzzle(true);
-					setBins([]);
-					setMeta(null);
-				} else if (!res.ok) {
-					throw new Error('Failed to fetch overview');
-				} else {
-					const data = await res.json();
-					setBins(data.bins || []);
-					const m = data.meta || {};
-					const bitLen = (hex?: string) => { if (!hex) return undefined; try { const bi = BigInt(hex); return bi.toString(2).length; } catch { return undefined; } };
-					const startLen = bitLen(m.puzzleStart);
-					const endLen = bitLen(m.puzzleEnd);
-					const startExp = typeof startLen === 'number' ? (startLen - 1) : undefined;
-					const endExpVal = typeof m.maxExp === 'number'
-						? m.maxExp
-						: (typeof endLen === 'number' ? (endLen - 1) : undefined);
-					setMeta({
-						binCount: typeof m.binCount === 'number' ? m.binCount : undefined,
-						maxExp: endExpVal,
-						startExp: startExp,
-						endExp: endExpVal,
-						address: typeof m.address === 'string' ? m.address : undefined,
-					});
-				}
-				const statsRes = await fetch('/api/pool/stats');
-				if (statsRes.ok) {
-					const stats = await statsRes.json();
-					setRecent(stats.recentBlocks || []);
-					setActive(stats.activeBlocks || []);
-				}
-				const minersRes = await fetch('/api/pool/miners', { cache: 'no-store' });
-				if (minersRes.ok) {
-					const j = await minersRes.json();
-					setMiners(Array.isArray(j.miners) ? j.miners : []);
-				}
+				if (res.status === 404) { setNoPuzzle(true); return; }
+				if (!res.ok) throw new Error('Failed to fetch overview');
+				const data = await res.json();
+				setBins(data.bins || []);
+				const m = data.meta || {};
+				const bitLen = (hex?: string) => { try { return hex ? BigInt(hex).toString(2).length : undefined; } catch { return undefined; } };
+				setMeta({
+					binCount: m.binCount,
+					maxExp: typeof m.maxExp === 'number' ? m.maxExp : bitLen(m.puzzleEnd) ? (bitLen(m.puzzleEnd)! - 1) : undefined,
+					startExp: bitLen(m.puzzleStart) ? bitLen(m.puzzleStart)! - 1 : undefined,
+					endExp: typeof m.maxExp === 'number' ? m.maxExp : bitLen(m.puzzleEnd) ? (bitLen(m.puzzleEnd)! - 1) : undefined,
+					address: m.address,
+				});
+				const [statsRes, minersRes] = await Promise.all([
+					fetch('/api/pool/stats'),
+					fetch('/api/pool/miners', { cache: 'no-store' }),
+				]);
+				if (statsRes.ok) { const s = await statsRes.json(); setRecent(s.recentBlocks || []); setActive(s.activeBlocks || []); }
+				if (minersRes.ok) { const j = await minersRes.json(); setMiners(Array.isArray(j.miners) ? j.miners : []); }
 				setLastUpdated(Date.now());
-			} catch (e) {
-				setError(e instanceof Error ? e.message : 'Failed to load overview');
-			} finally {
-				setLoading(false);
-			}
-		};
-		load();
+			} catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+			finally { setLoading(false); }
+		})();
 	}, []);
 
 	useEffect(() => {
-		const pollMs = 30000;
-		const tick = () => {
-			const rem = Math.ceil((pollMs - (Date.now() % pollMs)) / 1000);
-			setNextPollInSec(Math.max(0, rem));
-		};
-		tick();
-		const id = setInterval(tick, 1000);
+		const id = setInterval(() => setNextPollInSec(s => s <= 1 ? 30 : s - 1), 1000);
 		return () => clearInterval(id);
 	}, []);
 
 	useEffect(() => {
 		const poll = async () => {
 			try {
-				const r = await fetch('/api/pool/stats?take=20', { cache: 'no-store' })
-				if (r.ok) {
-					const j = await r.json()
-					setRecent(j.recentBlocks || [])
-					setActive(j.activeBlocks || [])
-					setLastUpdated(Date.now())
-				}
-			} catch { }
-		}
-		poll()
-		const id = setInterval(poll, 30000)
-		return () => clearInterval(id)
-	}, [])
-
-	useEffect(() => {
-		const pollOverview = async () => {
-			try {
-				const r = await fetch('/api/pool/overview', { cache: 'no-store' })
-				if (r.ok) {
-					const j = await r.json()
-					setBins(j.bins || [])
-					setMeta(j.meta || null)
-					setLastUpdated(Date.now())
-				}
-			} catch { }
-		}
-		pollOverview()
-		const id = setInterval(pollOverview, 30000)
-		return () => clearInterval(id)
-	}, [])
-
-	// Cálculo das métricas exibidas
-	const overallPow: string = meta?.maxExp ? `2^${meta.maxExp}` : pow2Label(bins.reduce((acc: bigint, b) => acc + binLength(b.startHex, b.endHex), 0n));
-	const rangeBits: string | null = (meta?.startExp !== undefined && meta?.endExp !== undefined) ? `2^${meta.startExp}…2^${meta.endExp}` : null;
-	const activeCells: number = meta?.binCount ?? bins.length;
-
-	function computeOverallProgress(bins: BinStat[]): { ratio: number; percent: number } {
-		const totals = bins.reduce(
-			(acc, b) => {
-				acc.total += typeof b.total === 'number' ? b.total : 0;
-				acc.completed += typeof b.completed === 'number' ? b.completed : 0;
-				return acc;
-			},
-			{ total: 0, completed: 0 }
-		);
-		const ratio = totals.total > 0 ? Math.min(1, Math.max(0, totals.completed / totals.total)) : 0;
-		return { ratio, percent: Math.round(ratio * 100) };
-	}
-	const overallProgress = computeOverallProgress(bins);
-	const overallProgressLabel = overallProgress.ratio.toFixed(6);
-	const totalLenBI = bins.reduce((acc: bigint, b) => acc + binLength(b.startHex, b.endHex), 0n);
-	const onePercentLabel = formatTrillionsBI(totalLenBI / 100n);
-
-	const [minedAgg, setMinedAgg] = useState<{ segments: Array<{ leftPct: number; widthPct: number; color: string; label: string }>; legend: Array<{ label: string; color: string; count: number }> } | null>(null);
-	useEffect(() => {
-		const loadAgg = async () => {
-			try {
-				const r = await fetch('/api/pool/segments?days=0', { cache: 'no-store' });
-				if (r.ok) {
-					const j = await r.json();
-					if (j && Array.isArray(j.segments)) setMinedAgg({ segments: j.segments, legend: j.legend || [] });
-				}
+				const [statsR, ovR] = await Promise.all([
+					fetch('/api/pool/stats?take=20', { cache: 'no-store' }),
+					fetch('/api/pool/overview', { cache: 'no-store' }),
+				]);
+				if (statsR.ok) { const j = await statsR.json(); setRecent(j.recentBlocks || []); setActive(j.activeBlocks || []); }
+				if (ovR.ok) { const j = await ovR.json(); setBins(j.bins || []); setMeta(j.meta || null); }
+				setLastUpdated(Date.now());
 			} catch { }
 		};
-		loadAgg();
+		const id = setInterval(poll, 30000);
+		return () => clearInterval(id);
 	}, []);
 
-	function categorizeLen(len: bigint): { label: string; color: string } {
-		const B = 1_000_000_000n;
-		const T = 1_000_000_000_000n;
-		if (len <= 10n * B) return { label: '≤10B', color: 'bg-blue-400' };
-		if (len <= 250n * B) return { label: '≤250B', color: 'bg-cyan-500' };
-		if (len <= 1n * T) return { label: '≤1T', color: 'bg-green-500' };
-		if (len <= 10n * T) return { label: '≤10T', color: 'bg-amber-500' };
-		if (len <= 20n * T) return { label: '≤20T', color: 'bg-orange-600' };
-		if (len >= 100n * T) return { label: '≥100T+', color: 'bg-red-600' };
-		return { label: '20–100T', color: 'bg-orange-400' };
-	}
+	const overallPow = meta?.maxExp ? `2^${meta.maxExp}` : pow2Label(bins.reduce((a: bigint, b) => a + binLength(b.startHex, b.endHex), 0n));
+	const rangeBits = (meta?.startExp !== undefined && meta?.endExp !== undefined) ? `2^${meta.startExp}…2^${meta.endExp}` : null;
+	const activeCells = meta?.binCount ?? bins.length;
 
-	function computeMinedSegments(recentBlocks: RecentBlock[], allBins: BinStat[]): { segments: Array<{ leftPct: number; widthPct: number; color: string; label: string }>; legend: Array<{ label: string; color: string; count: number }> } {
-		const segments: Array<{ leftPct: number; widthPct: number; color: string; label: string }> = [];
+	const { ratio: overallRatio, percent: overallPct } = (() => {
+		const tot = bins.reduce((a, b) => ({ total: a.total + (b.total || 0), completed: a.completed + (b.completed || 0) }), { total: 0, completed: 0 });
+		const r = tot.total > 0 ? Math.min(1, tot.completed / tot.total) : 0;
+		return { ratio: r, percent: Math.round(r * 100) };
+	})();
+
+	const totalLenBI = bins.reduce((a: bigint, b) => a + binLength(b.startHex, b.endHex), 0n);
+	const validatedBI = bins.reduce((a: bigint, b) => a + toBI(b.completed), 0n);
+	const remainingBI = totalLenBI > validatedBI ? totalLenBI - validatedBI : 0n;
+	const onePercentLabel = formatT(totalLenBI / 100n);
+
+	const minedSegments = (() => {
+		if (!bins.length) return { segs: [], legend: [] };
+		const start = parseHexBI(bins[0].startHex), end = parseHexBI(bins[bins.length - 1].endHex);
+		if (end <= start) return { segs: [], legend: [] };
+		const full = end - start;
 		const legendMap: Record<string, { color: string; count: number }> = {};
-		if (!allBins.length) return { segments, legend: [] };
-		const rangeStart = parseHexBI(allBins[0].startHex);
-		const rangeEnd = parseHexBI(allBins[allBins.length - 1].endHex);
-		if (rangeEnd <= rangeStart) return { segments, legend: [] };
-		const fullLen = rangeEnd - rangeStart;
-		for (const rb of recentBlocks) {
-			const sHex = rb.hexRangeStartRaw || rb.hexRangeStart;
-			const eHex = rb.hexRangeEndRaw || rb.hexRangeEnd;
-			if (!sHex || !eHex) continue;
-			const s = parseHexBI(sHex);
-			const e = parseHexBI(eHex);
-			if (e <= s) continue;
-			const start = s > rangeStart ? s : rangeStart;
-			const end = e < rangeEnd ? e : rangeEnd;
-			if (end <= start) continue;
-			const len = end - start;
+		const segs = recent.map(rb => {
+			const sH = rb.hexRangeStartRaw || rb.hexRangeStart, eH = rb.hexRangeEndRaw || rb.hexRangeEnd;
+			if (!sH || !eH) return null;
+			const s2 = parseHexBI(sH), e2 = parseHexBI(eH);
+			if (e2 <= s2) return null;
+			const clS = s2 > start ? s2 : start, clE = e2 < end ? e2 : end;
+			if (clE <= clS) return null;
+			const len = clE - clS;
 			const cat = categorizeLen(len);
-			const leftPct = Number(((start - rangeStart) * 10000n) / fullLen) / 100;
-			const widthPct = Number((len * 10000n) / fullLen) / 100;
-			segments.push({ leftPct, widthPct, color: cat.color, label: cat.label });
 			legendMap[cat.label] = { color: cat.color, count: (legendMap[cat.label]?.count || 0) + 1 };
-		}
-		const legend = Object.entries(legendMap).map(([label, v]) => ({ label, color: v.color, count: v.count })).sort((a, b) => a.label.localeCompare(b.label));
-		return { segments, legend };
-	}
-	const mined = computeMinedSegments(recent, bins);
+			return { leftPct: Number(((clS - start) * 10000n) / full) / 100, widthPct: Number((len * 10000n) / full) / 100, ...cat };
+		}).filter(Boolean) as Array<{ leftPct: number; widthPct: number; color: string; label: string }>;
+		const legend = Object.entries(legendMap).map(([label, v]) => ({ label, color: v.color, count: v.count }));
+		return { segs, legend };
+	})();
 
+	const hoverHandler = (startHex: string, endHex: string) => {
+		if (!startHex || !endHex) { setHoveredBlockCells([]); return; }
+		const s = parseHexBI(startHex), e = parseHexBI(endHex);
+		setHoveredBlockCells(bins.reduce((acc: number[], b, bi) => {
+			if (s <= parseHexBI(b.endHex) && e >= parseHexBI(b.startHex))
+				acc.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
+			return acc;
+		}, []));
+	};
 
-
-
-	// Renderização de Estado (Loading/No Puzzle)
-	if (loading && bins.length === 0) {
+	if (loading && !bins.length) {
 		return (
-			<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
-				<div className="max-w-6xl mx-auto px-4 py-12">
-					<div className="bg-white border border-gray-200 rounded-md p-4 shadow-sm animate-pulse">
-						<div className="h-6 w-40 bg-gray-200 rounded mb-2" />
-						<div className="h-4 w-64 bg-gray-200 rounded" />
-					</div>
+			<div className="min-h-screen bg-volt-bg flex items-center justify-center">
+				<div className="text-center volt-fade-in">
+					<div className="w-12 h-12 rounded-full border-2 border-transparent mx-auto mb-4" style={{ borderTopColor: '#fc5c04', animation: 'voltSpin 700ms linear infinite' }} />
+					<p className="text-[13px]" style={{ color: '#5c5a55' }}>{t('dashboard.loading')}</p>
 				</div>
 			</div>
 		);
 	}
-	if (noPuzzle) { return (<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100"><div className="max-w-4xl mx-auto px-4 py-12"><PuzzleConfigNotice /></div></div>); }
-	if (error) { return (<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100"><div className="max-w-4xl mx-auto px-4 py-12"><div className="bg-red-100 border border-red-400 p-4 rounded text-red-800">Error: {error}</div></div></div>); }
-
+	if (noPuzzle) return <div className="min-h-screen bg-volt-bg"><div className="max-w-4xl mx-auto px-4 sm:px-7 py-12"><PuzzleConfigNotice /></div></div>;
+	if (error) return (
+		<div className="min-h-screen bg-volt-bg">
+			<div className="max-w-4xl mx-auto px-4 sm:px-7 py-12">
+				<div className="volt-card p-5">
+					<p className="text-[13px]" style={{ color: '#f0554a' }}>Error: {error}</p>
+				</div>
+			</div>
+		</div>
+	);
 
 	return (
-		// PADRÃO 1: Fundo com degradê
-		<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
-			<div className="max-w-6xl mx-auto px-4 py-12">
+		<div className="min-h-screen bg-volt-bg text-volt-text volt-fade-in">
+			<div className="max-w-6xl mx-auto px-4 sm:px-7 py-10">
 
-				{/* Header e Meta (NOVO PADRÃO VISUAL) */}
-				<Card className="mb-8 shadow-sm border-gray-200">
-					<CardHeader className="border-b pb-4">
-						<div className="flex items-center justify-between">
-							<div className='flex items-center gap-2'>
-								<div className="p-3 bg-blue-100 rounded-full">
-									<Hash className="h-6 w-6 text-blue-600" />
+				{/* ── Page header ── */}
+				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+					<div>
+						<div className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: '#fc5c04' }}>{t('overview.pool')}</div>
+						<h1 className="text-[28px] font-bold leading-tight" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee', letterSpacing: '-0.02em' }}>{t('overview.overview')}</h1>
+					</div>
+					<div className="flex items-center gap-2 flex-wrap">
+						<span className="volt-badge-accent">{overallPow}</span>
+						{rangeBits && <span className="volt-badge-neutral font-mono text-[11px]">{rangeBits}</span>}
+						<span className="volt-badge-success">{activeCells} {t('overview.cells')}</span>
+						<div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11.5px]" style={{ background: '#131313', border: '1px solid #262624', color: '#9a9892' }}>
+							<Clock className="h-3 w-3" /> {fmtUpdated(lastUpdated)}
+						</div>
+						<button onClick={() => window.location.reload()} className="volt-btn-ghost text-[13px] px-3 py-1.5">
+							<RotateCcw className="w-3.5 h-3.5" /> {t('common.refresh')}
+						</button>
+					</div>
+				</div>
+
+				{meta?.address && (
+					<div className="mb-6">
+						<PuzzleInfoCard variant="overview" />
+					</div>
+				)}
+
+				{/* ── Tab switcher ── */}
+				<div className="flex items-center gap-1 p-1 rounded-xl w-fit mb-6" style={{ background: '#131313', border: '1px solid #262624' }}>
+					{([
+						{ key: 'blocks', icon: Blocks, label: t('overview.tabs.blocks') },
+						{ key: 'miners', icon: Pickaxe, label: t('overview.tabs.miners') },
+					] as const).map(({ key, icon: Icon, label }) => (
+						<button
+							key={key}
+							onClick={() => setTab(key)}
+							className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all duration-150"
+							style={tab === key
+								? { background: '#fc5c04', color: '#0a0a0a' }
+								: { color: '#5c5a55' }
+							}
+						>
+							<Icon className="h-4 w-4" /> {label}
+						</button>
+					))}
+				</div>
+
+				{/* ── Blocks tab ── */}
+				{tab === 'blocks' && (
+					<>
+						{/* Metric cards */}
+						<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+
+							{/* Pool Speed */}
+							<div className="volt-card p-5 flex flex-col gap-3">
+								<div className="flex items-center justify-between">
+									<div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(252,92,4,0.1)', border: '1px solid rgba(252,92,4,0.15)' }}>
+										<Gauge className="h-4.5 w-4.5" style={{ color: '#fc5c04' }} />
+									</div>
+									<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{t('overview.blocks.poolSpeed')}</span>
 								</div>
 								<div>
-									<CardTitle className="text-2xl font-bold text-gray-900">Pool Overview</CardTitle>
-									<CardDescription className="text-gray-600">A visual summary of the puzzle’s progress and recent validations.</CardDescription>
+									<div className="text-[22px] font-bold leading-none" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#fc5c04', letterSpacing: '-0.02em' }}>
+										{poolSpeed(recent)}
+									</div>
+									<p className="text-[11px] mt-1.5" style={{ color: '#5c5a55' }}>{t('overview.blocks.avgOfLast')}</p>
 								</div>
 							</div>
-							<div className="flex items-center gap-3">
-								<div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200">
-									<Clock className="h-4 w-4 text-blue-600" />
-									<span className="text-xs font-semibold text-blue-700">Last Updated</span>
-									<Badge variant="outline" className="text-[10px] font-bold border-blue-300 text-blue-700 bg-white">
-										{formatLastUpdated(lastUpdated)}
-									</Badge>
+
+							{/* Total Validated */}
+							<div className="volt-card p-5 flex flex-col gap-3">
+								<div className="flex items-center justify-between">
+									<div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(61,220,132,0.1)', border: '1px solid rgba(61,220,132,0.15)' }}>
+										<CheckCircle2 className="h-4.5 w-4.5" style={{ color: '#3ddc84' }} />
+									</div>
+									<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{t('overview.blocks.validated')}</span>
 								</div>
-								<button
-									onClick={() => window.location.reload()}
-									className='text-sm text-gray-600 hover:text-blue-600 px-3 py-1 rounded-md transition-colors inline-flex items-center gap-1'
-								>
-									<RotateCcw className='w-4 h-4' /> Refresh
-								</button>
+								<div>
+									<div className="text-[20px] font-bold font-mono leading-none" style={{ color: '#3ddc84', letterSpacing: '-0.01em' }}>{formatT(validatedBI)}</div>
+									<div className="text-[11.5px] font-mono mt-1.5" style={{ color: '#5c5a55' }}>
+										<span style={{ color: '#9a9892' }}>{formatT(remainingBI)}</span> {t('overview.blocks.remaining')}
+									</div>
+								</div>
 							</div>
-						</div>
-					</CardHeader>
-					<CardContent className="pt-6">
-						<div className="flex flex-wrap items-center gap-4">
-							<span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-md font-semibold text-sm inline-flex items-center gap-2">
-								<Expand className='w-4 h-4' /> Difficulty: {overallPow}
-							</span>
-							{rangeBits && (
-								<span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md font-mono text-sm">
-									Bits Range: {rangeBits}
-								</span>
-							)}
-							<span className="px-3 py-1 bg-green-50 text-green-700 rounded-md font-semibold text-sm">
-								Active Cells: {activeCells}
-							</span>
-						</div>
-						<div className="mt-4">
-							{/* Assumindo que PuzzleInfoCard usa o mesmo estilo */}
-							{meta?.address && <PuzzleInfoCard variant="overview" />}
-						</div>
-					</CardContent>
-				</Card>
 
-				<Tabs defaultValue="overview" className="w-full">
-					<TabsList className="w-full overflow-x-auto bg-transparent">
-						<TabsTrigger value="overview" className="inline-flex items-center gap-2 data-[state=active]:text-blue-600"><Blocks className="h-4 w-4" /> Blocks</TabsTrigger>
-						<TabsTrigger value="miners" className="inline-flex items-center gap-2 data-[state=active]:text-blue-600"><Pickaxe className="h-4 w-4" /> Miners</TabsTrigger>
-					</TabsList>
-
-					<TabsContent value="overview">
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-							<Card className="col-span-1 shadow-sm border-gray-200">
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
-										<Gauge className="h-5 w-5 text-blue-600" /> Pool Speed
-									</h3>
-									<span className="text-xs text-gray-500">(last 10 blocks)</span>
-								</CardHeader>
-								<CardContent>
-									<div className="text-3xl font-bold text-blue-700">{computePoolSpeed(recent)}</div>
-									<div className="text-sm text-gray-600 mt-1">Average speed computed from the last 10 completions.</div>
-								</CardContent>
-							</Card>
-
-							<Card className="shadow-sm border-gray-200">
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
-										<CheckCircle2 className="h-5 w-5 text-green-600" /> Total Validation
-									</h3>
-								</CardHeader>
-								<CardContent>
-									{(() => {
-										const t = computeTotalsT(bins);
-										const cls = adaptiveTextClass(t);
-										return (
-											<div className={`text-gray-900 font-mono ${cls}`}>
-												<span className="px-2 py-1 bg-gray-100 rounded break-all block w-fit leading-tight">{t}</span>
-											</div>
-										);
-									})()}
-									<div className="text-sm text-gray-600 mt-1">Validated / Remaining (T-keys).</div>
-								</CardContent>
-							</Card>
-							<Card className="shadow-sm border-gray-200">
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
-										<Expand className="h-5 w-5 text-blue-600" /> Range Swept
-									</h3>
-									<span className="text-xs text-gray-500">{overallProgress.percent}%</span>
-								</CardHeader>
-								<CardContent>
-									<div className="flex items-center justify-between mb-2">
-										<span className="text-sm text-gray-600">Swept</span>
-										<span className="font-mono text-sm text-gray-900">{overallProgressLabel}</span>
+							{/* Range Swept */}
+							<div className="volt-card p-5 flex flex-col gap-3">
+								<div className="flex items-center justify-between">
+									<div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(252,92,4,0.1)', border: '1px solid rgba(252,92,4,0.15)' }}>
+										<TrendingUp className="h-4.5 w-4.5" style={{ color: '#fc5c04' }} />
 									</div>
-									<div className="w-full bg-gray-200 rounded h-3 overflow-hidden">
-										<div
-											style={{ width: `${overallProgress.percent}%` }}
-											className="h-3 bg-blue-600"
-										/>
+									<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{t('overview.blocks.rangeSwept')}</span>
+								</div>
+								<div>
+									<div className="text-[28px] font-bold leading-none mb-2" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee', letterSpacing: '-0.03em' }}>
+										{overallPct}<span className="text-[18px]" style={{ color: '#5c5a55' }}>%</span>
 									</div>
-									<div className="text-xs text-gray-600 mt-2">Fraction of total range swept. 1% ≈ <span className="font-mono text-gray-900">{onePercentLabel}</span></div>
-								</CardContent>
-							</Card>
-							<Card className="shadow-sm border-gray-200">
-								<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-									<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-lg">
-										<Blocks className="h-5 w-5 text-blue-600" /> Mined Regions
-									</h3>
-									<span className="text-xs text-gray-500">{(minedAgg?.segments?.length ?? 0) || (mined.segments.length)} segments</span>
-								</CardHeader>
-								<CardContent>
+									<div className="w-full rounded-full overflow-hidden mb-1.5" style={{ height: 5, background: '#1e1e1c' }}>
+										<div style={{ width: `${overallPct}%`, height: 5, background: '#fc5c04', borderRadius: 9999, transition: 'width 700ms cubic-bezier(.4,0,.2,1)' }} />
+									</div>
+									<p className="text-[11px]" style={{ color: '#5c5a55' }}>
+										{t('overview.blocks.approx')} <span className="font-mono" style={{ color: '#9a9892' }}>{onePercentLabel}</span>
+									</p>
+								</div>
+							</div>
+
+							{/* Mined Regions */}
+							<div className="volt-card p-5 flex flex-col gap-3">
+								<div className="flex items-center justify-between">
+									<div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(61,220,132,0.1)', border: '1px solid rgba(61,220,132,0.15)' }}>
+										<PieChart className="h-4.5 w-4.5" style={{ color: '#3ddc84' }} />
+									</div>
+									<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{t('overview.blocks.minedRegions')}</span>
+								</div>
+								<div>
+									<div className="text-[28px] font-bold leading-none mb-2" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee', letterSpacing: '-0.03em' }}>
+										{minedSegments.segs.length}
+										<span className="text-[13px] ml-1.5" style={{ color: '#5c5a55' }}>{t('overview.blocks.segments')}</span>
+									</div>
 									<TooltipProvider delayDuration={100}>
-										<div className="relative w-full h-4 bg-gray-200 rounded overflow-hidden">
-											<div className="absolute top-0 left-0 h-4 overflow-hidden" style={{ width: `${overallProgress.percent}%` }}>
-												{(minedAgg?.segments ?? mined.segments).map((s, idx) => {
-													const scaledLeft = (s.leftPct * overallProgress.percent) / 100;
-													const scaledWidth = (s.widthPct * overallProgress.percent) / 100;
-													const hundredths = Math.max(0, Math.round(s.widthPct * 100));
-													const lenApproxBI = (totalLenBI * BigInt(hundredths)) / 10000n;
-													const lenLabel = formatTrillionsBI(lenApproxBI);
-													const pctLabel = `${s.widthPct.toFixed(2)}%`;
+										<div className="relative w-full rounded-full overflow-hidden mb-1.5" style={{ height: 5, background: '#1e1e1c' }}>
+											<div className="absolute inset-0 overflow-hidden" style={{ width: `${overallPct}%` }}>
+												{minedSegments.segs.map((s, i) => {
+													const sL = (s.leftPct * overallPct) / 100;
+													const sW = (s.widthPct * overallPct) / 100;
 													return (
-														<Tooltip key={idx}>
+														<Tooltip key={i}>
 															<TooltipTrigger asChild>
-																<div className={`absolute top-0 h-4 ${s.color} opacity-70`} style={{ left: `${scaledLeft}%`, width: `${scaledWidth}%` }} />
+																<div className="absolute top-0 h-full opacity-80 hover:opacity-100" style={{ left: `${sL}%`, width: `${Math.max(sW, 0.3)}%`, background: s.color }} />
 															</TooltipTrigger>
-															<TooltipContent side="top" align="center">
-																<div className="flex items-center gap-2">
-																	<span className="font-mono">{s.label}</span>
-																	<span className="text-gray-500">|</span>
-																	<span className="font-mono">{pctLabel}</span>
-																	<span className="text-gray-500">|</span>
-																	<span className="font-mono">{lenLabel}</span>
-																</div>
+															<TooltipContent side="top">
+																<span className="font-mono text-xs">{s.label} — {s.widthPct.toFixed(2)}%</span>
 															</TooltipContent>
 														</Tooltip>
 													);
@@ -516,42 +349,38 @@ export default function PoolOverviewPage() {
 											</div>
 										</div>
 									</TooltipProvider>
-									<div className="flex flex-wrap gap-3 mt-3">
-										{(minedAgg?.legend ?? mined.legend).map((l, i) => (
-											<div key={i} className="flex items-center gap-2 text-xs text-gray-700">
-												<span className={`inline-block w-3 h-3 rounded ${l.color}`} />
-												<span className="font-mono">{l.label}</span>
-												<span className="text-gray-500">({l.count})</span>
-											</div>
+									<div className="flex flex-wrap gap-2 mt-0.5">
+										{minedSegments.legend.map((l, i) => (
+											<span key={i} className="flex items-center gap-1 text-[10.5px]" style={{ color: '#9a9892' }}>
+												<span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: l.color }} />
+												{l.label} ({l.count})
+											</span>
 										))}
 									</div>
-								</CardContent>
-							</Card>
+								</div>
+							</div>
 						</div>
 
-						<div className='pb-8'>
+						{/* Live Activity — untouched */}
+						<div className="mb-6">
+							<div className="flex items-center gap-2 mb-3">
+								<Activity className="h-4 w-4" style={{ color: '#fc5c04' }} />
+								<span className="text-[15px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('overview.liveActivity.title')}</span>
+								<div className="flex items-center gap-3 ml-auto text-[11px]" style={{ color: '#5c5a55' }}>
+									<span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: '#fc5c04' }} />{t('overview.liveActivity.active')}</span>
+									<span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: '#3ddc84' }} />{t('overview.liveActivity.validated')}</span>
+								</div>
+							</div>
 							<PoolActivityTimelineStandalone
 								active={active}
 								validated={recent}
 								animationsEnabled={true}
 								isLoading={loading || (!active.length && !recent.length)}
-								onHoverRange={(startHex: string, endHex: string) => {
-									if (!startHex || !endHex) { setHoveredBlockCells([]); return }
-									const start = parseHexBI(startHex);
-									const end = parseHexBI(endHex);
-									const indices: number[] = [];
-									for (let bi = 0; bi < bins.length; bi++) {
-										const bs = parseHexBI(bins[bi].startHex);
-										const be = parseHexBI(bins[bi].endHex);
-										if (start <= be && end >= bs) {
-											indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
-										}
-									}
-									setHoveredBlockCells(indices);
-								}}
+								onHoverRange={hoverHandler}
 							/>
 						</div>
 
+						{/* Heatmap — untouched */}
 						<ValidationHeatmap
 							bins={bins}
 							binCount={meta?.binCount ?? bins.length}
@@ -561,118 +390,91 @@ export default function PoolOverviewPage() {
 							onNavigateBin={(idx) => router.push(`/overview/bin/${idx}`)}
 						/>
 
+						{/* Last Completed Blocks — untouched */}
 						<div className="mt-6">
-							<div className="flex items-center justify-between py-2">
-								<h3 className="text-gray-900 font-semibold flex items-center gap-2 text-xl">
-									<div className=' bg-blue-100 p-3 rounded-full'>
-
-										<BrickWallFire className="w-5 h-5 text-blue-500" />
-									</div>
-									Last Completed Blocks
-								</h3>
-								<p className="text-sm text-gray-600">Polling: next in <span className='text-blue-600 font-semibold'>{nextPollInSec}s</span></p>
+							<div className="flex items-center justify-between mb-4">
+								<div className="flex items-center gap-2">
+									<BrickWallFire className="w-4 h-4" style={{ color: '#fc5c04' }} />
+									<span className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('overview.lastCompleted')}</span>
+								</div>
+								{/* Last Completed Blocks - keeping as is since it's a technical term */}
+								<span className="text-[11.5px]" style={{ color: '#5c5a55' }}>
+									{t('overview.nextPoll').replace('{n}', `${nextPollInSec}`)}
+								</span>
 							</div>
-							<BlocksTimeline
-								items={recent.slice(0, 10)}
-								pollUrl="/api/pool/stats?take=10&skip=0"
-								pollIntervalMs={30000}
-								direction="forward"
-								speedMs={60000}
-								gapPx={16}
-								animationsEnabled={true}
-								onHoverRange={(startHex: string, endHex: string) => {
-									if (!startHex || !endHex) { setHoveredBlockCells([]); return }
-									const start = parseHexBI(startHex);
-									const end = parseHexBI(endHex);
-									const indices: number[] = [];
-									for (let bi = 0; bi < bins.length; bi++) {
-										const bs = parseHexBI(bins[bi].startHex);
-										const be = parseHexBI(bins[bi].endHex);
-										if (start <= be && end >= bs) {
-											indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
-										}
-									}
-									setHoveredBlockCells(indices);
-								}}
-							/>
+							<BlocksTimeline items={recent.slice(0, 10)} pollUrl="/api/pool/stats?take=10&skip=0" pollIntervalMs={30000} direction="forward" speedMs={60000} gapPx={16} animationsEnabled={true} onHoverRange={hoverHandler} />
+							<BlocksTimeline items={recent.slice(10, 20)} pollUrl="/api/pool/stats?take=10&skip=10" pollIntervalMs={30000} direction="reverse" speedMs={60000} gapPx={16} animationsEnabled={true} onHoverRange={hoverHandler} />
+						</div>
+					</>
+				)}
 
-							<div className="mt-0">
-								<BlocksTimeline
-									items={recent.slice(10, 20)}
-									pollUrl="/api/pool/stats?take=10&skip=10"
-									pollIntervalMs={30000}
-									direction="reverse"
-									speedMs={60000}
-									gapPx={16}
-									animationsEnabled={true}
-									onHoverRange={(startHex: string, endHex: string) => {
-										if (!startHex || !endHex) { setHoveredBlockCells([]); return }
-										const start = parseHexBI(startHex);
-										const end = parseHexBI(endHex);
-										const indices: number[] = [];
-										for (let bi = 0; bi < bins.length; bi++) {
-											const bs = parseHexBI(bins[bi].startHex);
-											const be = parseHexBI(bins[bi].endHex);
-											if (start <= be && end >= bs) {
-												indices.push(Math.max(0, 256 - (meta?.binCount ?? bins.length)) + bi);
-											}
-										}
-										setHoveredBlockCells(indices);
-									}}
-								/>
+				{/* ── Miners tab ── */}
+				{tab === 'miners' && (
+					<div className="volt-card">
+						<div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: '1px solid #262624' }}>
+							<div>
+								<div className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: '#fc5c04' }}>{t('overview.miners.title')}</div>
+								<div className="flex items-center gap-2">
+									<Users className="h-4 w-4" style={{ color: '#fc5c04' }} />
+									<span className="text-[19px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('overview.miners.subtitle')}</span>
+								</div>
 							</div>
+							<span className="text-[12px]" style={{ color: '#5c5a55' }}>
+								{miners.length} {miners.length !== 1 ? t('overview.miners.miners') : t('overview.miners.miner')}
+							</span>
 						</div>
 
-					</TabsContent>
+						{miners.length === 0 ? (
+							<div className="px-6 py-14 text-center">
+								<Pickaxe className="h-8 w-8 mx-auto mb-3" style={{ color: '#2a2926' }} />
+								<p className="text-[13px]" style={{ color: '#5c5a55' }}>{t('overview.miners.noMiners')}</p>
+							</div>
+						) : (
+							<div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+								{miners.map((m, idx) => (
+									<div key={idx} className="rounded-xl p-4" style={{ background: '#111110', border: '1px solid #1e1e1c' }}>
 
-					<TabsContent value="miners">
-						<Card className="shadow-sm border-gray-200">
-							<CardHeader className="border-b pb-4">
-								<CardTitle className="text-xl font-bold text-gray-900 flex gap-2 items-center justify-start"><Pickaxe className='h-6 w-6 text-blue-500 ' />Active Miners</CardTitle>
-								<CardDescription className="text-gray-600">Address, token, speed, validated keys, share and blocks.</CardDescription>
-							</CardHeader>
-							<CardContent className="pt-6">
-								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-									{miners.map((m, idx) => (
-										<div key={idx} className="border rounded-lg p-4 bg-white shadow-sm">
-											<div className="flex items-center gap-2 text-sm text-gray-500">
-												<Bitcoin className="h-4 w-4 text-blue-600" /> Address
+										{/* Rank + address */}
+										<div className="flex items-center gap-3 mb-4">
+											<div
+												className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
+												style={{
+													background: idx === 0 ? 'rgba(252,92,4,0.15)' : idx === 1 ? 'rgba(255,255,255,0.06)' : '#1a1a18',
+													border: `1px solid ${idx === 0 ? 'rgba(252,92,4,0.3)' : '#262624'}`,
+													color: idx === 0 ? '#fc5c04' : idx === 1 ? '#f4f3ee' : '#5c5a55',
+												}}
+											>
+												#{idx + 1}
 											</div>
-											<div className="font-mono text-gray-900 font-semibold mb-2">{m.addressShort}</div>
-											<div className="flex items-center gap-2 text-sm text-gray-500">
-												<Key className="h-4 w-4 text-gray-700" /> Token
-											</div>
-											<div className="font-mono text-gray-900 mb-2">{m.tokenShort}</div>
-											<div className="flex justify-between items-center text-sm mt-2">
-												<span className="flex items-center gap-1 text-gray-500"><Gauge className="h-4 w-4 text-blue-600" /> Average Speed</span>
-												<span className="font-semibold text-blue-700">{m.avgSpeedLabel}</span>
-											</div>
-											<div className="flex justify-between items-center text-sm mt-1">
-												<span className="flex items-center gap-1 text-gray-500"><CheckCircle2 className="h-4 w-4 text-green-600" /> Total Validated</span>
-												<span className="font-semibold text-gray-900">{m.validatedLabel}</span>
-											</div>
-											<div className="flex justify-between items-center text-sm mt-1">
-												<span className="flex items-center gap-1 text-gray-500"><PieChart className="h-4 w-4 text-emerald-600" /> Share</span>
-												<span className="font-semibold text-green-700">{m.sharePercentLabel}</span>
-											</div>
-											<div className="flex justify-between items-center text-sm mt-1">
-												<span className="flex items-center gap-1 text-gray-500"><ListIcon className="h-4 w-4 text-gray-700" /> Total Blocks</span>
-												<span className="font-semibold">{m.totalBlocks}</span>
+											<div className="min-w-0">
+												<div className="font-mono text-[12.5px] font-semibold truncate" style={{ color: '#f4f3ee' }}>{m.addressShort}</div>
+												<div className="font-mono text-[11px] truncate" style={{ color: '#5c5a55' }}>{m.tokenShort}</div>
 											</div>
 										</div>
-									))}
-									{miners.length === 0 && (
-										<div className="text-sm text-gray-600">No miners found.</div>
-									)}
-								</div>
-							</CardContent>
-						</Card>
-					</TabsContent>
-				</Tabs>
+
+										{/* Stats */}
+										<div className="space-y-2.5" style={{ borderTop: '1px solid #1e1e1c', paddingTop: 12 }}>
+											{[
+												{ icon: Gauge, label: t('overview.miners.avgSpeed'), value: m.avgSpeedLabel, color: '#fc5c04' },
+												{ icon: CheckCircle2, label: t('overview.miners.validated'), value: m.validatedLabel, color: '#3ddc84' },
+												{ icon: PieChart, label: t('overview.miners.poolShare'), value: m.sharePercentLabel, color: '#3ddc84' },
+												{ icon: ListIcon, label: t('overview.miners.totalBlocks'), value: String(m.totalBlocks), color: '#9a9892' },
+											].map(({ icon: Icon, label, value, color }) => (
+												<div key={label} className="flex items-center justify-between">
+													<span className="flex items-center gap-1.5 text-[11.5px]" style={{ color: '#5c5a55' }}>
+														<Icon className="h-3.5 w-3.5 shrink-0" /> {label}
+													</span>
+													<span className="text-[12px] font-semibold font-mono" style={{ color }}>{value}</span>
+												</div>
+											))}
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
+				)}
 			</div>
-
-
-			{/* CSS moved into reusable component */}
 		</div>
 	);
 }

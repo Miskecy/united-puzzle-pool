@@ -1,23 +1,19 @@
-'use client'
+﻿'use client'
 import { Gauge, Clock, TrendingUp, Activity } from 'lucide-react'
 import { useRef, useEffect } from 'react'
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from 'recharts'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/chart'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 type Point = { t: number; v: number; ts?: number }
+type Props = { points: Point[]; avgLabel: string; remainingBKeys?: number }
 
-type Props = {
-	points: Point[]
-	avgLabel: string
-	remainingBKeys?: number
-}
-
-const PRIMARY_COLOR_HSL = 'hsl(217.2 91.2% 59.8%)'
-const PRIMARY_COLOR_HSL_END = 'hsl(262.1 83.3% 57.8%)'
-const NF_EN_US_2DP = new Intl.NumberFormat('en-US', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const ACCENT = '#fc5c04'
+const ACCENT_END = '#c94800'
+const NF = new Intl.NumberFormat('en-US', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Props) {
+	const { t } = useTranslation()
 	const chartData = points.map(p => ({ t: p.t, ts: p.ts, speed: Math.max(0, p.v) }))
 	const latestPoint = chartData.length > 0 ? chartData[chartData.length - 1] : null
 	const latestSpeed = latestPoint ? latestPoint.speed.toFixed(3) : '—'
@@ -25,277 +21,169 @@ export default function PoolSpeedChart({ points, avgLabel, remainingBKeys }: Pro
 
 	const nowAtMountRef = useRef<number>(0)
 	const rtfRef = useRef<Intl.RelativeTimeFormat | null>(null)
-	useEffect(() => {
-		nowAtMountRef.current = Date.now()
-		try {
-			rtfRef.current = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-		} catch { }
-	}, [])
+	useEffect(() => { nowAtMountRef.current = Date.now(); try { rtfRef.current = new Intl.RelativeTimeFormat('en', { numeric: 'auto' }) } catch { } }, [])
 
-	// Calculate trend
 	const prevSpeed = chartData.length >= 2 ? chartData[chartData.length - 2].speed : 0
-	const trend = chartData.length >= 2 && prevSpeed > 0
-		? (((chartData[chartData.length - 1].speed - prevSpeed) / prevSpeed) * 100).toFixed(1)
-		: '0'
+	const trend = chartData.length >= 2 && prevSpeed > 0 ? (((chartData[chartData.length - 1].speed - prevSpeed) / prevSpeed) * 100).toFixed(1) : '0'
 	const isPositiveTrend = parseFloat(trend) >= 0
 
-	const chartConfig: ChartConfig = {
-		speed: { label: 'Speed (BKeys/s)', color: PRIMARY_COLOR_HSL },
-	}
+	const chartConfig: ChartConfig = { speed: { label: 'Speed (BKeys/s)', color: ACCENT } }
 
-	function adaptiveNumCls(s: string): string {
-		const len = s.length;
-		if (len <= 10) return 'text-4xl';
-		if (len <= 16) return 'text-3xl';
-		if (len <= 24) return 'text-2xl';
-		if (len <= 32) return 'text-xl';
-		return 'text-lg';
-	}
+	const dateFormatter = (v: number | string) => new Date(typeof v === 'number' ? v : Number(v)).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 
-	const dateFormatter = (value: number | string) => {
-		const num = typeof value === 'number' ? value : Number(value)
-		const d = new Date(num)
-		return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-	}
-
-	// We no longer need explicit day window here; X axis uses per-point ts
+	const adaptiveNumCls = (s: string) => { const l = s.length; if (l <= 10) return 'text-4xl'; if (l <= 16) return 'text-3xl'; if (l <= 24) return 'text-2xl'; if (l <= 32) return 'text-xl'; return 'text-lg' }
 
 	if (chartData.length === 0) {
 		return (
-			<Card className="bg-linear-to-br from-white to-gray-50 border border-gray-200 shadow-lg min-h-[400px] flex items-center justify-center">
-				<div className="text-center p-8">
-					<Activity className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-					<p className="text-gray-500 text-lg font-medium">No speed data available</p>
-					<p className="text-gray-400 text-sm mt-2">Data will appear here when available</p>
+			<div className="volt-card min-h-[300px] flex items-center justify-center">
+				<div className="text-center p-8 space-y-3">
+					<Activity className="h-14 w-14 mx-auto" style={{ color: '#3d3c38' }} />
+					<p className="text-[15px] font-medium" style={{ color: '#5c5a55' }}>{t('poolSpeedChart.noData')}</p>
+					<p className="text-[13px]" style={{ color: '#3d3c38' }}>{t('poolSpeedChart.noDataDesc')}</p>
 				</div>
-			</Card>
+			</div>
 		)
 	}
 
 	return (
-		<Card className="bg-linear-to-br from-white via-white to-blue-50/30 border border-gray-200 shadow-lg hover:shadow-xl transition-all duration-300">
-			<CardHeader className="pb-3 space-y-0">
+		<div className="volt-card">
+			{/* Header */}
+			<div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid #262624' }}>
 				<div className="flex items-start justify-between">
 					<div className="space-y-1">
 						<div className="flex items-center gap-2.5">
-							<div className="p-2 bg-blue-100 rounded-lg">
-								<Gauge className="h-5 w-5 text-blue-600" />
+							<div className="p-2 rounded-lg" style={{ background: 'rgba(252,92,4,0.1)' }}>
+								<Gauge className="h-5 w-5" style={{ color: ACCENT }} />
 							</div>
-							<CardTitle className="text-xl font-bold text-gray-900">
-								Pool Speed
-							</CardTitle>
+							<span className="text-[19px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{t('poolSpeedChart.title')}</span>
 						</div>
-						<CardDescription className="text-sm text-gray-500 ml-11">
-							{avgLabel} last 24h average
-						</CardDescription>
+						<p className="text-[12.5px] ml-11" style={{ color: '#5c5a55' }}>{avgLabel} {t('poolSpeedChart.lastAvg')}</p>
 					</div>
-					<div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-200">
-						<Clock className="h-4 w-4 text-blue-600" />
-						<span className="text-xs font-semibold text-blue-700">Today</span>
+					<div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'rgba(252,92,4,0.08)', border: '1px solid rgba(252,92,4,0.2)' }}>
+						<Clock className="h-3.5 w-3.5" style={{ color: ACCENT }} />
+						<span className="text-[11.5px] font-semibold" style={{ color: ACCENT }}>{t('poolSpeedChart.today')}</span>
 					</div>
 				</div>
-			</CardHeader>
+			</div>
 
-			<CardContent className="space-y-6">
-				{/* Stats Section */}
+			<div className="px-6 py-5 space-y-5">
+				{/* Stat cards */}
 				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-					<div className="bg-linear-to-br from-blue-50 to-blue-100/50 rounded-xl p-4 border border-blue-200/50">
+					{/* Current speed */}
+					<div className="rounded-xl p-4" style={{ background: 'rgba(252,92,4,0.06)', border: '1px solid rgba(252,92,4,0.15)' }}>
 						<div className="flex items-baseline gap-2">
-							<span className="text-3xl sm:text-4xl lg:text-5xl font-black text-blue-600 tracking-tight">
-								{latestSpeed}
-							</span>
-							<span className="text-sm font-medium text-blue-600/70">BKeys/s</span>
+							<span className="text-3xl sm:text-4xl font-black tracking-tight" style={{ color: ACCENT }}>{latestSpeed}</span>
+							<span className="text-[13px] font-medium" style={{ color: 'rgba(252,92,4,0.7)' }}>{t('poolSpeedChart.bKeysS')}</span>
 						</div>
-						<p className="text-xs font-medium text-blue-700 mt-1.5">Current Speed</p>
+						<p className="text-[11.5px] font-medium mt-1.5" style={{ color: ACCENT }}>{t('poolSpeedChart.currentSpeed')}</p>
 					</div>
 
-					<div className="bg-linear-to-br from-gray-50 to-gray-100/50 rounded-xl p-4 border border-gray-200/50">
+					{/* Trend */}
+					<div className="rounded-xl p-4" style={{ background: '#131313', border: '1px solid #262624' }}>
 						<div className="flex items-center gap-2">
-							<TrendingUp className={`h-5 w-5 ${isPositiveTrend ? 'text-green-600' : 'text-red-600 rotate-180'}`} />
-							<span className={`text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight ${isPositiveTrend ? 'text-green-600' : 'text-red-600'}`}>
-								{Math.abs(parseFloat(trend))}%
-							</span>
-							<span className="text-sm font-medium text-gray-600">{isPositiveTrend ? 'up' : 'down'} vs previous</span>
+							<TrendingUp className={`h-5 w-5 ${isPositiveTrend ? '' : 'rotate-180'}`} style={{ color: isPositiveTrend ? '#3ddc84' : '#f0554a' }} />
+							<span className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: isPositiveTrend ? '#3ddc84' : '#f0554a' }}>{Math.abs(parseFloat(trend))}%</span>
+							<span className="text-[13px] font-medium" style={{ color: '#9a9892' }}>{isPositiveTrend ? t('poolSpeedChart.up') : t('poolSpeedChart.down')} {t('poolSpeedChart.vsPrev')}</span>
 						</div>
-						<p className="text-xs font-medium text-gray-600 mt-1.5">Recent Change</p>
+						<p className="text-[11.5px] font-medium mt-1.5" style={{ color: '#5c5a55' }}>{t('poolSpeedChart.recentChange')}</p>
 					</div>
 
-					<div className="bg-linear-to-br from-purple-50 to-purple-100/50 rounded-xl p-4 border border-purple-200/50">
-						{remainingBKeys && latestSpeedNum > 0 ? (
-							(() => {
-								const secs = remainingBKeys / latestSpeedNum
-								const hours = secs / 3600
-								const days = hours / 24
-								const weeks = days / 7
-								const months = days / 30
-								const years = days / 365
-								const units = [
-									{ label: 'Millennium', value: years / 1000 },
-									{ label: 'Century', value: years / 100 },
-									{ label: 'Decades', value: years / 10 },
-									{ label: 'Years', value: years },
-									{ label: 'Months', value: months },
-									{ label: 'Weeks', value: weeks },
-									{ label: 'Days', value: days },
-									{ label: 'Hours', value: hours },
-								]
-								let idx = units.findIndex(u => u.value >= 1)
-								if (idx === -1) idx = units.length - 1
-								const u = units[idx]
-								const valStr = !isFinite(u.value) ? '—' : (Math.abs(u.value) < 0.01 ? '<0.01' : NF_EN_US_2DP.format(u.value))
-								const cls = adaptiveNumCls(valStr)
-								return (
-									<div>
-										<div className="flex items-start gap-2">
-											<span className={`font-black text-purple-700 tracking-tight break-all leading-tight ${cls} w-full block`}>
-												{valStr}
-											</span>
-											<span className="text-sm font-medium text-purple-700/80 shrink-0">{u.label}</span>
-										</div>
-										<p className="text-xs font-medium text-purple-700 mt-1.5">Time to Solve</p>
+					{/* Time to solve */}
+					<div className="rounded-xl p-4" style={{ background: '#131313', border: '1px solid #262624' }}>
+						{remainingBKeys && latestSpeedNum > 0 ? (() => {
+							const secs = remainingBKeys / latestSpeedNum
+							const hours = secs / 3600; const days = hours / 24; const weeks = days / 7; const months = days / 30; const years = days / 365
+							const units = [
+								{ label: t('poolSpeedChart.timeUnits.millennium'), value: years / 1000 }, { label: t('poolSpeedChart.timeUnits.century'), value: years / 100 }, { label: t('poolSpeedChart.timeUnits.decades'), value: years / 10 },
+								{ label: t('poolSpeedChart.timeUnits.years'), value: years }, { label: t('poolSpeedChart.timeUnits.months'), value: months }, { label: t('poolSpeedChart.timeUnits.weeks'), value: weeks },
+								{ label: t('poolSpeedChart.timeUnits.days'), value: days }, { label: t('poolSpeedChart.timeUnits.hours'), value: hours },
+							]
+							let idx = units.findIndex(u => u.value >= 1); if (idx === -1) idx = units.length - 1
+							const u = units[idx]; const valStr = !isFinite(u.value) ? '—' : (Math.abs(u.value) < 0.01 ? '<0.01' : NF.format(u.value))
+							return (
+								<div>
+									<div className="flex items-start gap-2">
+										<span className={`font-black tracking-tight break-all leading-tight w-full block ${adaptiveNumCls(valStr)}`} style={{ color: '#9a9892' }}>{valStr}</span>
+										<span className="text-[13px] font-medium shrink-0" style={{ color: '#5c5a55' }}>{u.label}</span>
 									</div>
-								)
-							})()
-						) : (
-							<div>
-								<div className="flex items-baseline gap-2">
-									<span className="text-2xl sm:text-3xl lg:text-4xl font-black text-purple-700 tracking-tight">—</span>
+									<p className="text-[11.5px] font-medium mt-1.5" style={{ color: '#5c5a55' }}>{t('poolSpeedChart.timeToSolve')}</p>
 								</div>
-								<p className="text-xs font-medium text-purple-700 mt-1.5">Time to Solve</p>
+							)
+						})() : (
+							<div>
+								<span className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: '#5c5a55' }}>—</span>
+								<p className="text-[11.5px] font-medium mt-1.5" style={{ color: '#5c5a55' }}>{t('poolSpeedChart.timeToSolve')}</p>
 							</div>
 						)}
 					</div>
 				</div>
 
-				{/* Chart Section */}
-				<div className="bg-white rounded-xl border border-gray-200 p-4">
+				{/* Chart */}
+				<div className="rounded-xl p-4" style={{ background: '#131313', border: '1px solid #262624' }}>
 					<ChartContainer config={chartConfig} className="min-h-[200px] w-full ring-0 outline-none">
 						<ResponsiveContainer width="100%" height={200}>
-							<AreaChart
-								accessibilityLayer
-								data={chartData}
-								margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-							>
-								<CartesianGrid
-									vertical={false}
-									strokeDasharray="3 3"
-									className="stroke-gray-200"
-									opacity={0.5}
-								/>
-								<XAxis
-									dataKey="ts"
-									tickLine={false}
-									axisLine={false}
-									tickMargin={10}
-									tickFormatter={dateFormatter}
-									className="text-xs fill-gray-500"
-									tick={{ fontSize: 11 }}
-								/>
-								<YAxis
-									orientation="right"
-									axisLine={false}
-									tickLine={false}
-									tickMargin={10}
-									className="text-xs fill-gray-500"
-									domain={['auto', 'auto']}
-									tick={{ fontSize: 11 }}
-								/>
-
+							<AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+								<CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#262624" opacity={0.6} />
+								<XAxis dataKey="ts" tickLine={false} axisLine={false} tickMargin={10} tickFormatter={dateFormatter} tick={{ fontSize: 11, fill: '#5c5a55' }} />
+								<YAxis orientation="right" axisLine={false} tickLine={false} tickMargin={10} domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#5c5a55' }} />
 								<ChartTooltip
-									cursor={{ strokeDasharray: '4 4', stroke: PRIMARY_COLOR_HSL, strokeWidth: 2 }}
+									cursor={{ strokeDasharray: '4 4', stroke: ACCENT, strokeWidth: 2 }}
 									content={({ active, payload }) => {
 										if (!active || !payload || payload.length === 0) return null
 										const data = payload[0].payload as { t: number; ts?: number; speed: number }
-										const date = new Date((data.ts ?? data.t))
+										const date = new Date(data.ts ?? data.t)
 										const formatTimeAgo = (ms: number) => {
-											const rtf = rtfRef.current
-											const s = Math.floor(ms / 1000)
+											const rtf = rtfRef.current; const s = Math.floor(ms / 1000)
 											if (s < 60) return rtf ? rtf.format(-s, 'second') : `${s}s ago`
-											const m = Math.floor(s / 60)
-											if (m < 60) return rtf ? rtf.format(-m, 'minute') : `${m}m ago`
-											const h = Math.floor(m / 60)
-											if (h < 24) return rtf ? rtf.format(-h, 'hour') : `${h}h ago`
-											const d = Math.floor(h / 24)
-											if (d < 7) return rtf ? rtf.format(-d, 'day') : `${d}d ago`
-											const w = Math.floor(d / 7)
-											if (w < 4) return rtf ? rtf.format(-w, 'week') : `${w}w ago`
-											const mo = Math.floor(d / 30)
-											if (mo < 12) return rtf ? rtf.format(-mo, 'month') : `${mo}mo ago`
-											const y = Math.floor(d / 365)
-											return rtf ? rtf.format(-y, 'year') : `${y}y ago`
+											const m = Math.floor(s / 60); if (m < 60) return rtf ? rtf.format(-m, 'minute') : `${m}m ago`
+											const h = Math.floor(m / 60); if (h < 24) return rtf ? rtf.format(-h, 'hour') : `${h}h ago`
+											const d = Math.floor(h / 24); if (d < 7) return rtf ? rtf.format(-d, 'day') : `${d}d ago`
+											const w = Math.floor(d / 7); if (w < 4) return rtf ? rtf.format(-w, 'week') : `${w}w ago`
+											const mo = Math.floor(d / 30); if (mo < 12) return rtf ? rtf.format(-mo, 'month') : `${mo}mo ago`
+											return rtf ? rtf.format(-Math.floor(d / 365), 'year') : `${Math.floor(d / 365)}y ago`
 										}
-
 										return (
-											<div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg p-3 min-w-[200px]">
+											<div className="rounded-lg p-3 min-w-[180px]" style={{ background: '#191919', border: '1px solid #262624' }}>
 												<div className="space-y-2">
-													<div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-														<Clock className="h-4 w-4 text-blue-600" />
-														<span className="text-xs font-semibold text-gray-700">
-															{date.toLocaleDateString('en-US', {
-																weekday: 'short',
-																day: 'numeric',
-																month: 'short',
-																year: 'numeric'
-															})}
-														</span>
+													<div className="flex items-center gap-2 pb-2" style={{ borderBottom: '1px solid #262624' }}>
+														<Clock className="h-3.5 w-3.5" style={{ color: ACCENT }} />
+														<span className="text-[11.5px] font-semibold" style={{ color: '#9a9892' }}>{date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
 													</div>
 													<div className="flex items-center gap-2">
-														<span className="text-xs text-gray-500">Time:</span>
-														<span className="text-xs font-medium text-gray-700">
-															{date.toLocaleTimeString('en-US', {
-																hour: '2-digit',
-																minute: '2-digit',
-																second: '2-digit'
-															})}
-														</span>
-														<span className="ml-auto text-[10px] font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
+														<span className="text-[11px]" style={{ color: '#5c5a55' }}>{t('poolSpeedChart.tooltipTime')}</span>
+														<span className="text-[11px] font-medium" style={{ color: '#9a9892' }}>{date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+														<span className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(252,92,4,0.1)', color: ACCENT }}>
 															{formatTimeAgo(Math.max(0, nowAtMountRef.current - date.getTime()))}
 														</span>
 													</div>
-													<div className="flex items-center gap-2 pt-1">
-														<div className="w-2 h-2 rounded-full bg-blue-600"></div>
-														<span className="text-xs text-gray-500">Speed:</span>
-														<span className="text-sm font-bold text-blue-600">
-															{data.speed.toFixed(3)} BKeys/s
-														</span>
+													<div className="flex items-center gap-2">
+														<div className="w-2 h-2 rounded-full" style={{ background: ACCENT }} />
+														<span className="text-[11px]" style={{ color: '#5c5a55' }}>{t('poolSpeedChart.tooltipSpeed')}</span>
+														<span className="text-[12px] font-bold" style={{ color: ACCENT }}>{data.speed.toFixed(3)} {t('poolSpeedChart.bKeysS')}</span>
 													</div>
 												</div>
 											</div>
 										)
 									}}
 								/>
-
 								<defs>
 									<linearGradient id="colorSpeed" x1="0" y1="0" x2="0" y2="1">
-										<stop offset="0%" stopColor={PRIMARY_COLOR_HSL} stopOpacity={0.9} />
-										<stop offset="50%" stopColor={PRIMARY_COLOR_HSL} stopOpacity={0.4} />
-										<stop offset="100%" stopColor={PRIMARY_COLOR_HSL_END} stopOpacity={0.1} />
+										<stop offset="0%" stopColor={ACCENT} stopOpacity={0.8} />
+										<stop offset="50%" stopColor={ACCENT} stopOpacity={0.3} />
+										<stop offset="100%" stopColor={ACCENT_END} stopOpacity={0.05} />
 									</linearGradient>
-									<filter id="shadow">
-										<feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.15" />
-									</filter>
 								</defs>
-
-								<Area
-									dataKey="speed"
-									type="monotone"
-									stroke={PRIMARY_COLOR_HSL}
-									strokeWidth={2.5}
-									fill="url(#colorSpeed)"
-									fillOpacity={1}
-									filter="url(#shadow)"
-								/>
+								<Area dataKey="speed" type="monotone" stroke={ACCENT} strokeWidth={2.5} fill="url(#colorSpeed)" fillOpacity={1} />
 							</AreaChart>
 						</ResponsiveContainer>
 					</ChartContainer>
 				</div>
 
-				{/* Footer Info */}
-				<div className="flex items-center justify-between text-xs text-gray-500 pt-2">
-					<span>{chartData.length} data points recorded</span>
-					<span className="text-gray-400">Period: Last 24h</span>
+				<div className="flex items-center justify-between text-[11.5px]" style={{ color: '#5c5a55' }}>
+					<span>{chartData.length} {t('poolSpeedChart.dataPoints')}</span>
+					<span>{t('poolSpeedChart.period')}</span>
 				</div>
-			</CardContent>
-		</Card>
+			</div>
+		</div>
 	)
 }

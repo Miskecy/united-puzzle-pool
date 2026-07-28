@@ -193,21 +193,31 @@ When you find a valid private key, submit it to claim your reward.
 
 -   `POST /api/token/generate` — Generate a new mining token
 -   `GET /api/block` — Get block assignment (requires `pool-token`)
+-   `GET /api/block/:id` — Get a specific block by ID (requires `pool-token`)
 -   `POST /api/block/submit` — Submit 10–30 private keys; keys must cover all returned `checkwork_addresses`. Marks block complete and awards credits. If a submitted key derives the puzzle address, the active puzzle is auto-marked solved.
 -   `GET /api/pool/stats` — Get pool statistics
+-   `GET /api/pool/overview` — Get pool overview (active blocks, miners, progress)
+-   `GET /api/pool/miners` — Get miner leaderboard
+-   `GET /api/pool/blocks` — Get recent block list
+-   `GET /api/pool/bin` — Get hex range bin data for the validation heatmap
+-   `GET /api/pool/segments` — Get mined segment data for range visualization
+-   `GET /api/pool/distribution` — Get block distribution statistics
 -   `GET /api/user/stats` — Get user statistics (requires `pool-token`)
 -   `GET /api/user/history` — Get user block history (requires `pool-token`)
+-   `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
+-   `GET /api/puzzles/solved` — Returns list of all solved puzzles
 
-### Credits
+### Credits & Transfers
 
--   `POST /api/credits/transfer/init` — Initialize a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ toAddress: string, amount: number }`. Returns a signed message template and `nonce` to be signed with the sender’s Bitcoin address.
+-   `POST /api/credits/transfer/init` — Initialize a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ toAddress: string, amount: number }`. Returns a signed message template and `nonce` to be signed with the sender's Bitcoin address.
 -   `POST /api/credits/transfer/confirm` — Confirm a credits transfer. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ nonce: string, signature: string }`. Verifies the signature and deducts credits; responds with remaining credits.
 
-### Shared Pool API
+### Reward Redemption
 
--   `GET /api/shared` — Query validation status for a hex range. Headers: `x-shared-secret` or `shared-pool-token`. Query: `?start=<hex64>&end=<hex64>`. Returns status `VALIDATED`, `ACTIVE`, `PARTIAL`, or `NOT_FOUND` with aggregated `checkwork_addresses` and `privatekeys` when applicable.
--   `POST /api/shared` — Submit validated private keys and checkwork addresses for a hex range. Headers: `x-shared-secret` or `shared-pool-token`. Body includes `startRange`, `endRange`, `checkworks_addresses`, `privatekeys`, and optional `puzzleaddress`.
--   `POST /api/shared/token/generate` — Generate or rotate a shared pool token for a configured puzzle. Body: `{ puzzleaddress: string }`. Returns `{ token }`.
+-   `POST /api/redeem/init` — Initialize a reward redemption for a solved puzzle. Headers: `pool-token` or `Authorization: Bearer <token>`. Body: `{ amount?: number, puzzleId?: string }`. Returns a message and `nonce` to sign with your Bitcoin address. Requires the selected puzzle to be solved with a known private key.
+-   `POST /api/redeem/confirm` — Confirm a redemption by submitting the signed message. Body: `{ nonce: string, signature: string }`. Creates a `PENDING` redemption request for admin review.
+-   `GET /api/redeem/list` — List the current user's redemption requests (requires `pool-token`).
+-   `GET /api/redeem/status` — Check the status of a specific redemption (requires `pool-token`).
 
 ### Setup & Admin
 
@@ -219,29 +229,48 @@ When you find a valid private key, submit it to claim your reward.
 -   `PATCH /api/config/active` — Set active puzzle: `{ id }` (admin)
 -   `GET /api/config/backup` — Download SQLite DB file (admin). The download filename includes a timestamp: `dev-YYYY-MM-DD_HH-mm-ss.db`.
 -   `POST /api/config/backup` — Restore DB from uploaded file (admin)
--   `GET /api/puzzle/info` — Returns current puzzle metadata; responds `404` if no active puzzle configured
+-   `GET /api/admin/redeem` — List all redemption requests (admin)
+-   `PATCH /api/admin/redeem/:id` — Approve or reject a redemption request (admin)
 
 #### Database Backup & Restore Notes
 
 -   Local development should use `DATABASE_URL=file:./prisma/dev.db` so Prisma reads/writes the database under the `prisma/` folder.
 -   The Restore API resolves relative `file:` URLs to `prisma/` by default. If your `DATABASE_URL` points outside `prisma/`, update it and restart the app.
 -   Verify live state via `GET /api/config/backup?status=1` (admin). The response includes `envUrl`, `dbFile`, `tables`, `tableNames`, and `sizeBytes`.
--   On `/setup/config`, use “Database Status” to check configuration and see a warning if `DATABASE_URL` is misconfigured.
+-   On `/setup/config`, use "Database Status" to check configuration and see a warning if `DATABASE_URL` is misconfigured.
 
 ### Notes on Credits
 
 -   Credits are tracked internally in milliunits and exposed with up to 3 decimal places.
 -   Transfers require signing the message returned by `/api/credits/transfer/init` using the Bitcoin address associated with the token.
 
-### Notes on Shared API
-
--   Shared API can be enabled/disabled via `app_config.shared_pool_api_enabled` and supports either a secret header or a registered token.
-
 ### Notes
 
 -   Key Range (Bits) is displayed in UI as `2^min…2^max`, derived from hex ranges.
 -   Setup/config page is organized into sections: Database Backup & Restore, Active Puzzle, Add New Puzzle, and Puzzles.
 -   In Setup → All Puzzles, each entry shows its Start and End hex ranges for quick inspection.
+
+## Internationalization (i18n)
+
+The UI supports multiple languages. Currently available:
+
+| Language | Code | Status |
+|---|---|---|
+| English | `en` | Default |
+| Portuguese (Brazil) | `pt-BR` | Full |
+
+### How it works
+
+- Translation files live in [`src/lib/i18n/`](src/lib/i18n/) (`en.ts` is the master; `pt-BR.ts` mirrors its structure).
+- The `useTranslation()` hook (from `src/contexts/LanguageContext.tsx`) provides a `t(key)` function that resolves dot-notation keys (e.g. `t('dashboard.work.noActiveBlock')`).
+- Dynamic strings use `{n}` placeholders: `t('common.timeAgo.min').replace('{n}', '5')` → `"5 minutes ago"`.
+- The language selector is in the navigation header and persists to `localStorage`.
+
+### Adding a new language
+
+1. Copy `src/lib/i18n/en.ts` and translate all string values.
+2. Import and register it in `src/contexts/LanguageContext.tsx`.
+3. Add the locale code to the language switcher in `src/components/NavigationHeader.tsx`.
 
 ## Learn More
 
