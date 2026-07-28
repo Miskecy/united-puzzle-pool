@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-// Assumindo que Button utiliza o estilo padrão (hover, etc.)
-import { Button } from '@/components/ui/button'
 import { Bitcoin, Copy, CheckCircle2, Wallet, Coins } from 'lucide-react'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 type Variant = 'home' | 'dashboard' | 'overview'
 
@@ -17,126 +15,152 @@ type Info = {
 }
 
 export default function PuzzleInfoCard({ variant = 'dashboard' }: { variant?: Variant }) {
-    const [info, setInfo] = useState<Info | null>(null)
-    const [copied, setCopied] = useState(false)
+	const { t } = useTranslation()
+	const [info, setInfo] = useState<Info | null>(null)
+	const [copied, setCopied] = useState(false)
 
-    useEffect(() => {
-        let mounted = true
-        ;(async () => {
-            try {
-                const r = await fetch('/api/puzzle/info', { cache: 'no-store' })
-                if (!r.ok) { if (mounted) setInfo(null); return }
-                const j = await r.json()
-                if (mounted) setInfo(j)
-            } catch { }
-        })()
-        const id = setInterval(async () => {
-            try {
-                const r = await fetch('/api/puzzle/info', { cache: 'no-store' })
-                if (!r.ok) return
-                const j = await r.json()
-                if (mounted) setInfo(j)
-            } catch { }
-        }, 300000)
-        return () => { mounted = false; clearInterval(id) }
-    }, [])
+	useEffect(() => {
+		let mounted = true
+		const load = async () => {
+			try {
+				const r = await fetch('/api/puzzle/info', { cache: 'no-store' })
+				if (!r.ok) { if (mounted) setInfo(null); return }
+				const j = await r.json()
+				if (mounted) setInfo(j)
+			} catch { }
+		}
+		load()
+		const id = setInterval(load, 300000)
+		return () => { mounted = false; clearInterval(id) }
+	}, [])
 
 	const fmtUsd = (n: number) => n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
 	const fmtBtc = (n: number) => `${n.toFixed(8)} BTC`
 
-	const header = variant === 'home' ? 'Current Puzzle' : variant === 'overview' ? 'Puzzle Status' : 'Puzzle Information'
-	const desc = variant === 'home' ? 'Live address and balance' : variant === 'overview' ? 'Address, balance, and transactions' : 'Puzzle address, transactions, and balances'
+	const header =
+		variant === 'home' ? t('puzzleInfo.currentPuzzle') :
+		variant === 'overview' ? t('puzzleInfo.puzzleStatus') :
+		t('puzzleInfo.puzzleInformation')
+	const desc =
+		variant === 'home' ? t('puzzleInfo.liveAddress') :
+		variant === 'overview' ? t('puzzleInfo.addressBalance') :
+		t('puzzleInfo.puzzleAddress')
 
 	return (
-		// PADRÃO 1: Card com sombra (exceto em 'overview' onde é frequentemente embutido)
-		<Card className={`border-gray-200 transition-shadow ${variant === 'overview' ? 'bg-white' : 'bg-white shadow-sm hover:shadow-md'}`}>
-			<CardHeader className='border-b pb-4'>
+		<div className="volt-card">
+			{/* Header */}
+			<div className="px-6 pt-5 pb-4" style={{ borderBottom: '1px solid #262624' }}>
 				<div className="flex items-center justify-between">
-					{/* PADRÃO 2: Título com gray-900 e ícone blue-600 */}
-					<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-						<Bitcoin className="h-5 w-5 text-blue-600" />{header}
-					</CardTitle>
-					{info?.puzzleDetected ? (
-						<span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium border border-green-300">
+					<div>
+						<div className="text-[11px] font-semibold uppercase tracking-[0.08em] mb-1" style={{ color: '#fc5c04' }}>
+							{t('puzzleInfo.bitcoinPuzzle')}
+						</div>
+						<div className="text-[19px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>
+							{header}
+						</div>
+					</div>
+					{info?.puzzleDetected && (
+						<span
+							className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11.5px] font-semibold"
+							style={{ background: '#123420', color: '#3ddc84', border: '1px solid rgba(61,220,132,0.3)' }}
+						>
 							<span className="relative flex h-2 w-2">
-								<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-								<span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+								<span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#3ddc84' }} />
+								<span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#3ddc84' }} />
 							</span>
-							Puzzle Key Found
+							{t('puzzleInfo.keyFound')}
 						</span>
-					) : null}
+					)}
 				</div>
-				{/* PADRÃO 3: Descrição com gray-600 */}
-				<CardDescription className="text-gray-600">{desc}</CardDescription>
-			</CardHeader>
+				<p className="text-[13px] mt-1" style={{ color: '#5c5a55' }}>{desc}</p>
+			</div>
 
-			<CardContent className="pt-6">
+			{/* Body */}
+			<div className="px-6 py-5">
 				{info ? (
 					<div className="space-y-4">
-						{/* Linha 1: Endereço Bitcoin */}
-						<div className="col-span-1 md:col-span-3">
-							<label className="text-sm text-gray-600 font-medium">Target Bitcoin Address</label>
-							<div className="flex items-center justify-between bg-gray-100 border border-gray-200 p-3 rounded-lg mt-1">
-								{/* Cor de código padronizada para azul */}
-								<code className="text-gray-800 font-mono text-sm break-all select-all flex-1 pr-3">{info.address}</code>
-								<Button
+						{/* Address */}
+						<div>
+							<label className="text-[12.5px] font-semibold block mb-1.5" style={{ color: '#9a9892' }}>
+								{t('puzzleInfo.targetAddress')}
+							</label>
+							<div
+								className="flex items-center justify-between rounded-[10px] p-3 gap-2"
+								style={{ background: '#191919', border: '1px solid #262624' }}
+							>
+								<code className="text-[13px] font-mono break-all select-all flex-1 pr-2" style={{ color: '#f4f3ee' }}>
+									{info.address}
+								</code>
+								<button
 									type="button"
-									className="bg-transparent hover:bg-gray-200 p-2 rounded-full"
+									className="volt-btn-ghost shrink-0 px-3 py-2"
 									onClick={async () => {
 										try {
-											await navigator.clipboard.writeText(info.address);
-											setCopied(true);
-											setTimeout(() => setCopied(false), 1500);
+											await navigator.clipboard.writeText(info.address)
+											setCopied(true)
+											setTimeout(() => setCopied(false), 1500)
 										} catch { }
 									}}
 								>
-									{copied ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4 text-gray-600" />}
-								</Button>
+									{copied
+										? <CheckCircle2 className="h-4 w-4" style={{ color: '#3ddc84' }} />
+										: <Copy className="h-4 w-4" style={{ color: '#9a9892' }} />
+									}
+								</button>
 							</div>
 						</div>
 
-						{/* Linhas 2-4: Métricas em um Grid de 3 Colunas */}
-						<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-
-							{/* Transações */}
-							<div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-								<div className="text-sm text-gray-600 font-medium">Transactions</div>
-								<div className="text-xl font-bold text-gray-900 flex items-center gap-2 mt-1">
-									<Wallet className="h-5 w-5 text-blue-600" />{info.txCount}
+						{/* Metrics */}
+						<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+							<div className="volt-card p-4 flex flex-col justify-between" style={{ minHeight: 90 }}>
+								<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{t('puzzleInfo.transactions')}</span>
+								<div>
+									<div className="flex items-center gap-2 mt-2">
+										<Wallet className="h-4 w-4" style={{ color: '#fc5c04' }} />
+										<span className="text-[22px] font-bold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee', letterSpacing: '-0.02em' }}>
+											{info.txCount}
+										</span>
+									</div>
+									<div className="text-[11.5px] mt-0.5" style={{ color: '#5c5a55' }}>{t('puzzleInfo.onChainTotal')}</div>
 								</div>
-								<div className="text-xs text-gray-600 mt-1">Total on-chain transactions</div>
 							</div>
 
-							{/* Balance (BTC) */}
-							<div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-								<div className="text-sm text-gray-600 font-medium">Balance (BTC)</div>
-								<div className="text-xl font-bold text-gray-900 mt-1">{fmtBtc(info.balanceBtc)}</div>
-								<div className="text-xs text-gray-600 mt-1">Confirmed balance</div>
+							<div className="volt-card p-4 flex flex-col justify-between" style={{ minHeight: 90 }}>
+								<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{t('puzzleInfo.balance')}</span>
+								<div>
+									<div className="text-[22px] font-bold mt-2" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#fc5c04', letterSpacing: '-0.02em' }}>
+										{fmtBtc(info.balanceBtc)}
+									</div>
+									<div className="text-[11.5px] mt-0.5" style={{ color: '#5c5a55' }}>{t('puzzleInfo.confirmedBalance')}</div>
+								</div>
 							</div>
 
-							{/* USD Value */}
-							<div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-								<div className="text-sm text-gray-600 font-medium">USD Value</div>
-								<div className="text-xl font-bold text-gray-900 flex items-center gap-2 mt-1">
-									<Coins className="h-5 w-5 text-green-600" />{fmtUsd(info.balanceUsd)}
+							<div className="volt-card p-4 flex flex-col justify-between" style={{ minHeight: 90 }}>
+								<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{t('puzzleInfo.usdValue')}</span>
+								<div>
+									<div className="flex items-center gap-2 mt-2">
+										<Coins className="h-4 w-4" style={{ color: '#3ddc84' }} />
+										<span className="text-[22px] font-bold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#3ddc84', letterSpacing: '-0.02em' }}>
+											{fmtUsd(info.balanceUsd)}
+										</span>
+									</div>
+									<div className="text-[11.5px] mt-0.5" style={{ color: '#5c5a55' }}>{t('puzzleInfo.atCurrentPrice')}</div>
 								</div>
-								<div className="text-xs text-gray-600 mt-1">Converted at current price</div>
 							</div>
 						</div>
 					</div>
 				) : (
-					// Loader Padronizado
-					<div className="bg-white border border-gray-200 rounded-md p-4 animate-pulse shadow-sm">
-						<div className="h-4 w-1/3 bg-gray-200 rounded mb-3" />
-						<div className="h-6 w-full bg-gray-200 rounded mb-4" />
-						<div className="grid grid-cols-3 gap-4">
-							<div className='h-12 bg-gray-100 rounded' />
-							<div className='h-12 bg-gray-100 rounded' />
-							<div className='h-12 bg-gray-100 rounded' />
+					<div className="animate-pulse space-y-4">
+						<div className="h-4 rounded" style={{ background: '#191919', width: '40%' }} />
+						<div className="h-11 rounded-[10px]" style={{ background: '#191919' }} />
+						<div className="grid grid-cols-3 gap-3">
+							<div className="h-20 rounded-2xl" style={{ background: '#191919' }} />
+							<div className="h-20 rounded-2xl" style={{ background: '#191919' }} />
+							<div className="h-20 rounded-2xl" style={{ background: '#191919' }} />
 						</div>
 					</div>
 				)}
-			</CardContent>
-		</Card>
+			</div>
+		</div>
 	)
 }

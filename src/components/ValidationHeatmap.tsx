@@ -4,12 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
-import { Hash, Expand, Gauge, CheckCircle2, Flame, PackageSearch } from 'lucide-react'
+import { Flame, PackageSearch, ChevronDown } from 'lucide-react'
+import { useTranslation } from '@/contexts/LanguageContext'
 
 type BinStat = {
 	index: number
@@ -28,8 +24,8 @@ type Props = {
 	focusCellIndex?: number | null
 	onClearFocus?: () => void
 	onNavigateBin?: (index: number) => void
-	activeRanges?: { startHex: string, endHex: string }[]
-	completedRanges?: { startHex: string, endHex: string }[]
+	activeRanges?: { startHex: string; endHex: string }[]
+	completedRanges?: { startHex: string; endHex: string }[]
 }
 
 const HEATMAP_COLORS = Array.from({ length: 50 }, (_, i) => {
@@ -41,112 +37,101 @@ const HEATMAP_COLORS = Array.from({ length: 50 }, (_, i) => {
 	return `hsla(${hue}, ${sat}%, ${light}%, ${alpha.toFixed(2)})`
 })
 
-function parseHexBI(hex: string): bigint {
-	const clean = hex.replace(/^0x/, '')
-	return BigInt(`0x${clean}`)
-}
+const GRADIENT = `linear-gradient(to right, ${HEATMAP_COLORS[0]}, ${HEATMAP_COLORS[12]}, ${HEATMAP_COLORS[25]}, ${HEATMAP_COLORS[37]}, ${HEATMAP_COLORS[49]})`
 
+function parseHexBI(hex: string): bigint {
+	return BigInt(`0x${hex.replace(/^0x/, '')}`)
+}
 function binLength(startHex: string, endHex: string): bigint {
-	const s = parseHexBI(startHex)
-	const e = parseHexBI(endHex)
+	const s = parseHexBI(startHex), e = parseHexBI(endHex)
 	return e >= s ? e - s : 0n
 }
-
 function pow2Label(len: bigint): string {
 	if (len <= 0n) return '0'
-	const expCeil = len.toString(2).length
-	return `2^${expCeil}`
+	return `2^${len.toString(2).length}`
 }
-
 function formatTrillionsNum(n: number): string {
 	const t = n / 1_000_000_000_000
 	if (t >= 100) return `${Math.round(t)}T`
 	if (t >= 10) return `${t.toFixed(1)}T`
 	return `${t.toFixed(2)}T`
 }
-
 function formatTrillionsBI(n: bigint): string {
 	const T = 1_000_000_000_000n
-	const tInt = n / T
-	const rem = n % T
+	const tInt = n / T, rem = n % T
 	const twoDec = (rem * 100n) / T
-	const intStr = tInt.toString()
-	const withCommas = intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-	return `${withCommas}.${twoDec.toString().padStart(2, '0')}T`
+	return `${tInt.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${twoDec.toString().padStart(2, '0')}T`
 }
-
 function toBI(n: number): bigint {
 	if (!Number.isFinite(n)) return 0n
-	const safe = Math.max(0, Math.floor(n))
-	return BigInt(safe)
+	return BigInt(Math.max(0, Math.floor(n)))
 }
-
 function formatPercentPrecise(completed: number, lenBI: bigint): string {
 	try {
-		const len = lenBI
-		if (len <= 0n) return '0.00000%'
+		if (lenBI <= 0n) return '0.00000%'
 		const cBI = toBI(completed)
 		const scale = 100000n
-		const scaled = (cBI * 100n * scale) / len
-		const intPart = scaled / scale
-		const frac = scaled % scale
-		return `${intPart.toString()}.${frac.toString().padStart(5, '0')}%`
-	} catch {
-		return '0.00000%'
-	}
+		const scaled = (cBI * 100n * scale) / lenBI
+		const intPart = scaled / scale, frac = scaled % scale
+		return `${intPart}.${frac.toString().padStart(5, '0')}%`
+	} catch { return '0.00000%' }
 }
-
 function formatCompactHexRange(hex: string): string {
 	const s = hex.startsWith('0x') ? hex.slice(2) : hex
 	if (s.length <= 24) return `0x${s}`
-	const head = s.slice(0, 10)
-	const tail = s.slice(-8)
-	return `0x${head}…${tail}`
+	return `0x${s.slice(0, 10)}…${s.slice(-8)}`
 }
-
-function heatColor(percent: number, completed?: number, mode: 'percent' | 'absolute' = 'percent', absMax?: number): string {
+function heatColor(percent: number, completed: number | undefined, mode: 'percent' | 'absolute', absMax?: number): string {
 	const colors = HEATMAP_COLORS
 	if (mode === 'absolute') {
 		const max = absMax && isFinite(absMax) && absMax > 0 ? absMax : 1
 		const c = completed && isFinite(completed) ? Math.max(0, completed) : 0
-		const ratio = Math.max(0, Math.min(1, c / max))
-		const idx = Math.round(ratio * (colors.length - 1))
-		return colors[idx]
-	} else {
-		const p = isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0
-		const idx = Math.round((p / 100) * (colors.length - 1))
+		const idx = Math.round(Math.max(0, Math.min(1, c / max)) * (colors.length - 1))
 		return colors[idx]
 	}
+	const p = isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0
+	return colors[Math.round((p / 100) * (colors.length - 1))]
 }
 
-export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = [], highlightBinIndex = null, focusCellIndex = null, onClearFocus, onNavigateBin, activeRanges = [], completedRanges = [] }: Props) {
+const RANGE_STATUS_CLASS: Record<string, string> = {
+	VALIDATED: 'volt-badge-success',
+	ACTIVE: 'volt-badge-accent',
+	PARTIAL: 'volt-badge-neutral',
+	OUT_OF_RANGE: 'volt-badge-neutral',
+	NOT_FOUND: 'volt-badge-danger',
+}
+
+export default function ValidationHeatmap({
+	bins, binCount, hoveredBlockCells = [], highlightBinIndex = null,
+	focusCellIndex = null, onClearFocus, onNavigateBin,
+	activeRanges = [], completedRanges = [],
+}: Props) {
 	const router = useRouter()
+	const { t } = useTranslation()
 	const [colorMode, setColorMode] = useState<'percent' | 'absolute'>('percent')
 	const [hoveredCell, setHoveredCell] = useState<number | null>(null)
 	const [localFocusCell, setLocalFocusCell] = useState<number | null>(null)
-	const [rangeInput, setRangeInput] = useState<string>('')
+	const [rangeInput, setRangeInput] = useState('')
 	const [rangeStatus, setRangeStatus] = useState<'VALIDATED' | 'ACTIVE' | 'PARTIAL' | 'NOT_FOUND' | 'OUT_OF_RANGE' | null>(null)
-	const [rangeMsg, setRangeMsg] = useState<string>('')
+	const [rangeMsg, setRangeMsg] = useState('')
 	const [coveredCells, setCoveredCells] = useState<number[]>([])
-	const [rangeDetail, setRangeDetail] = useState<string>('')
-	const [suppressTooltip, setSuppressTooltip] = useState<boolean>(false)
+	const [rangeDetail, setRangeDetail] = useState('')
+	const [suppressTooltip, setSuppressTooltip] = useState(false)
+	const [rangeCheckOpen, setRangeCheckOpen] = useState(false)
 
 	const activeCells = binCount ?? bins.length
 	const totalCells = 256
 	const offset = Math.max(0, totalCells - activeCells)
 	const maxAbsCompleted = useMemo(() => Math.max(0, ...bins.map(b => Math.max(0, b.completed || 0))), [bins])
 
-	const highlightedCells: number[] = useMemo(() => {
-		return highlightBinIndex !== null && highlightBinIndex >= 0 ? [offset + highlightBinIndex] : []
-	}, [highlightBinIndex, offset])
+	const highlightedCells = useMemo(() =>
+		highlightBinIndex !== null && highlightBinIndex >= 0 ? [offset + highlightBinIndex] : [],
+		[highlightBinIndex, offset],
+	)
 
 	useEffect(() => {
 		if (focusCellIndex !== null) {
-			setCoveredCells([])
-			setRangeStatus(null)
-			setRangeMsg('')
-			setRangeDetail('')
-			setSuppressTooltip(false)
+			setCoveredCells([]); setRangeStatus(null); setRangeMsg(''); setRangeDetail(''); setSuppressTooltip(false)
 		}
 	}, [focusCellIndex])
 
@@ -154,270 +139,296 @@ export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = 
 		try {
 			setSuppressTooltip(true)
 			const parts = rangeInput.trim().split(':')
-			if (parts.length !== 2) { setRangeStatus(null); setRangeMsg('Type as start:end'); return }
-			const sRaw = parts[0].trim()
-			const eRaw = parts[1].trim()
+			if (parts.length !== 2) { setRangeStatus(null); setRangeMsg(t('heatmap.rangeLookup.typeAsStartEnd')); return }
 			const normHex = (h: string) => {
-				let t = h.replace(/^0x/, '').toLowerCase()
-				if (!/^[0-9a-f]+$/.test(t)) return null
-				if (t.length === 0 || t.length > 64) return null
-				if (t.length < 64) t = t.padStart(64, '0')
-				return '0x' + t
+				let v = h.trim().replace(/^0x/, '').toLowerCase()
+				if (!/^[0-9a-f]+$/.test(v) || v.length === 0 || v.length > 64) return null
+				if (v.length < 64) v = v.padStart(64, '0')
+				return '0x' + v
 			}
-			const sHex = normHex(sRaw)
-			const eHex = normHex(eRaw)
-			if (!sHex || !eHex) { setRangeStatus(null); setRangeMsg('Invalid hex range'); return }
-			const sBI = parseHexBI(sHex)
-			const eBI = parseHexBI(eHex)
-			if (eBI < sBI) { setRangeStatus(null); setRangeMsg('End must be >= start'); return }
-			let status: 'VALIDATED' | 'ACTIVE' | 'PARTIAL' | 'NOT_FOUND' | 'OUT_OF_RANGE' = 'NOT_FOUND'
+			const sHex = normHex(parts[0]), eHex = normHex(parts[1])
+			if (!sHex || !eHex) { setRangeStatus(null); setRangeMsg(t('heatmap.rangeLookup.invalidHex')); return }
+			const sBI = parseHexBI(sHex), eBI = parseHexBI(eHex)
+			if (eBI < sBI) { setRangeStatus(null); setRangeMsg(t('heatmap.rangeLookup.endBeforeStart')); return }
 
 			const puzzleStart = bins.length > 0 ? parseHexBI(bins[0].startHex) : 0n
 			const puzzleEnd = bins.length > 0 ? parseHexBI(bins[bins.length - 1].endHex) : 0n
+			let status: typeof rangeStatus = 'NOT_FOUND'
+
 			if (eBI < puzzleStart || sBI > puzzleEnd) {
 				status = 'OUT_OF_RANGE'
 			} else {
-				const exactActive = activeRanges.find(ar => parseHexBI(ar.startHex) === sBI && parseHexBI(ar.endHex) === eBI)
 				const exactCompleted = completedRanges.find(cr => parseHexBI(cr.startHex) === sBI && parseHexBI(cr.endHex) === eBI)
-				if (exactCompleted) {
-					status = 'VALIDATED'
-					const cellsInRange: number[] = []
-					for (let i = 0; i < totalCells; i++) {
-						const cell = i >= offset ? (bins[i - offset] ?? null) : null
-						if (!cell) continue
-						const bs = parseHexBI(cell.startHex)
-						const be = parseHexBI(cell.endHex)
-						if (sBI <= be && eBI >= bs) cellsInRange.push(i)
-					}
-					setCoveredCells(cellsInRange)
+				const exactActive = activeRanges.find(ar => parseHexBI(ar.startHex) === sBI && parseHexBI(ar.endHex) === eBI)
+				const cellsInRange: number[] = []
+				for (let i = 0; i < totalCells; i++) {
+					const cell = i >= offset ? (bins[i - offset] ?? null) : null
+					if (!cell) continue
+					if (sBI <= parseHexBI(cell.endHex) && eBI >= parseHexBI(cell.startHex)) cellsInRange.push(i)
 				}
-				else if (exactActive) {
-					status = 'ACTIVE'
-					const cellsInRange: number[] = []
-					for (let i = 0; i < totalCells; i++) {
-						const cell = i >= offset ? (bins[i - offset] ?? null) : null
-						if (!cell) continue
-						const bs = parseHexBI(cell.startHex)
-						const be = parseHexBI(cell.endHex)
-						if (sBI <= be && eBI >= bs) cellsInRange.push(i)
-					}
-					setCoveredCells(cellsInRange)
-				}
-				else {
-					const cellsInRange: number[] = []
-					for (let i = 0; i < totalCells; i++) {
-						const cell = i >= offset ? (bins[i - offset] ?? null) : null
-						if (!cell) continue
-						const bs = parseHexBI(cell.startHex)
-						const be = parseHexBI(cell.endHex)
-						if (sBI <= be && eBI >= bs) cellsInRange.push(i)
-					}
-					setCoveredCells(cellsInRange)
-					if (cellsInRange.length > 0) {
-						const anyProgress = cellsInRange.some(i => {
-							const cell = bins[i - offset]
-							if (!cell) return false
-							return (cell.completed ?? 0) > 0 || (cell.percent ?? 0) > 0
-						})
-						status = anyProgress ? 'PARTIAL' : 'NOT_FOUND'
-					} else {
-						status = 'NOT_FOUND'
-					}
+				setCoveredCells(cellsInRange)
+				if (exactCompleted) status = 'VALIDATED'
+				else if (exactActive) status = 'ACTIVE'
+				else if (cellsInRange.length > 0) {
+					const anyProgress = cellsInRange.some(i => {
+						const cell = bins[i - offset]; return !!(cell && ((cell.completed ?? 0) > 0 || (cell.percent ?? 0) > 0))
+					})
+					status = anyProgress ? 'PARTIAL' : 'NOT_FOUND'
 				}
 			}
+
 			setRangeStatus(status)
 			if (status === 'OUT_OF_RANGE') {
-				setRangeMsg('Range outside active puzzle')
+				setRangeMsg(t('heatmap.status.outsidePuzzle'))
 				const ps = bins[0]?.startHex ? formatCompactHexRange(bins[0].startHex) : '—'
 				const pe = bins[bins.length - 1]?.endHex ? formatCompactHexRange(bins[bins.length - 1].endHex) : '—'
-				setRangeDetail(`The specified range is beyond the configured puzzle bounds. Valid range is ${ps} to ${pe}.`)
+				setRangeDetail(`${t('heatmap.status.outsidePuzzleDesc')} ${ps} → ${pe}.`)
 			} else if (status === 'VALIDATED') {
-				setRangeMsg('Range is VALIDATED')
-				setRangeDetail('This exact range has been fully validated and recorded. You can inspect details on the bin page for proofs and progress history.')
+				setRangeMsg(t('heatmap.status.validated'))
+				setRangeDetail(t('heatmap.status.validatedDesc'))
 			} else if (status === 'ACTIVE') {
-				setRangeMsg('Range is ACTIVE')
-				setRangeDetail('This exact range is currently assigned and being processed by miners. Validation may increase over time as keys are found.')
+				setRangeMsg(t('heatmap.status.active'))
+				setRangeDetail(t('heatmap.status.activeDesc'))
 			} else if (status === 'PARTIAL') {
-				setRangeMsg('Range is PARTIAL')
-				setRangeDetail('The range overlaps puzzle bins that show some progress, but it is not fully validated. Blue borders indicate the covered bins.')
+				setRangeMsg(t('heatmap.status.partial'))
+				setRangeDetail(t('heatmap.status.partialDesc'))
 			} else {
-				setRangeMsg('Range is NOT_VALIDATED')
-				setRangeDetail('The range lies within the puzzle but has no recorded assignments or validation yet.')
-			}
-			for (let bi = 0; bi < bins.length; bi++) {
-				const bs = parseHexBI(bins[bi].startHex)
-				const be = parseHexBI(bins[bi].endHex)
-				if (sBI <= be && eBI >= bs) { break }
+				setRangeMsg(t('heatmap.status.notValidated'))
+				setRangeDetail(t('heatmap.status.notValidatedDesc'))
 			}
 		} catch {
-			setRangeStatus(null)
-			setRangeMsg('Failed to check range')
+			setRangeStatus(null); setRangeMsg(t('heatmap.rangeLookup.failed'))
 		}
 	}
 
 	return (
-		<Card className="shadow-md border-gray-200 mb-8">
-			<CardHeader className="border-b pb-4">
-				<CardTitle className="text-gray-900 flex items-center gap-2 text-lg">
-					<Flame className="h-5 w-5 text-orange-600" /> Validation Heatmap
-				</CardTitle>
-				<CardDescription className="text-gray-600">Visual intensity of validated key space across the puzzle.</CardDescription>
-			</CardHeader>
-			<CardContent className="pt-6">
-				<div className="flex items-center justify-between mb-4">
-					<div className="flex items-center gap-2 text-sm text-gray-700">
-						<Gauge className="h-4 w-4 text-orange-600" />
-						<span className="font-semibold">Color Scale Mode</span>
+		<div className="volt-card mb-8">
+			{/* Header */}
+			<div
+				className="px-6 pt-5 pb-4 flex flex-col sm:flex-row sm:items-center gap-4"
+				style={{ borderBottom: '1px solid #262624' }}
+			>
+				<div className="flex items-center gap-3 flex-1 min-w-0">
+					<div
+						className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+						style={{ background: 'rgba(252,92,4,0.1)', border: '1px solid rgba(252,92,4,0.15)' }}
+					>
+						<Flame className="h-4 w-4" style={{ color: '#fc5c04' }} />
 					</div>
-					<div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-						<button type="button" onClick={() => setColorMode('percent')} className={`px-3 py-1 text-xs font-medium ${colorMode === 'percent' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Percent</button>
-						<button type="button" onClick={() => setColorMode('absolute')} className={`px-3 py-1 text-xs font-medium border-l border-gray-300 ${colorMode === 'absolute' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Absolute (T-keys)</button>
+					<div className="min-w-0">
+						<div className="text-[15px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>
+							{t('heatmap.title')}
+						</div>
+						<p className="text-[12px] mt-0.5" style={{ color: '#5c5a55' }}>
+							{t('heatmap.description')}
+						</p>
 					</div>
 				</div>
 
-				<p className="text-xs text-gray-600 mb-2">Darker colors indicate higher validation either by <span className="font-semibold">percent</span> or <span className="font-semibold">absolute</span> mode. Cells outside the configured puzzle range appear transparent with a dashed border.</p>
+				{/* Color mode toggle */}
+				<div
+					className="flex items-center gap-1 p-1 rounded-lg shrink-0"
+					style={{ background: '#0f0f0f', border: '1px solid #1e1e1c' }}
+				>
+					{(['percent', 'absolute'] as const).map(mode => (
+						<button
+							key={mode}
+							onClick={() => setColorMode(mode)}
+							className="px-3 py-1.5 rounded-md text-[12px] font-semibold transition-all duration-150"
+							style={colorMode === mode
+								? { background: '#fc5c04', color: '#0a0a0a' }
+								: { color: '#5c5a55' }
+							}
+						>
+							{mode === 'percent' ? t('heatmap.percent') : t('heatmap.absolute')}
+						</button>
+					))}
+				</div>
+			</div>
 
-				<Accordion type="single" collapsible className="mb-4 w-full">
-					<AccordionItem value="range-check" className="border-gray-200">
-						<AccordionTrigger className="text-sm text-gray-900 hover:no-underline">
-							<div className='flex gap-2'>
-								<PackageSearch className='w-5 h-5 text-blue-600 items-center justify-center' />
-								<span className="font-medium">Range check</span>
-							</div>
-						</AccordionTrigger>
-						<AccordionContent className="pt-0">
-							<div className="flex flex-col gap-2 w-full ">
-								<div className='flex gap-2 flex-1'>
-									<Input
-										placeholder="400000000000000000:7fffffffffffffffff"
+			<div className="px-6 py-5 space-y-5">
+				{/* Range lookup accordion */}
+				<div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e1e1c' }}>
+					<button
+						onClick={() => setRangeCheckOpen(v => !v)}
+						className="w-full flex items-center justify-between px-4 py-3 text-left"
+						style={{ background: '#111110' }}
+					>
+						<span className="flex items-center gap-2 text-[13px] font-medium" style={{ color: '#f4f3ee' }}>
+							<PackageSearch className="w-4 h-4" style={{ color: '#fc5c04' }} />
+							{t('heatmap.rangeLookup.title')}
+						</span>
+						<ChevronDown
+							className="h-4 w-4 shrink-0 transition-transform duration-200"
+							style={{ color: '#5c5a55', transform: rangeCheckOpen ? 'rotate(180deg)' : 'none' }}
+						/>
+					</button>
+					{rangeCheckOpen && (
+						<div className="px-4 pb-4 pt-3 space-y-3" style={{ background: '#0d0d0c', borderTop: '1px solid #1e1e1c' }}>
+							<p className="text-[11.5px]" style={{ color: '#5c5a55' }}>
+								{t('heatmap.rangeLookup.description')} <span className="font-mono" style={{ color: '#9a9892' }}>{t('heatmap.rangeLookup.startEnd')}</span> {t('heatmap.rangeLookup.toCheck')}
+							</p>
+							<div className="flex gap-2">
+								<div className="volt-input-wrap flex-1 min-w-0">
+									<input
+										className="w-full bg-transparent text-[12px] font-mono outline-none"
+										style={{ color: '#f4f3ee' }}
+										placeholder={t('heatmap.rangeLookup.placeholder')}
 										value={rangeInput}
-										onChange={(e) => setRangeInput(e.target.value)}
-										onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkRangeAndFocus(); } }}
-										className="text-xs w-full flex-1"
+										onChange={e => setRangeInput(e.target.value)}
+										onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); checkRangeAndFocus() } }}
 									/>
-									<Button variant="outline" onClick={checkRangeAndFocus} className="text-xs bg-blue-600 text-white hover:text-blue-600"><PackageSearch className='w-4 h-4' />Check</Button>
 								</div>
-								<div className='flex items-center gap-2 justify-center'>
-									{rangeMsg && (
-										<Badge className={
-											rangeStatus === 'VALIDATED' ? 'bg-green-100 text-green-700 border border-green-300' :
-												rangeStatus === 'ACTIVE' ? 'bg-blue-100 text-blue-700 border border-blue-300' :
-													rangeStatus === 'PARTIAL' ? 'bg-amber-100 text-amber-700 border border-amber-300' :
-														rangeStatus === 'OUT_OF_RANGE' ? 'bg-gray-100 text-gray-700 border border-gray-300' :
-															'bg-red-100 text-red-700 border border-red-300'
-										}>
-											{rangeMsg}
-										</Badge>
+								<button
+									onClick={checkRangeAndFocus}
+									className="volt-btn-primary text-[12px] flex items-center gap-1.5 px-3 shrink-0"
+								>
+									<PackageSearch className="w-3.5 h-3.5" /> {t('heatmap.rangeLookup.check')}
+								</button>
+							</div>
+							{(rangeMsg || rangeDetail) && (
+								<div className="space-y-2 pt-1">
+									{rangeMsg && rangeStatus && (
+										<span className={RANGE_STATUS_CLASS[rangeStatus] ?? 'volt-badge-neutral'}>{rangeMsg}</span>
 									)}
 									{rangeDetail && (
-										<div className="text-[11px] text-gray-600 text-center">
-											{rangeDetail}
-										</div>
+										<p className="text-[11.5px] leading-relaxed" style={{ color: '#9a9892' }}>{rangeDetail}</p>
 									)}
 								</div>
-							</div>
-						</AccordionContent>
-					</AccordionItem>
-				</Accordion>
+							)}
+						</div>
+					)}
+				</div>
 
+				{/* Heatmap grid */}
 				<TooltipProvider delayDuration={0}>
-					<div className="heatmap-container bg-purple-100/10 border border-gray-100  rounded-lg p-3 sm:p-4">
-						<div className="inline-grid heatmap-grid">
+					<div className="rounded-xl p-3 sm:p-4" style={{ background: '#0f0f0f', border: '1px solid #1e1e1c' }}>
+						<div className="hm-grid">
 							{Array.from({ length: totalCells }, (_, i) => {
 								const cell = i >= offset ? (bins[i - offset] ?? null) : null
 								const lenBI = cell ? binLength(cell.startHex, cell.endHex) : 0n
 								const lenPow = cell ? pow2Label(lenBI) : ''
 								const completedT = cell ? formatTrillionsNum(cell.completed) : ''
 								const totalT = cell ? formatTrillionsBI(lenBI) : ''
-								const bg = cell ? ((cell.completed ?? 0) > 0 ? heatColor(cell.percent, cell.completed, colorMode, maxAbsCompleted) : 'transparent') : 'transparent'
+								const bg = cell && (cell.completed ?? 0) > 0
+									? heatColor(cell.percent, cell.completed, colorMode, maxAbsCompleted)
+									: 'transparent'
 								const isFocused = (focusCellIndex !== null && focusCellIndex === i) || (localFocusCell !== null && localFocusCell === i)
-								const isHovered = (hoveredCell === i) || hoveredBlockCells.includes(i) || highlightedCells.includes(i) || coveredCells.includes(i) || isFocused
+								const isBlockHovered = hoveredBlockCells.includes(i)
+								const isHighlighted = highlightedCells.includes(i) || coveredCells.includes(i)
+								const isMouseHover = hoveredCell === i
+								const isAnyActive = isMouseHover || isBlockHovered || isHighlighted || isFocused
 
-								const colorsLen = HEATMAP_COLORS.length
-								let colorIdx = 0
-								if (cell && (cell.completed ?? 0) > 0) {
-									if (colorMode === 'absolute') {
-										const max = maxAbsCompleted && isFinite(maxAbsCompleted) && maxAbsCompleted > 0 ? maxAbsCompleted : 1
-										const c = cell.completed && isFinite(cell.completed) ? Math.max(0, cell.completed) : 0
-										const ratio = Math.max(0, Math.min(1, c / max))
-										colorIdx = Math.round(ratio * (colorsLen - 1))
-									} else {
-										const p = isFinite(cell.percent) ? Math.max(0, Math.min(100, cell.percent)) : 0
-										colorIdx = Math.round((p / 100) * (colorsLen - 1))
-									}
-								}
-								const textClass = colorIdx >= 35 ? 'text-white' : 'text-gray-700'
-
-								const style = cell
+								const cellStyle = cell
 									? {
 										backgroundColor: bg,
-										border: isHovered ? '2px solid #3b82f6' : '1px solid rgba(0,0,0,0.1)',
-										transform: isHovered ? 'scale(1.05)' : 'scale(1)',
-										zIndex: isHovered ? 10 : 1,
+										border: isAnyActive ? 'none' : '1px solid rgba(255,255,255,0.05)',
+										boxShadow: isAnyActive
+											? isBlockHovered
+												? '0 0 0 2px #3ddc84, 0 0 10px rgba(61,220,132,0.2)'
+												: '0 0 0 2px #fc5c04, 0 0 10px rgba(252,92,4,0.2)'
+											: undefined,
+										zIndex: isAnyActive ? 10 : 1,
+										cursor: 'pointer',
 									}
 									: {
-										backgroundColor: bg,
-										border: '1px dashed #d1d5db',
-										opacity: 0.5,
+										backgroundColor: 'transparent',
+										border: '1px dashed rgba(255,255,255,0.18)',
+										cursor: 'default',
 									}
 
 								return (
-									<Tooltip key={i} open={(hoveredCell === i) || (!suppressTooltip && isFocused)}>
+									<Tooltip key={i} open={(isMouseHover) || (!suppressTooltip && isFocused)}>
 										<TooltipTrigger asChild>
 											<div
-												style={style}
-												className="w-full rounded-md relative overflow-hidden cursor-pointer heatmap-cell transition-all duration-200"
+												style={cellStyle}
+												className="hm-cell rounded-md relative overflow-hidden transition-all duration-150"
 												onMouseEnter={() => { setSuppressTooltip(false); setHoveredCell(i) }}
 												onMouseLeave={() => setHoveredCell(null)}
 												onClick={() => {
-													if (onClearFocus) onClearFocus()
-													setCoveredCells([])
-													setRangeStatus(null)
-													setRangeMsg('')
-													setRangeDetail('')
-													setSuppressTooltip(false)
-													setLocalFocusCell(null)
-													setHoveredCell(null)
 													if (!cell) return
+													if (onClearFocus) onClearFocus()
+													setCoveredCells([]); setRangeStatus(null); setRangeMsg(''); setRangeDetail('')
+													setSuppressTooltip(false); setLocalFocusCell(null); setHoveredCell(null)
 													if (onNavigateBin) onNavigateBin(cell.index)
 													else router.push(`/overview/bin/${cell.index}`)
 												}}
 											>
 												{cell && (
-													<span className={`absolute inset-0 flex items-center justify-center text-[9px] sm:text-[10px] ${textClass} font-semibold pointer-events-none`}>
+													<span
+														className="hm-label absolute inset-0 flex items-center justify-center font-bold pointer-events-none select-none"
+														style={{ color: 'rgba(255,255,255,0.7)', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
+													>
 														{lenPow}
 													</span>
 												)}
 											</div>
 										</TooltipTrigger>
 										{cell && (
-											<TooltipContent side="top" align="center" sideOffset={8} className="bg-gray-900 border-gray-800 text-white max-w-xs">
-												<div className="space-y-3 p-2">
-													<div className="flex items-center gap-2 font-semibold text-sm border-b border-gray-700 pb-2">
-														<Hash className="h-4 w-4 text-blue-400" />
-														<span className="font-mono text-blue-400">Bin {cell.index + 1} / {activeCells}</span>
+											<TooltipContent
+												side="top"
+												align="center"
+												sideOffset={6}
+												className="p-0"
+												style={{
+													background: '#141412',
+													border: '1px solid #262624',
+													boxShadow: '0 12px 40px rgba(0,0,0,0.75)',
+													borderRadius: 12,
+													minWidth: 220,
+												}}
+											>
+												<div className="p-3.5 space-y-3">
+													{/* Title */}
+													<div className="flex items-center justify-between">
+														<span className="text-[13px] font-bold font-mono" style={{ color: '#fc5c04' }}>
+															{t('heatmap.tooltip.bin')} {cell.index + 1}
+														</span>
+														<span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: '#1e1e1c', color: '#5c5a55' }}>
+															{t('heatmap.tooltip.of')} {activeCells}
+														</span>
 													</div>
-													<div className="flex items-start gap-2 text-xs">
-														<Expand className="h-3 w-3 text-purple-400 mt-0.5 shrink-0" />
-														<div className="font-mono text-gray-300 overflow-hidden">
-															<div className="font-medium text-white mb-1">Range</div>
-															<div className="text-[10px] break-all">{formatCompactHexRange(cell.startHex)}</div>
-															<div className="text-[10px] break-all opacity-80">{formatCompactHexRange(cell.endHex)}</div>
+
+													{/* Range */}
+													<div className="rounded-lg p-2.5 space-y-1" style={{ background: '#0f0f0e', border: '1px solid #1e1e1c' }}>
+														<div className="flex items-center gap-2 text-[10.5px] font-mono">
+															<span className="shrink-0" style={{ color: '#5c5a55' }}>{t('heatmap.tooltip.from')}</span>
+															<span className="truncate" style={{ color: '#9a9892' }}>{formatCompactHexRange(cell.startHex)}</span>
+														</div>
+														<div className="flex items-center gap-2 text-[10.5px] font-mono">
+															<span className="shrink-0" style={{ color: '#5c5a55' }}>{t('heatmap.tooltip.to')}&nbsp;&nbsp;&nbsp;</span>
+															<span className="truncate" style={{ color: '#9a9892' }}>{formatCompactHexRange(cell.endHex)}</span>
 														</div>
 													</div>
-													<div className="flex items-center gap-2 text-xs text-gray-300">
-														<Gauge className="h-3 w-3 text-purple-400" />
-														<span className="font-mono"><span className="font-medium text-white">Length:</span> {lenPow}</span>
+
+													{/* Stats */}
+													<div className="space-y-1.5">
+														<div className="flex items-center justify-between text-[12px]">
+															<span style={{ color: '#5c5a55' }}>{t('heatmap.tooltip.length')}</span>
+															<span className="font-mono font-semibold" style={{ color: '#f4f3ee' }}>{lenPow}</span>
+														</div>
+														<div className="flex items-center justify-between text-[12px]">
+															<span style={{ color: '#5c5a55' }}>{t('heatmap.tooltip.validated')}</span>
+															<span className="font-mono font-bold" style={{ color: '#3ddc84' }}>{formatPercentPrecise(cell.completed, lenBI)}</span>
+														</div>
+														<div className="flex items-center justify-between text-[12px]">
+															<span style={{ color: '#5c5a55' }}>{t('heatmap.tooltip.keys')}</span>
+															<span className="font-mono" style={{ color: '#9a9892' }}>{completedT} / {totalT}</span>
+														</div>
 													</div>
-													<div className="flex items-center gap-2 text-xs text-gray-300">
-														<CheckCircle2 className="h-3 w-3 text-green-400" />
-														<span className="font-mono"><span className="font-medium text-white">Validated:</span> {formatPercentPrecise(cell.completed, lenBI)}</span>
-													</div>
-													<div className="text-xs font-mono text-gray-300">
-														<span className="font-medium text-white">Progress:</span> {completedT} / {totalT}
+
+													{/* Progress bar */}
+													<div className="w-full rounded-full overflow-hidden" style={{ height: 4, background: '#1e1e1c' }}>
+														<div style={{
+															width: `${Math.min(100, cell.percent)}%`,
+															height: 4,
+															background: 'linear-gradient(to right, #fc5c04, #ff9c04)',
+															borderRadius: 9999,
+															transition: 'width 300ms ease',
+														}} />
 													</div>
 												</div>
-												<TooltipPrimitive.Arrow className="fill-gray-900" width={10} height={6} />
+												<TooltipPrimitive.Arrow style={{ fill: '#141412' }} width={10} height={6} />
 											</TooltipContent>
 										)}
 									</Tooltip>
@@ -427,28 +438,44 @@ export default function ValidationHeatmap({ bins, binCount, hoveredBlockCells = 
 					</div>
 				</TooltipProvider>
 
-				<div className="mt-4 text-sm text-gray-600 flex flex-col sm:flex-row sm:items-center gap-4">
-					<div className="flex items-center gap-2 scale-container">
-						<span className="font-semibold">Scale: 0%</span>
-						{HEATMAP_COLORS.map((c, i) => (
-							<span key={i} className="inline-block rounded-sm scale-swatch h-3 w-3" style={{ backgroundColor: c }}></span>
-						))}
-						<span className="font-semibold">100%</span>
-					</div>
+				{/* Legend */}
+				<div className="flex items-center gap-3">
+					<span className="text-[11px] shrink-0 font-mono" style={{ color: '#5c5a55' }}>{t('heatmap.legend.min')}</span>
+					<div
+						className="flex-1 rounded-full"
+						style={{ height: 8, background: GRADIENT, border: '1px solid rgba(255,255,255,0.06)' }}
+					/>
+					<span className="text-[11px] shrink-0 font-mono" style={{ color: '#5c5a55' }}>{t('heatmap.legend.max')}</span>
+					<span
+						className="text-[11px] shrink-0 px-2 py-0.5 rounded-full ml-1"
+						style={{ background: '#111110', border: '1px solid #1e1e1c', color: '#5c5a55' }}
+					>
+						{colorMode === 'percent' ? t('heatmap.tooltip.coverage') : t('heatmap.tooltip.keysValidated')}
+					</span>
 				</div>
+			</div>
 
-				<style jsx>{`
-          .heatmap-grid { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 3px; }
-          @media (max-width: 640px) { .heatmap-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; } }
-          @media (min-width: 641px) and (max-width: 1024px) { .heatmap-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; } }
-          .heatmap-cell { width: 100%; aspect-ratio: 3 / 1; min-height: 18px; }
-          @media (max-width: 640px) { .heatmap-cell { aspect-ratio: 3 / 1; min-height: 16px; } }
-          @media (min-width: 641px) and (max-width: 1024px) { .heatmap-cell { aspect-ratio: 3 / 1; min-height: 17px; } }
-          .scale-container { display: flex; flex-wrap: wrap; gap: 6px; }
-          .scale-swatch { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(0,0,0,0.08); transition: transform .15s ease, box-shadow .15s ease; cursor: pointer; }
-          .scale-swatch:hover { transform: translateY(-1px) scale(1.7); box-shadow: 0 0 0 2px rgba(59,130,246,.25); z-index: 5; }
-        `}</style>
-			</CardContent>
-		</Card>
+			<style jsx>{`
+				.hm-grid {
+					display: grid;
+					grid-template-columns: repeat(16, minmax(0, 1fr));
+					gap: 3px;
+				}
+				@media (max-width: 640px) {
+					.hm-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; }
+				}
+				@media (min-width: 641px) and (max-width: 1023px) {
+					.hm-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2px; }
+				}
+				.hm-cell {
+					aspect-ratio: 2 / 1;
+					min-height: 16px;
+					cursor: pointer;
+				}
+				.hm-label { font-size: 0; }
+				@media (min-width: 641px) { .hm-label { font-size: 8px; } }
+				@media (min-width: 1024px) { .hm-label { font-size: 9px; } }
+			`}</style>
+		</div>
 	)
 }

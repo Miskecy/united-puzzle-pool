@@ -2,283 +2,258 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Menu, X, Home, BarChart3, BookOpen, Grid3X3, Calculator, ChevronDown, GitBranch, Terminal, GpuIcon, Code2Icon, Wrench } from 'lucide-react';
+import { useEffect, useRef, useCallback } from 'react';
+import { useState } from 'react';
+import { Menu, X, Home, BarChart3, Grid3X3, BookOpen, ChevronDown, Terminal, Code2Icon } from 'lucide-react';
+import { useTranslation } from '@/contexts/LanguageContext';
+import type { Lang } from '@/contexts/LanguageContext';
 
 export default function NavigationHeader() {
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const [isDocsOpen, setIsDocsOpen] = useState(false);
-	const [isGpuOpen, setIsGpuOpen] = useState(false);
-
 	const pathname = usePathname();
-
 	const docsRef = useRef<HTMLDivElement | null>(null);
-	const gpuRef = useRef<HTMLDivElement | null>(null);
-	const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+	const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const { t, lang, setLang } = useTranslation();
 
-	// Módulos de Documentação
-	const docItems = [
-		{ href: '/docs/api', label: 'API Endpoints', icon: Terminal },
-		{ href: '/docs/shared', label: 'Shared Pool API', icon: GitBranch },
-		{ href: '/docs/gpu-script', label: 'GPU Script Guide', icon: Code2Icon },
-	];
-
-	const gpuItems = [
-		{ href: '/tools/gpu-ranking', label: 'GPU Ranking', icon: GpuIcon },
-		{ href: '/tools/calc', label: 'Calculator', icon: Calculator },
-	];
-
-	// Navegação Principal
 	const navItems = [
-		{ href: '/', label: 'Home', icon: Home },
-		{ href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
-		{ href: '/overview', label: 'Overview', icon: Grid3X3 },
+		{ href: '/', label: t('nav.home'), icon: Home },
+		{ href: '/dashboard', label: t('nav.dashboard'), icon: BarChart3 },
+		{ href: '/overview', label: t('nav.overview'), icon: Grid3X3 },
 	];
 
-	const toggleMenu = useCallback(() => {
-		setIsMenuOpen(v => !v);
-		// Garante que o menu de Docs feche se o menu principal abrir
-		if (!isMenuOpen) { setIsDocsOpen(false); setIsGpuOpen(false); }
-	}, [isMenuOpen]);
+	const docItems = [
+		{ href: '/docs/api', label: t('nav.apiEndpoints'), icon: Terminal },
+		{ href: '/docs/gpu-script', label: t('nav.gpuScriptGuide'), icon: Code2Icon },
+	];
 
-	// --- Lógica de Dropdown Desktop Aprimorada (Hover Controlado) ---
-
-	// Função para fechar o dropdown após um pequeno atraso
-	const handleMouseLeave = useCallback(() => {
-		if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-		hoverTimerRef.current = setTimeout(() => {
-			setIsDocsOpen(false);
-		}, 150); // Delay de 150ms antes de fechar
-	}, []);
-
-	// Função para abrir o dropdown imediatamente e limpar o timer de fechamento
-	const handleMouseEnter = useCallback(() => {
-		if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-		setIsDocsOpen(true);
-	}, []);
-
-	// Efeito para fechar o dropdown ao clicar fora
-	useEffect(() => {
-		function onDocClick(e: MouseEvent) {
-			const el = docsRef.current;
-			const gel = gpuRef.current;
-			if (!el || !(e.target instanceof Node)) return;
-
-			// Fecha se o clique foi fora do dropdown (e não foi o botão de toggle móvel)
-			if (isDocsOpen && !el.contains(e.target)) {
-				setIsDocsOpen(false);
-			}
-			if (isGpuOpen && gel && !gel.contains(e.target)) {
-				setIsGpuOpen(false);
-			}
-		}
-		document.addEventListener('mousedown', onDocClick);
-		return () => {
-			document.removeEventListener('mousedown', onDocClick);
-			if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-		};
-	}, [isDocsOpen, isGpuOpen]);
-
-
-	// --- Helpers ---
 	const isActive = useCallback((href: string) => {
 		if (!pathname) return false;
-		if (href === '/dashboard') {
-			if (pathname === '/history' || pathname.startsWith('/history/')) return true;
-		}
-		if (href === '/overview') {
-			if (pathname.startsWith('/block/')) return true;
-		}
-		return pathname === href || pathname.startsWith(href + '/');
+		if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/history' || pathname.startsWith('/history/') || pathname.startsWith('/dashboard/');
+		if (href === '/overview') return pathname === '/overview' || pathname.startsWith('/block/') || pathname.startsWith('/overview/');
+		return pathname === href;
 	}, [pathname]);
 
 	const docsActive = pathname?.startsWith('/docs') ?? false;
-	const gpuActive = pathname?.startsWith('/tools') ?? false;
 
-	// --- Renderização ---
+	const handleDocsEnter = useCallback(() => {
+		if (hoverTimer.current) clearTimeout(hoverTimer.current);
+		setIsDocsOpen(true);
+	}, []);
+
+	const handleDocsLeave = useCallback(() => {
+		if (hoverTimer.current) clearTimeout(hoverTimer.current);
+		hoverTimer.current = setTimeout(() => setIsDocsOpen(false), 150);
+	}, []);
+
+	useEffect(() => {
+		function onOutsideClick(e: MouseEvent) {
+			if (docsRef.current && e.target instanceof Node && !docsRef.current.contains(e.target)) {
+				setIsDocsOpen(false);
+			}
+		}
+		document.addEventListener('mousedown', onOutsideClick);
+		return () => {
+			document.removeEventListener('mousedown', onOutsideClick);
+			if (hoverTimer.current) clearTimeout(hoverTimer.current);
+		};
+	}, []);
+
+	const toggleMenu = useCallback(() => {
+		setIsMenuOpen(v => !v);
+		setIsDocsOpen(false);
+	}, []);
+
+	const toggleLang = useCallback(() => {
+		setLang(lang === 'en' ? 'pt-BR' : 'en');
+	}, [lang, setLang]);
+
 	return (
-		<header className="bg-white border-b border-gray-200 shadow-lg sticky top-0 z-999">
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-				<div className="flex justify-between items-center py-4">
+		<header
+			className="sticky top-0 z-30"
+			style={{
+				background: '#000000',
+				borderBottom: '1px solid #262624',
+				boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+			}}
+		>
+			<div className="max-w-7xl mx-auto px-4 sm:px-7">
+				<div className="flex justify-between items-center py-3">
 
-					{/* Logo (Design mais limpo) */}
-					<Link href="/" className="flex items-center space-x-3 group">
-						<div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center transform group-hover:scale-105 transition-transform duration-300">
-							<span className="text-white font-extrabold text-xl">₿</span>
+					{/* Brand */}
+					<Link href="/" className="flex items-center gap-2.5 group">
+						<div
+							className="w-8 h-8 rounded-lg flex items-center justify-center"
+							style={{ background: 'linear-gradient(135deg, #fc5c04, #ff7226)' }}
+						>
+							<span className="text-volt-bg font-extrabold text-base leading-none">₿</span>
 						</div>
-						<span className="text-gray-900 text-xl font-bold group-hover:text-blue-600 transition-colors duration-300">
+						<span
+							className="text-base font-bold transition-colors duration-150"
+							style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}
+						>
 							United Puzzle Pool
 						</span>
 					</Link>
 
-					{/* Navegação Desktop */}
-					<nav className="hidden md:flex space-x-1 items-center">
-						{navItems.map((item) => {
-							const Icon = item.icon;
-							const active = isActive(item.href);
-							const linkClass = active
-								? 'flex items-center space-x-2 px-3 py-2.5 rounded-lg text-sm font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all duration-200'
-								: 'flex items-center space-x-2 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200';
-							const iconClass = active ? 'text-blue-700' : 'text-blue-500';
+					{/* Desktop Nav */}
+					<nav className="hidden md:flex items-center gap-1">
+						{navItems.map(({ href, label, icon: Icon }) => {
+							const active = isActive(href);
 							return (
 								<Link
-									key={item.href}
-									href={item.href}
-									className={linkClass}
+									key={href}
+									href={href}
+									className="flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all duration-150"
+									style={active
+										? { background: 'linear-gradient(135deg, #fc5c04, #ff7226)', color: '#0a0a0a' }
+										: { color: '#9a9892' }
+									}
+									onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.cssText += 'color:#f4f3ee;background:#212121;'; }}
+									onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.color = '#9a9892'; (e.currentTarget as HTMLElement).style.background = 'transparent'; } }}
 								>
-									<Icon size={18} className={iconClass} />
-									<span>{item.label}</span>
+									<Icon size={16} />
+									<span>{label}</span>
 								</Link>
 							);
 						})}
 
-						{/* Dropdown de GPU */}
-						<div
-							ref={gpuRef}
-							className="relative"
-						>
-							<button
-								type="button"
-								className={`${gpuActive ? 'bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100' : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50 font-medium'} flex items-center space-x-2 px-3 py-2.5 rounded-lg text-sm transition-all duration-200`}
-								onClick={() => setIsGpuOpen(v => !v)}
-							>
-								<Wrench size={18} className={gpuActive ? 'text-blue-700' : 'text-blue-500'} />
-								<span>Tools</span>
-								<ChevronDown size={16} className={`transition-transform duration-300 ${isGpuOpen ? 'rotate-180' : ''} text-gray-500`} />
-							</button>
-							<div
-								className={`absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-2xl py-2 z-50 transform origin-top-right transition-all duration-300 ease-in-out ${isGpuOpen ? 'opacity-100 scale-100 visible' : 'opacity-0 scale-95 pointer-events-none'}`}
-							>
-								<div className='p-2'>
-									{gpuItems.map((item) => {
-										const Icon = item.icon;
-										const active = isActive(item.href);
-										return (
-											<Link
-												key={item.href}
-												href={item.href}
-												className={`flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors duration-200 ${active ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-800 hover:bg-gray-100'}`}
-												onClick={() => setIsGpuOpen(false)}
-											>
-												<Icon size={16} className={active ? 'text-blue-700' : 'text-blue-600'} />
-												<span className='font-medium'>{item.label}</span>
-											</Link>
-										);
-									})}
-								</div>
-							</div>
-						</div>
-
-						{/* Dropdown de Documentação */}
+						{/* Docs dropdown */}
 						<div
 							ref={docsRef}
 							className="relative"
-							onMouseEnter={handleMouseEnter}
-							onMouseLeave={handleMouseLeave}
+							onMouseEnter={handleDocsEnter}
+							onMouseLeave={handleDocsLeave}
 						>
 							<button
 								type="button"
-								className={`${docsActive ? 'bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100' : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50 font-medium'} flex items-center space-x-2 px-3 py-2.5 rounded-lg text-sm transition-all duration-200`}
-								onClick={() => setIsDocsOpen((v) => !v)}
+								onClick={() => setIsDocsOpen(v => !v)}
+								className="flex items-center gap-2 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all duration-150"
+								style={docsActive
+									? { background: 'linear-gradient(135deg, #fc5c04, #ff7226)', color: '#0a0a0a' }
+									: { color: '#9a9892' }
+								}
 							>
-								<BookOpen size={18} className={docsActive ? 'text-blue-700' : 'text-blue-500'} />
-								<span>Docs</span>
-								<ChevronDown size={16} className={`transition-transform duration-300 ${isDocsOpen ? 'rotate-180' : ''} text-gray-500`} />
+								<BookOpen size={16} />
+								<span>{t('nav.docs')}</span>
+								<ChevronDown
+									size={14}
+									className="transition-transform duration-200"
+									style={{ transform: isDocsOpen ? 'rotate(180deg)' : 'rotate(0deg)', color: docsActive ? '#0a0a0a' : '#5c5a55' }}
+								/>
 							</button>
-							{/* Menu Dropdown com Transição */}
+
 							<div
-								className={`absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-2xl py-2 z-50 transform origin-top-right transition-all duration-300 ease-in-out
-                                ${isDocsOpen ? 'opacity-100 scale-100 visible' : 'opacity-0 scale-95 pointer-events-none'}`}
+								className="absolute right-0 mt-2 w-56 z-50 transition-all duration-100"
+								style={{
+									background: '#131313',
+									border: '1px solid #262624',
+									borderRadius: '12px',
+									padding: '6px',
+									boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+									transformOrigin: 'top right',
+									opacity: isDocsOpen ? 1 : 0,
+									transform: isDocsOpen ? 'scale(1)' : 'scale(0.95)',
+									pointerEvents: isDocsOpen ? 'auto' : 'none',
+								}}
 							>
-								<div className='p-2'>
-									{docItems.map((doc) => {
-										const DocIcon = doc.icon;
-										const docActive = isActive(doc.href);
-										return (
-											<Link
-												key={doc.href}
-												href={doc.href}
-												className={`flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-colors duration-200 ${docActive ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-800 hover:bg-gray-100'}`}
-												onClick={() => { setIsDocsOpen(false); }}
-											>
-												<DocIcon size={16} className={docActive ? 'text-blue-700' : 'text-blue-600'} />
-												<span className='font-medium'>{doc.label}</span>
-											</Link>
-										)
-									})}
-								</div>
+								{docItems.map(({ href, label, icon: Icon }) => {
+									const active = isActive(href);
+									return (
+										<Link
+											key={href}
+											href={href}
+											onClick={() => setIsDocsOpen(false)}
+											className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13.5px] font-medium transition-colors duration-100"
+											style={{ color: active ? '#fc5c04' : '#f4f3ee' }}
+											onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = '#212121'; }}
+											onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+										>
+											<Icon size={15} style={{ color: active ? '#fc5c04' : '#9a9892' }} />
+											<span>{label}</span>
+										</Link>
+									);
+								})}
 							</div>
 						</div>
+
+						{/* Language toggle */}
+						<button
+							onClick={toggleLang}
+							className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-bold transition-all duration-150 ml-1"
+							style={{ border: '1px solid #262624', color: '#9a9892' }}
+							onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#fc5c04'; (e.currentTarget as HTMLElement).style.color = '#fc5c04'; }}
+							onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#262624'; (e.currentTarget as HTMLElement).style.color = '#9a9892'; }}
+							title="Switch language"
+						>
+							<span style={{ color: lang === 'en' ? '#fc5c04' : '#5c5a55' }}>EN</span>
+							<span style={{ color: '#3a3835' }}>|</span>
+							<span style={{ color: lang === 'pt-BR' ? '#fc5c04' : '#5c5a55' }}>PT</span>
+						</button>
 					</nav>
 
-					{/* Mobile Menu Button */}
-					<button
-						onClick={toggleMenu}
-						className="md:hidden p-2 rounded-md text-gray-700 hover:text-blue-600 hover:bg-gray-100 transition-colors duration-200"
-					>
-						{isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-					</button>
+					{/* Mobile toggle */}
+					<div className="md:hidden flex items-center gap-2">
+						{/* Mobile language toggle */}
+						<button
+							onClick={toggleLang}
+							className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold"
+							style={{ border: '1px solid #262624', color: '#9a9892' }}
+						>
+							<span style={{ color: lang === 'en' ? '#fc5c04' : '#5c5a55' }}>EN</span>
+							<span style={{ color: '#3a3835' }}>|</span>
+							<span style={{ color: lang === 'pt-BR' ? '#fc5c04' : '#5c5a55' }}>PT</span>
+						</button>
+						<button
+							onClick={toggleMenu}
+							className="p-2 rounded-lg transition-colors duration-150"
+							style={{ color: '#9a9892' }}
+							onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#212121'; (e.currentTarget as HTMLElement).style.color = '#f4f3ee'; }}
+							onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9a9892'; }}
+						>
+							{isMenuOpen ? <X size={22} /> : <Menu size={22} />}
+						</button>
+					</div>
 				</div>
 
-				{/* Mobile Navigation (Slide Down) */}
-				{/* Oculta o menu de Docs se o menu principal mobile estiver fechado */}
+				{/* Mobile menu */}
 				{isMenuOpen && (
-					<div className="md:hidden pb-4 transition-all duration-300 ease-in-out">
-						<div className="flex flex-col space-y-2">
-							{navItems.map((item) => {
-								const Icon = item.icon;
+					<div className="md:hidden pb-4 volt-fade-in">
+						<div className="flex flex-col gap-1 pt-1">
+							{navItems.map(({ href, label, icon: Icon }) => {
+								const active = isActive(href);
 								return (
 									<Link
-										key={item.href}
-										href={item.href}
-										className={`${isActive(item.href) ? 'bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100' : 'text-gray-700 hover:text-blue-600 hover:bg-gray-100 font-medium'} flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors duration-200`}
+										key={href}
+										href={href}
 										onClick={toggleMenu}
+										className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold transition-colors duration-150"
+										style={active
+											? { background: 'linear-gradient(135deg, #fc5c04, #ff7226)', color: '#0a0a0a' }
+											: { color: '#9a9892' }
+										}
 									>
-										<Icon size={18} className={isActive(item.href) ? 'text-blue-700' : 'text-blue-500'} />
-										<span>{item.label}</span>
+										<Icon size={16} />
+										<span>{label}</span>
 									</Link>
 								);
 							})}
 
-							<div className="border-t border-gray-200 my-2" />
+							<div style={{ height: 1, background: '#262624', margin: '6px 0' }} />
 
-							{/* Itens de Documentação no Menu Mobile */}
-							<div className="pt-1">
-								<span className='text-xs font-semibold text-gray-500 px-3 pb-1 block'>Documentation</span>
-								{docItems.map((doc) => {
-									const DocIcon = doc.icon;
-									return (
-										<Link
-											key={doc.href}
-											href={doc.href}
-											className="flex items-center space-x-3 text-gray-700 hover:text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 hover:bg-gray-100"
-											onClick={toggleMenu}
-										>
-											<DocIcon size={18} className="text-blue-500" />
-											<span>{doc.label}</span>
-										</Link>
-									)
-								})}
-
-								<div className="pt-2">
-									<span className='text-xs font-semibold text-gray-500 px-3 pb-1 block'>Tools</span>
-									{gpuItems.map((item) => {
-										const Icon = item.icon;
-										return (
-											<Link
-												key={item.href}
-												href={item.href}
-												className="flex items-center space-x-3 text-gray-700 hover:text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 hover:bg-gray-100"
-												onClick={toggleMenu}
-											>
-												<Icon size={18} className="text-blue-500" />
-												<span>{item.label}</span>
-											</Link>
-										);
-									})}
-								</div>
-							</div>
-
+							<span className="px-3.5 text-[10.5px] font-bold uppercase tracking-widest" style={{ color: '#5c5a55' }}>{t('nav.documentation')}</span>
+							{docItems.map(({ href, label, icon: Icon }) => (
+								<Link
+									key={href}
+									href={href}
+									onClick={toggleMenu}
+									className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] text-[13px] font-semibold transition-colors duration-150"
+									style={{ color: '#9a9892' }}
+								>
+									<Icon size={16} />
+									<span>{label}</span>
+								</Link>
+							))}
 						</div>
 					</div>
 				)}

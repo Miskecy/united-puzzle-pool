@@ -1,14 +1,12 @@
 "use client"
 import Link from 'next/link';
-import { Trophy, Users, Target, Zap, Bitcoin, BarChart3, BookOpen, UsersRound } from 'lucide-react';
+import { Trophy, Users, Target, Zap, Bitcoin, BarChart3, BookOpen, UsersRound, ArrowRight } from 'lucide-react';
 import PuzzleInfoCard from '@/components/PuzzleInfoCard';
 import PoolSpeedChart from '@/components/PoolSpeedChart';
 import PoolActivityTimelineStandalone from '@/components/PoolActivityTimelineStandalone';
 import { useEffect, useState } from 'react'
+import { useTranslation } from '@/contexts/LanguageContext'
 
-
-// As funções de fetch e a lógica de cálculo de validatedLabel foram mantidas aqui, mas
-// devem ser gerenciadas em um arquivo utilitário ou serviço na produção.
 type Point = { t: number; v: number }
 type TimelineBlock = {
 	id: string;
@@ -26,9 +24,10 @@ type TimelineBlock = {
 }
 
 export default function HomePage() {
+	const { t } = useTranslation()
 	const [completedBlocks, setCompletedBlocks] = useState(0)
 	const [validatedLabel, setValidatedLabel] = useState('0.00T')
-	const [totalMiners, setTotalMiners] = useState('—')
+	const [totalMiners, setTotalMiners] = useState<string | number>('—')
 	const [speedPoints, setSpeedPoints] = useState<Point[]>([])
 	const [avgSpeedLabel, setAvgSpeedLabel] = useState('—')
 	const [remainingBKeys, setRemainingBKeys] = useState(0)
@@ -59,11 +58,12 @@ export default function HomePage() {
 					const recent24 = Array.isArray(stats24?.recentBlocks) ? stats24.recentBlocks : []
 					chartRecent = recent24
 				}
-				// Aggregate into 24 hourly bins for the last 24 hours (rolling window)
+
 				const hourMs = 60 * 60 * 1000
 				const endTs = Date.now()
 				const startTs = endTs - 24 * hourMs
-				const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> = Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
+				const bins: Array<{ lenBI: bigint; secs: number; latestMs: number | null }> =
+					Array.from({ length: 24 }, () => ({ lenBI: 0n, secs: 0, latestMs: null }))
 
 				const items = chartRecent.filter((rb) => {
 					const cm = new Date(rb.completedAt ?? rb.createdAt ?? 0).getTime()
@@ -92,7 +92,7 @@ export default function HomePage() {
 					}
 				}
 
-				const points: Array<{ t: number; ts?: number; v: number }> = bins.map((b, i) => {
+				const points = bins.map((b, i) => {
 					const hourStart = startTs + i * hourMs
 					const latest = b.latestMs ?? hourStart
 					const t = hourStart
@@ -102,6 +102,7 @@ export default function HomePage() {
 					return { t, ts: latest, v: Number.isFinite(speed) ? speed : 0 }
 				})
 				setSpeedPoints(points)
+
 				if (totalSeconds > 0) {
 					const thresholds: Array<{ unit: string; divisor: bigint }> = [
 						{ unit: 'PKeys/s', divisor: 1_000_000_000_000_000n },
@@ -118,23 +119,24 @@ export default function HomePage() {
 					const valTimes100 = kpsTimes100 / divisor
 					const intPart = valTimes100 / 100n
 					const frac = valTimes100 % 100n
-					setAvgSpeedLabel(`${intPart.toString()}.${frac.toString().padStart(2, '0')} ${unit}`)
+					setAvgSpeedLabel(`${intPart}.${frac.toString().padStart(2, '0')} ${unit}`)
 				} else {
 					setAvgSpeedLabel('—')
 				}
+
 				if (overviewRes.ok) {
 					const data = await overviewRes.json()
-					const bins = Array.isArray(data.bins) ? data.bins : []
+					const overviewBins = Array.isArray(data.bins) ? data.bins : []
 					let validated = 0
 					let total = 0
-					for (const b of bins) {
+					for (const b of overviewBins) {
 						validated += Number(b.completed || 0)
 						total += Number(b.total || 0)
 					}
-                    const T = 1_000_000_000_000
-                    const t = validated / T
-                    const formatted = new Intl.NumberFormat('en-US', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(t)
-                    setValidatedLabel(`${formatted}T`)
+					const T = 1_000_000_000_000
+					const t = validated / T
+					const formatted = new Intl.NumberFormat('en-US', { useGrouping: true, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(t)
+					setValidatedLabel(`${formatted}T`)
 					const remaining = Math.max(0, total - validated)
 					setRemainingBKeys(remaining / 1_000_000_000)
 				}
@@ -145,88 +147,103 @@ export default function HomePage() {
 		return () => clearInterval(id)
 	}, [])
 
+	const features = [
+		{
+			icon: Users,
+			title: t('home.features.collaborative.title'),
+			body: t('home.features.collaborative.desc'),
+		},
+		{
+			icon: Trophy,
+			title: t('home.features.fairRewards.title'),
+			body: t('home.features.fairRewards.desc'),
+		},
+		{
+			icon: Target,
+			title: t('home.features.focusedTarget.title'),
+			body: t('home.features.focusedTarget.desc'),
+		},
+		{
+			icon: Zap,
+			title: t('home.features.maxEfficiency.title'),
+			body: t('home.features.maxEfficiency.desc'),
+		},
+	]
+
 	return (
-		// PADRÃO 1: Fundo com degradê leve para dar profundidade
-		<div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 text-gray-900">
+		<div className="min-h-screen bg-volt-bg text-volt-text volt-fade-in">
 
-			{/* Hero Section */}
-			<section className="relative overflow-hidden py-24 sm:py-32">
-				<div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<div className="text-center">
-						<div className="flex justify-center mb-6">
-							<Bitcoin className="w-20 h-20 text-blue-600 mx-auto animate-pulse" />
+			{/* Hero */}
+			<section className="relative overflow-hidden py-24 sm:py-32 px-4 sm:px-7">
+				<div className="max-w-7xl mx-auto text-center">
+					<div className="flex justify-center mb-8">
+						<div
+							className="w-20 h-20 rounded-2xl flex items-center justify-center"
+							style={{ background: 'linear-gradient(135deg, #fc5c04 0%, #ff7226 100%)', boxShadow: '0 0 60px rgba(252,92,4,0.25)' }}
+						>
+							<Bitcoin className="w-10 h-10" style={{ color: '#0a0a0a' }} />
 						</div>
-						{/* Títulos com cores e tamanhos PADRÃO */}
-						<h1 className="text-6xl md:text-7xl font-extrabold text-gray-900 mb-6 tracking-tight">
-							United <span className='text-blue-600'>Puzzle Pool</span>
-						</h1>
-						<p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-3xl mx-auto font-light">
-							Join our <span className='font-semibold'>collaborative mining pool</span> to tackle the famous Bitcoin Puzzle.
-							Work as a team!
-						</p>
+					</div>
 
-						{/* Botões de Ação */}
-						<div className="flex flex-col sm:flex-row gap-4 justify-center">
-							<Link
-								href="/dashboard"
-								className="bg-blue-600 text-white px-8 py-3.5 rounded-lg font-semibold text-lg hover:bg-blue-700 transition-all duration-200 transform hover:scale-[1.02] shadow-xl shadow-blue-200 inline-flex items-center gap-2 justify-center"
-							>
-								<Zap className='w-5 h-5' /> Get Started Now
-							</Link>
-							<Link
-								href="/docs/api"
-								className="border-2 border-gray-300 text-gray-700 px-8 py-3.5 rounded-lg font-semibold text-lg hover:bg-white hover:border-gray-400 transition-all duration-200 shadow-md inline-flex items-center gap-2 justify-center"
-							>
-								<BookOpen className='w-5 h-5' /> View Documentation
-							</Link>
-						</div>
+					<div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#fc5c04' }}>
+						{t('home.hero.badge')}
+					</div>
+					<h1
+						className="text-5xl sm:text-6xl md:text-7xl font-semibold mb-5"
+						style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee', letterSpacing: '-0.01em' }}
+					>
+						United <span style={{ color: '#fc5c04' }}>Puzzle Pool</span>
+					</h1>
+					<p className="text-lg md:text-xl mb-10 max-w-2xl mx-auto" style={{ color: '#9a9892' }}>
+						{t('home.hero.description')}
+					</p>
+
+					<div className="flex flex-col sm:flex-row gap-3 justify-center">
+						<Link href="/dashboard" className="volt-btn-primary text-[15px] px-7 py-3">
+							<Zap className="w-4 h-4" /> {t('home.hero.getStarted')}
+						</Link>
+						<Link href="/docs/api" className="volt-btn-ghost text-[15px] px-7 py-3">
+							<BookOpen className="w-4 h-4" /> {t('home.hero.documentation')}
+						</Link>
 					</div>
 				</div>
 			</section>
 
+			{/* Stats + Puzzle Info */}
+			<section className="py-12 px-4 sm:px-7" style={{ borderTop: '1px solid #262624', borderBottom: '1px solid #262624', background: '#0d0d0d' }}>
+				<div className="max-w-7xl mx-auto space-y-8">
 
-
-			{/* Puzzle Info & Quick Stats (Melhor Alinhamento) */}
-			<section className="py-12 bg-white border-y border-gray-200 space-y-8">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-					{/* Bloco 1: Quick Stats */}
-					<div className="lg:col-span-1 space-y-4">
-						<h3 className="text-xl font-bold text-gray-900 mb-2 border-b border-gray-200 pb-2">Pool Metrics</h3>
-						<div className="grid  gap-4">
-							{/* Stat 1: Validação Total */}
-							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">
-								<BarChart3 className="w-5 h-5 text-green-600 mx-auto mb-1" />
-								<div className="text-xl font-extrabold text-gray-900">{validatedLabel}</div>
-								<p className="text-xs text-gray-600">Total Validated</p>
+					{/* Stat cards */}
+					<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+						{[
+							{ icon: BarChart3, label: t('home.stats.totalValidated'), value: validatedLabel, color: '#3ddc84' },
+							{ icon: Trophy, label: t('home.stats.blocksCompleted'), value: Number(completedBlocks).toLocaleString('en-US'), color: '#fc5c04' },
+							{ icon: UsersRound, label: t('home.stats.activeMiners'), value: totalMiners, color: '#9a9892' },
+						].map(({ icon: Icon, label, value, color }) => (
+							<div
+								key={label}
+								className="volt-card p-4 flex flex-col justify-between"
+								style={{ minHeight: 105 }}
+							>
+								<span className="text-[10.5px] font-bold uppercase tracking-wider" style={{ color: '#5c5a55' }}>{label}</span>
+								<div>
+									<div className="text-[22px] font-bold mt-1" style={{ fontFamily: 'var(--font-space-grotesk)', color, letterSpacing: '-0.02em' }}>
+										{value}
+									</div>
+								</div>
+								<Icon className="w-4 h-4 mt-1" style={{ color }} />
 							</div>
-							{/* Stat 2: Blocos Completos */}
-							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">
-								<Trophy className="w-5 h-5 text-blue-600 mx-auto mb-1" />
-								<div className="text-xl font-extrabold text-gray-900">{Number(completedBlocks).toLocaleString('en-US')}</div>
-								<p className="text-xs text-gray-600">Blocks Completed</p>
-							</div>
-							{/* Stat 3: Total Miners */}
-							<div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center">
-								<UsersRound className="w-5 h-5 text-purple-600 mx-auto mb-1" />
-								<div className="text-xl font-extrabold text-gray-900">{totalMiners}</div>
-								<p className="text-xs text-gray-600">Active Miners</p>
-							</div>
-						</div>
+						))}
 					</div>
 
-					{/* Bloco 2: Puzzle Info Card (2/3 de largura) */}
-					<div className="lg:col-span-2">
-						{/* PuzzleInfoCard deve usar o mesmo estilo de card/sombra */}
-						<PuzzleInfoCard variant="home" />
-					</div>
-				</div>
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					{/* Puzzle Info */}
+					<PuzzleInfoCard variant="home" />
+
+					{/* Speed Chart */}
 					<PoolSpeedChart points={speedPoints} avgLabel={avgSpeedLabel} remainingBKeys={remainingBKeys} />
-				</div>
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-					{/* Split Panel: Active vs Validated */}
-					<div className='pb-8'>
+
+					{/* Activity Timeline */}
+					<div className="pb-4">
 						<PoolActivityTimelineStandalone
 							active={activeBlocks}
 							validated={recentBlocks}
@@ -237,79 +254,47 @@ export default function HomePage() {
 				</div>
 			</section>
 
-
-
-			{/* Features Section (Por que se juntar?) */}
-			<section className="py-20 bg-gray-50">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-					<h2 className="text-4xl font-bold text-center text-gray-900 mb-16">
-						Why Join Our Pool?
-					</h2>
-					{/* Grid de Features com design de card aprimorado */}
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-
-						{/* Feature 1: Collaborative Work */}
-						<div className="bg-white p-6 rounded-xl border border-gray-200 hover:border-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl">
-							<div className="w-14 h-14 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-								<Users className="w-6 h-6 text-blue-600" />
+			{/* Features */}
+			<section className="py-20 px-4 sm:px-7">
+				<div className="max-w-7xl mx-auto">
+					<div className="text-center mb-14">
+						<div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#fc5c04' }}>{t('home.features.label')}</div>
+						<h2 className="text-[30px] font-semibold" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>
+							{t('home.features.title')}
+						</h2>
+					</div>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+						{features.map(({ icon: Icon, title, body }) => (
+							<div
+								key={title}
+								className="volt-card p-6 transition-transform duration-300 hover:-translate-y-1.5 cursor-default"
+							>
+								<div
+									className="w-11 h-11 rounded-xl flex items-center justify-center mb-4"
+									style={{ background: 'rgba(252,92,4,0.1)', border: '1px solid rgba(252,92,4,0.15)' }}
+								>
+									<Icon className="w-5 h-5" style={{ color: '#fc5c04' }} />
+								</div>
+								<h3 className="text-base font-semibold mb-2" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>{title}</h3>
+								<p className="text-[13px] leading-relaxed" style={{ color: '#9a9892' }}>{body}</p>
 							</div>
-							<h3 className="text-xl font-semibold text-gray-900 mb-3">Collaborative Work</h3>
-							<p className="text-gray-600">
-								Work with other miners to cover more ground and increase the chances of finding the solution.
-							</p>
-						</div>
-
-						{/* Feature 2: Fair Rewards */}
-						<div className="bg-white p-6 rounded-xl border border-gray-200 hover:border-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl">
-							<div className="w-14 h-14 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-								<Trophy className="w-6 h-6 text-green-600" />
-							</div>
-							<h3 className="text-xl font-semibold text-gray-900 mb-3">Fair Rewards</h3>
-							<p className="text-gray-600">
-								Earn credits by contributing processing power and receive your share if one of my devices finds the solution. If you find it, it&apos;s yours!
-							</p>
-						</div>
-
-						{/* Feature 3: Focused Target */}
-						<div className="bg-white p-6 rounded-xl border border-gray-200 hover:border-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl">
-							<div className="w-14 h-14 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-								<Target className="w-6 h-6 text-purple-600" />
-							</div>
-							<h3 className="text-xl font-semibold text-gray-900 mb-3">Focused Target</h3>
-							<p className="text-gray-600">
-								Focus on specific ranges of the Bitcoin puzzle, maximizing your hardware efficiency.
-							</p>
-						</div>
-
-						{/* Feature 4: Maximum Efficiency */}
-						<div className="bg-white p-6 rounded-xl border border-gray-200 hover:border-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl">
-							<div className="w-14 h-14 bg-yellow-100 rounded-lg flex items-center justify-center mb-4">
-								<Zap className="w-6 h-6 text-yellow-600" />
-							</div>
-							<h3 className="text-xl font-semibold text-gray-900 mb-3">Maximum Efficiency</h3>
-							<p className="text-gray-600">
-								Optimized system that distributes work intelligently, avoiding duplicated effort.
-							</p>
-						</div>
+						))}
 					</div>
 				</div>
 			</section>
 
-			{/* CTA Section (Limpo e Focado) */}
-			<section className="py-20 bg-white">
-				<div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-					<h2 className="text-4xl font-bold text-gray-900 mb-6">
-						Ready to get started?
+			{/* CTA */}
+			<section className="py-20 px-4 sm:px-7" style={{ borderTop: '1px solid #262624' }}>
+				<div className="max-w-3xl mx-auto text-center">
+					<h2 className="text-[30px] font-semibold mb-4" style={{ fontFamily: 'var(--font-space-grotesk)', color: '#f4f3ee' }}>
+						{t('home.cta.title')}
 					</h2>
-					<p className="text-xl text-gray-600 mb-8">
-						Join our pool and start contributing to solve the Bitcoin Puzzle today!
+					<p className="text-[15px] mb-8" style={{ color: '#9a9892' }}>
+						{t('home.cta.description')}
 					</p>
-					<Link
-						href="/dashboard"
-						className="inline-flex items-center space-x-2 bg-blue-600 text-white px-8 py-3.5 rounded-lg font-semibold text-lg hover:bg-blue-700 transition-all duration-200 transform hover:scale-[1.02] shadow-xl shadow-blue-200"
-					>
-						<span>Create My Account</span>
-						<BookOpen className="w-5 h-5" />
+					<Link href="/dashboard" className="volt-btn-primary text-[15px] px-8 py-3.5 inline-flex">
+						<span>{t('home.cta.startMining')}</span>
+						<ArrowRight className="w-4 h-4" />
 					</Link>
 				</div>
 			</section>

@@ -6,8 +6,31 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-space-grotesk);
+
+  /* Volt palette exposed to Tailwind */
+  --color-volt-bg: #0a0a0a;
+  --color-volt-panel: #000000;
+  --color-volt-surface: #131313;
+  --color-volt-surface-raised: #191919;
+  --color-volt-surface-hover: #212121;
+  --color-volt-border: #262624;
+  --color-volt-border-hover: #3a3835;
+  --color-volt-text: #f4f3ee;
+  --color-volt-text-secondary: #9a9892;
+  --color-volt-text-muted: #5c5a55;
+  --color-volt-accent: #fc5c04;
+  --color-volt-accent-hover: #ff7226;
+  --color-volt-accent-dim: #7a2e02;
+  --color-volt-success: #3ddc84;
+  --color-volt-success-dim: #123420;
+  --color-volt-danger: #f0554a;
+  --color-volt-danger-dim: #3a1512;
+  --color-volt-locked: #3a3835;
+
+  /* shadcn compat */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -45,78 +68,134 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Volt = always dark */
+  --background: #0a0a0a;
+  --foreground: #f4f3ee;
+  --card: #131313;
+  --card-foreground: #f4f3ee;
+  --popover: #131313;
+  --popover-foreground: #f4f3ee;
+  --primary: #fc5c04;
+  --primary-foreground: #0a0a0a;
+  --secondary: #191919;
+  --secondary-foreground: #f4f3ee;
+  --muted: #191919;
+  --muted-foreground: #9a9892;
+  --accent: #212121;
+  --accent-foreground: #f4f3ee;
+  --destructive: #f0554a;
+  --border: #262624;
+  --input: #191919;
+  --ring: #fc5c04;
+  --chart-1: #fc5c04;
+  --chart-2: #3ddc84;
+  --chart-3: #f0554a;
+  --chart-4: #ff7226;
+  --chart-5: #9a9892;
+  --sidebar: #000000;
+  --sidebar-foreground: #f4f3ee;
+  --sidebar-primary: #fc5c04;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #212121;
+  --sidebar-accent-foreground: #f4f3ee;
+  --sidebar-border: #262624;
+  --sidebar-ring: #fc5c04;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Keyframe animations */
+@keyframes voltFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes voltPopIn {
+  from { opacity: 0; transform: scale(0.94) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes voltShimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(280%); }
+}
+@keyframes voltSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes voltToastIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Mobile input zoom fix */
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px !important; }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    box-sizing: border-box;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-[#0a0a0a] text-[#f4f3ee] antialiased;
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-space-grotesk), system-ui, sans-serif;
+    letter-spacing: -0.01em;
   }
 }
+
+/* Utility classes */
+.volt-surface    { background: #131313; border: 1px solid #262624; }
+.volt-surface-raised { background: #191919; border: 1px solid #262624; }
+.volt-card       { background: #131313; border: 1px solid #262624; border-radius: 16px; overflow: hidden; }
+.volt-input-wrap {
+  display: flex; align-items: center; gap: 9px;
+  background: #191919; border: 1px solid #262624; border-radius: 10px; padding: 0 12px;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.volt-input-wrap:focus-within {
+  border-color: #fc5c04;
+  box-shadow: 0 0 0 3px rgba(252,92,4,0.12);
+}
+.volt-input-wrap input,
+.volt-input-wrap textarea {
+  flex: 1; background: transparent; border: none; outline: none;
+  padding: 11px 0; font-size: 13.5px; color: #f4f3ee;
+}
+.volt-input-wrap input::placeholder,
+.volt-input-wrap textarea::placeholder { color: #5c5a55; }
+
+.volt-btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 20px; border-radius: 10px; border: none;
+  background: #fc5c04; color: #0a0a0a;
+  font-size: 13.5px; font-weight: 600; cursor: pointer;
+  transition: background 120ms;
+}
+.volt-btn-primary:hover:not(:disabled) { background: #ff7226; }
+.volt-btn-primary:disabled { background: #3a3835; color: #5c5a55; cursor: default; }
+
+.volt-btn-ghost {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 10px;
+  background: transparent; border: 1px solid #262624; color: #f4f3ee;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.volt-btn-ghost:hover:not(:disabled) { border-color: #3a3835; background: #212121; }
+
+.volt-btn-danger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 16px; border-radius: 10px;
+  background: transparent; border: 1px solid #262624; color: #f0554a;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: background 120ms, border-color 120ms;
+}
+.volt-btn-danger:hover:not(:disabled) { border-color: #f0554a; background: rgba(240,85,74,0.1); }
+
+.volt-badge-success { background: #123420; color: #3ddc84; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 9999px; }
+.volt-badge-accent  { background: #7a2e02; color: #fc5c04; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 9999px; }
+.volt-badge-danger  { background: #3a1512; color: #f0554a; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 9999px; }
+.volt-badge-neutral { background: #262624; color: #9a9892; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 4px 8px; border-radius: 9999px; }
+
+.volt-fade-in { animation: voltFadeIn 200ms cubic-bezier(0.16,1,0.3,1) both; }
+.volt-pop-in  { animation: voltPopIn 220ms cubic-bezier(.2,.9,.3,1) both; }
