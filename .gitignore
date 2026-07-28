@@ -9,6 +9,10 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+/graphify-out
+/src/graphify-out
+
+.claude
 
 # testing
 /coverage

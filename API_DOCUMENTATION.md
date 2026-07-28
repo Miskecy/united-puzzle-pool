@@ -231,74 +231,128 @@ All assignments respect the **active puzzle** configured in the system. The retu
 2. Signing uses `bitcoinjs-message.verify` over the message returned by `/api/credits/transfer/init`.
 3. The Bitcoin address used must be the same one associated with your token.
 
-## Shared Pool API
+## Reward Redemption
 
-### 7. Query Validation Status
+When a puzzle is solved and the private key is recorded, miners can redeem their earned credits for a reward. The redemption flow requires a Bitcoin signature and is subject to admin review.
 
-**Endpoint:** `GET /api/shared`
+### 7. Initiate Redemption
+
+**Endpoint:** `POST /api/redeem/init`
+
+**Description:** Starts a redemption request for a solved puzzle. Returns a message and `nonce` to sign with your Bitcoin address. Only available when a puzzle is marked as solved with a recorded private key.
 
 **Headers:**
 
--   `x-shared-secret: <secret>` or `shared-pool-token: <token>`
+-   `pool-token` or `Authorization: Bearer <token>`
 
-**Query:**
-
--   `start`: 64-character hex (`0x...`)
--   `end`: 64-character hex (`0x...`)
-
-Note: The queried range must be contained within the active puzzle. Otherwise, the service returns `409`.
-
-**Response:**
+**Body:**
 
 ```json
 {
-    "status": "VALIDATED|ACTIVE|PARTIAL|NOT_FOUND",
-    "checkwork_addresses": ["..."],
-    "privatekeys": ["..."],
-    "blockId": "..."
+    "amount": 12.345,
+    "puzzleId": "optional-puzzle-id"
+}
+```
+
+-   `amount` is optional; omitting it defaults to your full available credits.
+-   `puzzleId` is optional; omitting it uses the currently active puzzle.
+
+**Success Response (200):**
+
+```json
+{
+    "message": "United Puzzle Pool Reward Redemption\nToken: ...\nAddress: 1...\nAmount: 12.345\nNonce: abc123...\nTimestamp: 2025-11-29T18:45:00.000Z",
+    "nonce": "abc123...",
+    "amount": 12.345,
+    "address": "1A3ULXt5m9rQo1QL5rfudjAEGpxodVSQv9"
 }
 ```
 
 Common errors:
 
--   `409`: Range outside the active puzzle
+-   `409`: No available credits, an existing pending redemption already exists, or the puzzle is not solved.
+-   `400`: Invalid or zero amount.
 
-### 8. Submit Shared Validation
+### 8. Confirm Redemption
 
-**Endpoint:** `POST /api/shared`
+**Endpoint:** `POST /api/redeem/confirm`
+
+**Description:** Submits the Bitcoin signature for the message returned by `/api/redeem/init`. Creates a `PENDING` redemption request that awaits admin approval.
 
 **Headers:**
 
--   `x-shared-secret` or `shared-pool-token`
+-   `pool-token` or `Authorization: Bearer <token>`
 
 **Body:**
 
 ```json
 {
-    "startRange": "0x...",
-    "endRange": "0x...",
-    "checkworks_addresses": ["..."],
-    "privatekeys": ["..."],
-    "puzzleaddress": "1..."
+    "nonce": "abc123...",
+    "signature": "H3r...XQ=="
 }
 ```
 
-Note: The submitted range must be contained within the active puzzle. Otherwise, the service returns `409` and does not record the validation.
-
-### 9. Generate Token for Shared Pool
-
-**Endpoint:** `POST /api/shared/token/generate`
-
-**Body:**
+**Success Response (200):**
 
 ```json
-{ "puzzleaddress": "1..." }
+{
+    "success": true,
+    "redemptionId": "xyz789...",
+    "status": "PENDING",
+    "amount": 12.345
+}
 ```
 
-**Response:**
+### 9. List Redemptions
+
+**Endpoint:** `GET /api/redeem/list`
+
+**Description:** Returns all redemption requests for the current user.
+
+**Headers:**
+
+-   `pool-token` or `Authorization: Bearer <token>`
+
+**Success Response (200):**
 
 ```json
-{ "token": "..." }
+[
+    {
+        "id": "xyz789...",
+        "amount": 12.345,
+        "status": "PENDING",
+        "createdAt": "2025-11-29T18:45:00.000Z",
+        "approvedAt": null,
+        "adminNote": null
+    }
+]
+```
+
+Possible `status` values: `PENDING`, `APPROVED`, `REJECTED`, `CANCELED`.
+
+### 10. Check Redemption Status
+
+**Endpoint:** `GET /api/redeem/status`
+
+**Description:** Returns the status of a specific redemption request.
+
+**Headers:**
+
+-   `pool-token` or `Authorization: Bearer <token>`
+
+**Query:**
+
+-   `id`: Redemption request ID
+
+**Success Response (200):**
+
+```json
+{
+    "id": "xyz789...",
+    "status": "PENDING",
+    "amount": 12.345,
+    "adminNote": null
+}
 ```
 
 ## Full User Flow
@@ -359,6 +413,7 @@ curl -X POST ${APP_URL}/api/block/submit \
 -   `400`: Invalid request (malformed JSON, incorrect data)
 -   `401`: Token not provided or invalid
 -   `405`: HTTP method not allowed
+-   `409`: Conflict (duplicate request, range mismatch, puzzle not solved)
 -   `500`: Internal server error
 
 ## Puzzle Information
