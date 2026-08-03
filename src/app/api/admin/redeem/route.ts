@@ -3,6 +3,7 @@ import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { prisma } from '@/lib/prisma'
 import { loadPuzzleConfig } from '@/lib/config'
 import { Prisma } from '@prisma/client'
+import { verifySession } from '@/lib/session'
 
 function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
@@ -29,8 +30,9 @@ async function ensureRedeemTable() {
 }
 
 async function handler(req: NextRequest) {
-	if (!getSecret()) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
-	if (!/(?:^|;\s*)setup_session=1(?:;|$)/.test(req.headers.get('cookie') || '')) return unauthorized()
+	const secret = getSecret()
+	if (!secret) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+	if (!verifySession(req.headers.get('cookie'), secret)) return unauthorized()
 
 	try {
 		if (req.method !== 'GET') {

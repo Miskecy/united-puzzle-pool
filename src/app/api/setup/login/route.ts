@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import { strictRateLimitMiddleware } from '@/lib/rate-limit'
+import { createSession } from '@/lib/session'
 
 function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
@@ -14,7 +15,7 @@ async function handler(req: NextRequest) {
   if (supplied !== secret) return unauthorized()
 
   const res = NextResponse.json({ ok: true })
-  res.cookies.set('setup_session', '1', {
+  res.cookies.set('setup_session', createSession(secret), {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',

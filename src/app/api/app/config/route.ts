@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { verifySession } from '@/lib/session'
 
 function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
@@ -56,7 +57,7 @@ async function handler(req: NextRequest) {
     }
 
 	if (req.method === 'PATCH') {
-		if (!/(?:^|;\s*)setup_session=1(?:;|$)/.test(req.headers.get('cookie') || '')) return unauthorized()
+		if (!verifySession(req.headers.get('cookie'), getSecret())) return unauthorized()
 		try {
 			const body = await req.json()
             const v = !!body?.shared_pool_api_enabled

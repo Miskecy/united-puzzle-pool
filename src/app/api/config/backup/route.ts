@@ -4,13 +4,15 @@ import { prisma } from '@/lib/prisma'
 import DatabaseCtor from 'better-sqlite3'
 import fs from 'fs/promises'
 import path from 'path'
+import { verifySession } from '@/lib/session'
 
 function getSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 function unauthorized() { return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } }) }
 
 async function handler(req: NextRequest) {
-	if (!getSecret()) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
-	if (!/(?:^|;\s*)setup_session=1(?:;|$)/.test(req.headers.get('cookie') || '')) return unauthorized()
+	const secret = getSecret()
+	if (!secret) return new Response(JSON.stringify({ error: 'Setup disabled' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
+	if (!verifySession(req.headers.get('cookie'), secret)) return unauthorized()
 
 	function resolveDbPath() {
 		const url = (process.env.DATABASE_URL || '').trim()
