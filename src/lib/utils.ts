@@ -337,8 +337,7 @@ export function deriveBitcoinAddressFromPrivateKeyHex(hex: string): string {
 			return ck.publicAddress;
 		} catch (error2) {
 			console.error('Erro no método alternativo:', error2);
-			// Retornar um valor padrão ao invés de lançar erro
-			return '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2'; // Endereço de teste padrão
+			throw new Error(`Failed to derive Bitcoin address from key: ${error2}`);
 		}
 	}
 }
@@ -346,19 +345,26 @@ export function deriveBitcoinAddressFromPrivateKeyHex(hex: string): string {
 export function generateCheckworkAddresses(start: string, end: string, count: number = 10): string[] {
 	console.log('generateCheckworkAddresses chamado com:', start, end, count);
 
-	const privateKeys = samplePrivateKeysInRange(start.replace('0x', ''), end.replace('0x', ''), count);
+	// Sample extra candidates so we can skip any that fail address derivation
+	const candidateCount = count + 10;
+	const privateKeys = samplePrivateKeysInRange(start.replace('0x', ''), end.replace('0x', ''), candidateCount);
 	console.log('Private keys gerados:', privateKeys.length, privateKeys);
 
 	const addresses: string[] = [];
 	for (const privateKeyHex of privateKeys) {
+		if (addresses.length >= count) break;
 		try {
 			const address = deriveBitcoinAddressFromPrivateKeyHex(privateKeyHex);
 			console.log('Endereço Bitcoin gerado:', address);
 			addresses.push(address);
 		} catch (error) {
-			console.error('Erro ao gerar Bitcoin address:', error);
-			throw new Error(`Falha ao gerar endereço Bitcoin da chave privada: ${error}`);
+			// Skip keys that fail derivation rather than storing a bogus fallback address
+			console.error('Skipping key that failed address derivation:', privateKeyHex, error);
 		}
+	}
+
+	if (addresses.length === 0) {
+		throw new Error('Failed to derive any Bitcoin addresses for checkwork');
 	}
 
 	console.log('Endereços Bitcoin gerados:', addresses.length, addresses);

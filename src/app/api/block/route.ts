@@ -144,7 +144,7 @@ async function handler(req: NextRequest) {
 			const validBlock = dbActive.find(b => {
 				try {
 					const size = BigInt(b.endRange) - BigInt(b.startRange);
-					const isBrowser = size <= 500000n;
+					const isBrowser = size <= 200000n;
 					return isRequestingBrowser ? isBrowser : !isBrowser;
 				} catch { return false; }
 			});

@@ -112,7 +112,7 @@ async function handler(req: NextRequest) {
 			// Fallback para Redis
 			let activeBlockId: string | null = null;
 			try {
-				const fromRedis = await getActiveBlockByToken(token);
+				const fromRedis = await getActiveBlockByToken(token, body.workerId);
 				if (fromRedis) activeBlockId = fromRedis;
 			} catch { }
 			if (activeBlockId) {
