@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { rateLimitMiddleware } from '@/lib/rate-limit'
 import CoinKey from 'coinkey'
 import { formatCompactHexRange } from '@/lib/formatRange'
+import { verifySession } from '@/lib/session'
+
+function getAdminSecret(): string { return (process.env.SETUP_SECRET || '').trim() }
 
 async function handler(req: NextRequest, { params }: { params: { id: string } }) {
 	try {
@@ -24,6 +27,13 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 		if (!block) {
 			return new Response(JSON.stringify({ error: 'Block not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } })
 		}
+
+		// Determine if requester can see private keys: must be the block owner or an admin
+		const requestToken = req.headers.get('pool-token')
+		const adminSecret = getAdminSecret()
+		const isAdmin = adminSecret ? verifySession(req.headers.get('cookie'), adminSecret) : false
+		const isOwner = !!requestToken && block.userToken?.token === requestToken
+		const canSeeKeys = isAdmin || isOwner
 
 		const startRaw = block.startRange
 		const endRaw = block.endRange
@@ -52,9 +62,14 @@ async function handler(req: NextRequest, { params }: { params: { id: string } })
 			}
 		})
 		const cwSet = new Set(checkworkAddresses)
-		const privateKeys = privateKeysRaw
 		const puzzleKey = block.blockSolution?.puzzlePrivateKey || null
-		const addressMap = derivedMap.map(({ privateKey, address }) => ({ privateKey: puzzleKey && privateKey === puzzleKey ? undefined : privateKey, address, isValid: cwSet.has(address) }))
+		// Only expose private keys to the block owner or admin
+		const privateKeys = canSeeKeys ? privateKeysRaw : []
+		const addressMap = derivedMap.map(({ privateKey, address }) => ({
+			...(canSeeKeys && !(puzzleKey && privateKey === puzzleKey) ? { privateKey } : {}),
+			address,
+			isValid: cwSet.has(address),
+		}))
 		const matchedCount = addressMap.filter(a => a.isValid).length
 		const missingAddresses = checkworkAddresses.filter(a => !addressMap.some(m => m.address === a))
 

@@ -3,6 +3,7 @@ import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { loadPuzzleConfig } from '@/lib/config'
 import { prisma } from '@/lib/prisma'
 import { getRedisClient } from '@/lib/redis'
+import { randomBytes } from 'crypto'
 
 function extractToken(req: NextRequest): string | null {
 	const authHeader = req.headers.get('Authorization')
@@ -12,8 +13,9 @@ function extractToken(req: NextRequest): string | null {
 
 function cryptoRandom(len: number): string {
 	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+	const buf = randomBytes(len)
 	let out = ''
-	for (let i = 0; i < len; i++) out += chars.charAt(Math.floor(Math.random() * chars.length))
+	for (let i = 0; i < len; i++) out += chars[buf[i] % chars.length]
 	return out
 }
 

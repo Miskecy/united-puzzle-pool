@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { rateLimitMiddleware } from '@/lib/rate-limit'
 import { getRedisClient } from '@/lib/redis'
 import * as bitcoinMessage from 'bitcoinjs-message'
+import { randomBytes } from 'crypto'
 
 function extractToken(req: NextRequest): string | null {
 	const authHeader = req.headers.get('Authorization')
@@ -34,8 +35,9 @@ async function ensureRedeemTable() {
 
 function randomId(): string {
 	const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+	const buf = randomBytes(24)
 	let out = ''
-	for (let i = 0; i < 24; i++) out += chars.charAt(Math.floor(Math.random() * chars.length))
+	for (let i = 0; i < 24; i++) out += chars[buf[i] % chars.length]
 	return out
 }
 

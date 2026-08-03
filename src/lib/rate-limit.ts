@@ -18,10 +18,14 @@ function cleanExpiredEntries(store: Map<string, RateLimitEntry>) {
 }
 
 function getClientIp(req: Request): string {
-	const forwarded = req.headers.get('x-forwarded-for');
 	const realIp = req.headers.get('x-real-ip');
-	if (forwarded) return forwarded.split(',')[0].trim();
-	if (realIp) return realIp;
+	if (realIp) return realIp.trim();
+	const forwarded = req.headers.get('x-forwarded-for');
+	if (forwarded) {
+		// Use the rightmost IP — the one appended by the trusted proxy, not the client
+		const parts = forwarded.split(',');
+		return parts[parts.length - 1].trim();
+	}
 	return '127.0.0.1';
 }
 
