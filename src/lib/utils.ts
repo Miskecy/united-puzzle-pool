@@ -249,41 +249,26 @@ export function samplePrivateKeysInRange(startHex: string, endHex: string, count
 		return privateKeys;
 	}
 
-	const fivePctLen = range / 20n; // ~5%
-	const twoPctLen = range / 50n;  // ~2%
-	const startSegLen = fivePctLen > 0n ? fivePctLen : 1n;
-	const endSegLen = twoPctLen > 0n ? twoPctLen : 1n;
-
-	const anchorStartBI = startBigInt + (startSegLen > 1n ? randomBigIntBelow(startSegLen) : 0n);
-	const anchorEndStart = endBigInt - endSegLen;
-	const anchorEndBI = (anchorEndStart > startBigInt ? anchorEndStart : startBigInt) + (endSegLen > 1n ? randomBigIntBelow(endSegLen) : 0n);
-
-	const anchorStartHex = bigIntToHex64(anchorStartBI);
-	const anchorEndHex = bigIntToHex64(anchorEndBI);
-	if (!used.has(anchorStartHex)) { used.add(anchorStartHex); privateKeys.push(anchorStartHex); }
-	if (!used.has(anchorEndHex)) { used.add(anchorEndHex); privateKeys.push(anchorEndHex); }
-
-	const remaining = count - privateKeys.length;
-	if (remaining > 0) {
-		let midStart = startBigInt + startSegLen;
-		let midEnd = endBigInt - endSegLen;
-		if (midEnd <= midStart) { midStart = startBigInt; midEnd = endBigInt; }
-		const midRange = midEnd - midStart;
-		const segments = BigInt(remaining);
-		const segmentSize = segments > 0n ? (midRange / segments) : midRange;
-		for (let i = 0; i < remaining; i++) {
-			const idx = BigInt(i);
-			const segStart = midStart + (segmentSize * idx);
-			let segEnd = i === remaining - 1 ? midEnd : (segStart + segmentSize);
-			if (segEnd <= segStart) segEnd = segStart + 1n;
-			const segLen = segEnd - segStart;
-			const offset = segLen > 1n ? randomBigIntBelow(segLen) : 0n;
-			const privBI = segStart + offset;
-			const privHex = bigIntToHex64(privBI);
-			if (!used.has(privHex)) {
-				used.add(privHex);
-				privateKeys.push(privHex);
-			}
+	// Purely stratified sampling across the entire range.
+	// The previous anchor-end strategy placed one checkwork key in the final 2% of
+	// the range, which caused GPU scanners (e.g. VanitySearch) to miss it when they
+	// had any batch-boundary or counter-overflow issue near the end of a large range
+	// (observed with 10T+ blocks). Pure stratified sampling distributes all checkwork
+	// keys evenly so no single key is disproportionately close to the range boundary.
+	const segments = BigInt(count);
+	const segmentSize = segments > 0n ? (range / segments) : range;
+	for (let i = 0; i < count; i++) {
+		const idx = BigInt(i);
+		const segStart = startBigInt + (segmentSize * idx);
+		let segEnd = i === count - 1 ? endBigInt : (segStart + segmentSize);
+		if (segEnd <= segStart) segEnd = segStart + 1n;
+		const segLen = segEnd - segStart;
+		const offset = segLen > 1n ? randomBigIntBelow(segLen) : 0n;
+		const privBI = segStart + offset;
+		const privHex = bigIntToHex64(privBI);
+		if (!used.has(privHex)) {
+			used.add(privHex);
+			privateKeys.push(privHex);
 		}
 	}
 
@@ -342,23 +327,23 @@ export function deriveBitcoinAddressFromPrivateKeyHex(hex: string): string {
 	}
 }
 
-export function generateCheckworkAddresses(start: string, end: string, count: number = 10): string[] {
-	console.log('generateCheckworkAddresses chamado com:', start, end, count);
+export function generateCheckworkData(start: string, end: string, count: number = 10): { addresses: string[]; privateKeys: string[] } {
+	console.log('generateCheckworkData chamado com:', start, end, count);
 
 	// Sample extra candidates so we can skip any that fail address derivation
 	const candidateCount = count + 10;
-	const privateKeys = samplePrivateKeysInRange(start.replace('0x', ''), end.replace('0x', ''), candidateCount);
-	console.log('Private keys gerados:', privateKeys.length, privateKeys);
+	const candidates = samplePrivateKeysInRange(start.replace('0x', ''), end.replace('0x', ''), candidateCount);
+	console.log('Private keys gerados:', candidates.length);
 
 	const addresses: string[] = [];
-	for (const privateKeyHex of privateKeys) {
+	const privateKeys: string[] = [];
+	for (const privateKeyHex of candidates) {
 		if (addresses.length >= count) break;
 		try {
 			const address = deriveBitcoinAddressFromPrivateKeyHex(privateKeyHex);
-			console.log('Endereço Bitcoin gerado:', address);
 			addresses.push(address);
+			privateKeys.push(privateKeyHex);
 		} catch (error) {
-			// Skip keys that fail derivation rather than storing a bogus fallback address
 			console.error('Skipping key that failed address derivation:', privateKeyHex, error);
 		}
 	}
@@ -367,6 +352,10 @@ export function generateCheckworkAddresses(start: string, end: string, count: nu
 		throw new Error('Failed to derive any Bitcoin addresses for checkwork');
 	}
 
-	console.log('Endereços Bitcoin gerados:', addresses.length, addresses);
-	return addresses;
+	console.log('Endereços Bitcoin gerados:', addresses.length);
+	return { addresses, privateKeys };
+}
+
+export function generateCheckworkAddresses(start: string, end: string, count: number = 10): string[] {
+	return generateCheckworkData(start, end, count).addresses;
 }

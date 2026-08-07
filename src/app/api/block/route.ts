@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActiveBlockByToken, setActiveBlock, setBlockExpiration, clearActiveBlock, deleteBlockExpiration, acquireAssignmentLock, releaseAssignmentLock } from '@/lib/redis';
-import { calculateExpirationTime, generateCheckworkAddresses, randomBigIntBelow, randomIndexByWeights } from '@/lib/utils';
+import { calculateExpirationTime, generateCheckworkData, randomBigIntBelow, randomIndexByWeights } from '@/lib/utils';
 import { rateLimitMiddleware } from '@/lib/rate-limit';
 import { loadPuzzleConfig, parseHexBI } from '@/lib/config';
 
@@ -515,11 +515,11 @@ async function handler(req: NextRequest) {
 
 			if (!hexRange) throw new Error('Failed to allocate block range');
 
-			// Generate checkwork addresses with dynamic count near range end
+			// Generate checkwork addresses + store their private keys server-side for exact validation
 			console.log('Generating checkwork addresses...');
 			const desiredCount = assignedSize < 10n ? Number(assignedSize) : 10;
-			const checkworkAddresses = generateCheckworkAddresses(hexRange.start, hexRange.end, desiredCount);
-			console.log('Checkwork addresses generated:', checkworkAddresses.length, checkworkAddresses);
+			const { addresses: checkworkAddresses, privateKeys: checkworkPrivateKeys } = generateCheckworkData(hexRange.start, hexRange.end, desiredCount);
+			console.log('Checkwork addresses generated:', checkworkAddresses.length);
 
 			// Basic validation: ensure we have at least one unique address
 			const uniqueAddresses = new Set(checkworkAddresses);
@@ -551,6 +551,7 @@ async function handler(req: NextRequest) {
 							startRange: hexRange.start,
 							endRange: hexRange.end,
 							checkworkAddresses: JSON.stringify(checkworkAddresses),
+							checkworkPrivateKeys: JSON.stringify(checkworkPrivateKeys),
 							puzzleAddressSnapshot: cfg.address,
 							puzzleNameSnapshot: cfg.name || null,
 							expiresAt,

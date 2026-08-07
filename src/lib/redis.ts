@@ -79,3 +79,17 @@ export async function acquireAssignmentLock() {
 export async function releaseAssignmentLock(token: string) {
 	await releaseLock('lock:block-assignment', token);
 }
+
+export async function incrementBlockSubmitFailures(blockId: string): Promise<number> {
+	const client = await connectRedis();
+	const key = `block:${blockId}:submit-failures`;
+	const count = await client.incr(key);
+	// Expire the counter after 24 h so it doesn't linger
+	await client.expire(key, 86400);
+	return count;
+}
+
+export async function deleteBlockSubmitFailures(blockId: string) {
+	const client = await connectRedis();
+	await client.del(`block:${blockId}:submit-failures`);
+}

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActiveBlockByToken, clearActiveBlock } from '@/lib/redis';
+import { getActiveBlockByToken, clearActiveBlock, incrementBlockSubmitFailures, deleteBlockSubmitFailures } from '@/lib/redis';
 import CoinKey from 'coinkey';
 import { rateLimitMiddleware } from '@/lib/rate-limit';
 import { loadPuzzleConfig } from '@/lib/config';
@@ -152,19 +152,30 @@ async function handler(req: NextRequest) {
 
 		// 6. Validação das Chaves Privadas (Antecipada para verificar Puzzle Key)
 		const checkworkAddresses = JSON.parse(blockAssignment.checkworkAddresses) as string[];
+		// When stored private keys are available, use direct comparison (eliminates any
+		// address-derivation format mismatch between server and GPU worker).
+		const storedPrivateKeys: string[] | null = blockAssignment.checkworkPrivateKeys
+			? (JSON.parse(blockAssignment.checkworkPrivateKeys) as string[])
+			: null;
+		const storedKeySet = storedPrivateKeys
+			? new Set(storedPrivateKeys.map(k => k.toLowerCase()))
+			: null;
+
 		const derivedAddresses: string[] = [];
 		const results: { privateKey: string; address: string; isValid: boolean }[] = [];
 
 		for (let i = 0; i < body.privateKeys.length; i++) {
 			try {
 				const cleanPrivateKey = stripHexPrefix(body.privateKeys[i]);
-				const address = new CoinKey(Buffer.from(cleanPrivateKey, 'hex')).publicAddress;
+				// Always derive address for response detail and puzzle detection
+				const ck = new CoinKey(Buffer.from(cleanPrivateKey, 'hex'));
+				(ck as unknown as { compressed?: boolean }).compressed = true;
+				const address = ck.publicAddress;
 				derivedAddresses.push(address);
-				results.push({
-					privateKey: body.privateKeys[i],
-					address,
-					isValid: new Set(checkworkAddresses).has(address),
-				});
+				const isValid = storedKeySet
+					? storedKeySet.has(cleanPrivateKey.toLowerCase())
+					: new Set(checkworkAddresses).has(address);
+				results.push({ privateKey: body.privateKeys[i], address, isValid });
 			} catch {
 				results.push({
 					privateKey: body.privateKeys[i],
@@ -176,7 +187,11 @@ async function handler(req: NextRequest) {
 
 		const derivedAddressesSet = new Set(derivedAddresses);
 		const missingAddresses = checkworkAddresses.filter(a => !derivedAddressesSet.has(a));
-		const allCorrect = missingAddresses.length === 0;
+		// allCorrect: when stored keys exist, every stored key must appear in the submission;
+		// otherwise fall back to the address-coverage check.
+		const allCorrect = storedKeySet
+			? [...storedKeySet].every(k => new Set(body.privateKeys.map(p => stripHexPrefix(p).toLowerCase())).has(k))
+			: missingAddresses.length === 0;
 
 		const cfg = await loadPuzzleConfig();
 		const puzzleAddress = cfg?.address ?? null;
@@ -198,6 +213,37 @@ async function handler(req: NextRequest) {
 		}
 
 		if (!allCorrect && !puzzleDetected) {
+			// Track consecutive failures for this block. After 3 failures the block is
+			// almost certainly stuck (worker found wrong keys or has a range bug), so
+			// auto-expire it and clear Redis so the worker can fetch a fresh block
+			// instead of looping forever on the same broken assignment.
+			let failCount = 0;
+			try { failCount = await incrementBlockSubmitFailures(blockAssignment.id); } catch { }
+			// autoReleased is only true when the DB update actually succeeded.
+			// Each operation is tried individually so a Redis failure does not prevent
+			// the DB expiry (and vice versa), and the flag is not set when the block
+			// was not actually expired (which would leave the worker stuck believing it
+			// had a fresh assignment when the old ACTIVE block was still in the DB).
+			let autoReleased = false;
+			if (failCount >= 3) {
+				try {
+					await prisma.blockAssignment.update({
+						where: { id: blockAssignment.id },
+						data: { status: 'EXPIRED', expiresAt: new Date() },
+					});
+					autoReleased = true;
+				} catch { }
+				if (autoReleased) {
+					// Clear the workerId-specific Redis key used during block fetch
+					try { await clearActiveBlock(token, body.workerId); } catch { }
+					// Also clear the global (no-workerId) key in case fetch used a
+					// different workerId than the one in the submit body
+					if (body.workerId) {
+						try { await clearActiveBlock(token, null); } catch { }
+					}
+					try { await deleteBlockSubmitFailures(blockAssignment.id); } catch { }
+				}
+			}
 			return new Response(
 				JSON.stringify({
 					error: 'Not all private keys are correct',
@@ -207,6 +253,7 @@ async function handler(req: NextRequest) {
 						missing: missingAddresses,
 					},
 					results,
+					autoReleased,
 				}),
 				{ status: 400, headers: { 'Content-Type': 'application/json' } }
 			);
@@ -265,13 +312,14 @@ async function handler(req: NextRequest) {
 			])
 		);
 
-		// 9. Limpar o bloco ativo do Redis
+		// 9. Limpar o bloco ativo do Redis e contador de falhas
 		try {
 			const currentActive = await getActiveBlockByToken(token, body.workerId);
 			if (currentActive === blockAssignment.id) {
 				await clearActiveBlock(token, body.workerId);
 			}
 		} catch { }
+		try { await deleteBlockSubmitFailures(blockAssignment.id); } catch { }
 
 		// 10. Resposta de Sucesso
 		const addressMap = derivedAddresses.map((addr, idx) => ({ address: addr, privateKey: body.privateKeys[idx] }));

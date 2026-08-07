@@ -24,6 +24,7 @@ model BlockAssignment {
     startRange            String           @map("start_range")
     endRange              String           @map("end_range")
     checkworkAddresses    String           @map("checkwork_addresses")
+    checkworkPrivateKeys  String?          @map("checkwork_private_keys")
     status                BlockStatus      @default(ACTIVE)
     expiresAt             DateTime         @map("expires_at")
     puzzleAddressSnapshot String?          @map("puzzle_address_snapshot")
