@@ -1,9 +1,27 @@
-import { NextRequest } from 'next/server';
+﻿import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActiveBlockByToken, setActiveBlock, setBlockExpiration, clearActiveBlock, deleteBlockExpiration, acquireAssignmentLock, releaseAssignmentLock } from '@/lib/redis';
+import { getActiveBlockByToken, setActiveBlock, setBlockExpiration, clearActiveBlock, deleteBlockExpiration, acquireAssignmentLock, releaseAssignmentLock, getCachedCompletedIntervals, setCachedCompletedIntervals, shouldRunExpiredSweep } from '@/lib/redis';
 import { calculateExpirationTime, generateCheckworkData, randomBigIntBelow, randomIndexByWeights } from '@/lib/utils';
 import { rateLimitMiddleware } from '@/lib/rate-limit';
 import { loadPuzzleConfig, parseHexBI } from '@/lib/config';
+
+// Exponential backoff on the Redis assignment lock â€” avoids busy-wait CPU spike on weak servers.
+async function acquireWithBackoff(maxMs: number): Promise<string | null> {
+	const start = Date.now();
+	let delay = 50;
+	while (true) {
+		const elapsed = Date.now() - start;
+		if (elapsed >= maxMs) return null;
+		const token = await acquireAssignmentLock();
+		if (token) return token;
+		const remaining = maxMs - (Date.now() - start);
+		const jitter = Math.floor(Math.random() * (delay * 0.5));
+		const wait = Math.min(delay + jitter, remaining, 400);
+		if (wait <= 0) return null;
+		await new Promise(r => setTimeout(r, wait));
+		delay = Math.min(Math.floor(delay * 1.5), 400);
+	}
+}
 
 async function handler(req: NextRequest) {
 	try {
@@ -172,21 +190,12 @@ async function handler(req: NextRequest) {
 			);
 		}
 
-		let lockToken: string | null = null;
-		{
-			const startWait = Date.now();
-			const maxWaitMs = 2000;
-			while (Date.now() - startWait < maxWaitMs) {
-				lockToken = await acquireAssignmentLock();
-				if (lockToken) break;
-				await new Promise((r) => setTimeout(r, 100 + Math.floor(Math.random() * 100)));
-			}
-			if (!lockToken) {
-				return new Response(
-					JSON.stringify({ error: 'Service busy, retry later' }),
-					{ status: 503, headers: { 'Content-Type': 'application/json' } }
-				);
-			}
+		const lockToken = await acquireWithBackoff(3000);
+		if (!lockToken) {
+			return new Response(
+				JSON.stringify({ error: 'Service busy, retry later' }),
+				{ status: 503, headers: { 'Content-Type': 'application/json', 'Retry-After': '3' } }
+			);
 		}
 
 		try {
@@ -243,7 +252,7 @@ async function handler(req: NextRequest) {
 
 			const sizeClamped = sizeKeys > maxRange ? maxRange : sizeKeys;
 
-			// 4. Se não estiver pulando ativo, verifica se já tem bloco ativo
+			// 4. Se nÃ£o estiver pulando ativo, verifica se jÃ¡ tem bloco ativo
 			let activeBlockId = null;
 			if (!skipActive) {
 				activeBlockId = await getActiveBlockByToken(token, workerId);
@@ -328,21 +337,45 @@ async function handler(req: NextRequest) {
 
 			if (!hexRange) {
 
-				// Sweep: mark any ACTIVE blocks past expiresAt as EXPIRED to free ranges
-				try {
-					await prisma.blockAssignment.updateMany({
-						where: { status: 'ACTIVE', expiresAt: { lt: new Date() } },
-						data: { status: 'EXPIRED' }
+				// Sweep expired ACTIVE blocks — debounced to at most once every 30 s globally.
+				if (await shouldRunExpiredSweep()) {
+					try {
+						await prisma.blockAssignment.updateMany({
+							where: { status: 'ACTIVE', expiresAt: { lt: new Date() } },
+							data: { status: 'EXPIRED' }
+						});
+					} catch { }
+				}
+
+				// COMPLETED intervals are immutable — served from Redis cache (5 min TTL).
+				// ACTIVE intervals change frequently but are few rows — always read fresh.
+				let completedRaw: { start: bigint; end: bigint }[] = [];
+				const cachedCompleted = await getCachedCompletedIntervals();
+				if (cachedCompleted !== null) {
+					try {
+						completedRaw = (JSON.parse(cachedCompleted) as { start: string; end: string }[])
+							.map(iv => ({ start: BigInt(iv.start), end: BigInt(iv.end) }));
+					} catch { }
+				} else {
+					const rows = await prisma.blockAssignment.findMany({
+						where: { status: 'COMPLETED' },
+						select: { startRange: true, endRange: true },
 					});
-				} catch { }
-				// Reserve intervals: exclude both COMPLETED (validated) and ACTIVE (currently being worked)
-				const reserved = await prisma.blockAssignment.findMany({
-					where: { OR: [{ status: 'COMPLETED' }, { status: 'ACTIVE' }] },
+					completedRaw = rows.map(r => ({ start: BigInt(r.startRange), end: BigInt(r.endRange) }));
+					setCachedCompletedIntervals(JSON.stringify(
+						completedRaw.map(iv => ({ start: iv.start.toString(), end: iv.end.toString() }))
+					)).catch(() => {});
+				}
+				const activeRows = await prisma.blockAssignment.findMany({
+					where: { status: 'ACTIVE' },
 					select: { startRange: true, endRange: true },
-					orderBy: { startRange: 'asc' }
 				});
+				const reserved = [
+					...completedRaw,
+					...activeRows.map(r => ({ start: BigInt(r.startRange), end: BigInt(r.endRange) })),
+				];
+
 				const completedIntervals = reserved
-					.map((r) => ({ start: BigInt(r.startRange), end: BigInt(r.endRange) }))
 					.map(iv => {
 						const s = iv.start > puzzleStart ? iv.start : puzzleStart;
 						const e = iv.end < puzzleEnd ? iv.end : puzzleEnd;
@@ -524,9 +557,9 @@ async function handler(req: NextRequest) {
 			// Basic validation: ensure we have at least one unique address
 			const uniqueAddresses = new Set(checkworkAddresses);
 			if (uniqueAddresses.size < 1) {
-				console.error('Erro: nenhum endereço gerado');
+				console.error('Erro: nenhum endereÃ§o gerado');
 				return new Response(
-					JSON.stringify({ error: 'Falha ao gerar endereços Bitcoin' }),
+					JSON.stringify({ error: 'Falha ao gerar endereÃ§os Bitcoin' }),
 					{ status: 500, headers: { 'Content-Type': 'application/json' } }
 				);
 			}

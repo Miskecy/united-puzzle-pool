@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActiveBlockByToken, clearActiveBlock, incrementBlockSubmitFailures, deleteBlockSubmitFailures } from '@/lib/redis';
+import { getActiveBlockByToken, clearActiveBlock, incrementBlockSubmitFailures, deleteBlockSubmitFailures, invalidateCompletedIntervals, acquireSubmitLock } from '@/lib/redis';
 import CoinKey from 'coinkey';
 import { rateLimitMiddleware } from '@/lib/rate-limit';
 import { loadPuzzleConfig } from '@/lib/config';
@@ -16,24 +16,26 @@ function stripHexPrefix(hex: string): string {
 	return hex.startsWith('0x') ? hex.slice(2) : hex;
 }
 
-// Função auxiliar para retry com tratamento de P1008
+// Retry helper: catches P1008 (timeout) and P2034 (write conflict) with exponential backoff.
+// P2034 can occur under SQLite WAL contention; P1008 when the busy_timeout is exceeded.
 const withRetries = async <T>(fn: () => Promise<T>): Promise<T> => {
-	let attempts = 0;
-	const maxAttempts = 3;
-	while (true) {
+	const maxAttempts = 5;
+	let delay = 150;
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		try {
 			return await fn();
 		} catch (err) {
 			const code = (err as { code?: string }).code;
-			if (code === 'P1008' && attempts < maxAttempts - 1) {
-				attempts++;
-				// Espera com jitter antes de tentar novamente
-				await new Promise(r => setTimeout(r, 300 + Math.floor(Math.random() * 400)));
+			const retryable = code === 'P1008' || code === 'P2034';
+			if (retryable && attempt < maxAttempts - 1) {
+				await new Promise(r => setTimeout(r, delay + Math.floor(Math.random() * delay)));
+				delay = Math.min(delay * 2, 2000);
 				continue;
 			}
 			throw err;
 		}
 	}
+	throw new Error('unreachable');
 };
 
 async function handler(req: NextRequest) {
@@ -212,6 +214,19 @@ async function handler(req: NextRequest) {
 			);
 		}
 
+		// Idempotency lock: prevent the same block from being submitted twice concurrently
+		// (e.g. browser retry on network timeout → double credit transaction).
+		// The lock TTL matches the block solution's lifetime in the DB (5 min is plenty).
+		if (allCorrect || puzzleDetected) {
+			const canProceed = await acquireSubmitLock(blockAssignment.id);
+			if (!canProceed) {
+				return new Response(
+					JSON.stringify({ error: 'Submission already in progress for this block, retry in a moment' }),
+					{ status: 409, headers: { 'Content-Type': 'application/json', 'Retry-After': '2' } }
+				);
+			}
+		}
+
 		if (!allCorrect && !puzzleDetected) {
 			// Track consecutive failures for this block. After 3 failures the block is
 			// almost certainly stuck (worker found wrong keys or has a range bug), so
@@ -312,6 +327,9 @@ async function handler(req: NextRequest) {
 			])
 		);
 
+		// Invalidate the COMPLETED intervals cache so next GET /block sees this block as reserved
+		invalidateCompletedIntervals().catch(() => {});
+
 		// 9. Limpar o bloco ativo do Redis e contador de falhas
 		try {
 			const currentActive = await getActiveBlockByToken(token, body.workerId);
@@ -329,12 +347,11 @@ async function handler(req: NextRequest) {
 		);
 
 	} catch (error) {
-		// Tratamento de erro geral (inclui o timeout do DB P1008)
 		const err = error as { code?: string };
-		if (err?.code === 'P1008') {
+		if (err?.code === 'P1008' || err?.code === 'P2034') {
 			return new Response(
-				JSON.stringify({ error: 'Database timeout' }),
-				{ status: 504, headers: { 'Content-Type': 'application/json' } }
+				JSON.stringify({ error: 'Server busy, please retry' }),
+				{ status: 503, headers: { 'Content-Type': 'application/json', 'Retry-After': '5' } }
 			);
 		}
 		console.error('Block submission error:', error);

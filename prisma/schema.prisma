@@ -37,6 +37,9 @@ model BlockAssignment {
     blockSolution         BlockSolution?
 
     @@unique([startRange, endRange])
+    @@index([status])
+    @@index([status, startRange])
+    @@index([userTokenId, status])
 }
 
 model BlockSolution {

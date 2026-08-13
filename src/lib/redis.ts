@@ -93,3 +93,74 @@ export async function deleteBlockSubmitFailures(blockId: string) {
 	const client = await connectRedis();
 	await client.del(`block:${blockId}:submit-failures`);
 }
+
+// Redis fixed-window rate limiter — shared across all processes/workers.
+// Falls back to "allow" on Redis error so a Redis outage doesn't lock out users.
+export async function checkRateLimit(
+	clientIp: string,
+	maxRequests: number,
+	windowSec: number
+): Promise<{ allowed: boolean; remaining: number; retryAfter: number }> {
+	try {
+		const client = await connectRedis();
+		const key = `rl:${clientIp}:${windowSec}`;
+		const count = await client.incr(key);
+		if (count === 1) await client.expire(key, windowSec);
+		const ttl = await client.ttl(key);
+		const retryAfter = ttl > 0 ? ttl : windowSec;
+		return {
+			allowed: count <= maxRequests,
+			remaining: Math.max(0, maxRequests - count),
+			retryAfter,
+		};
+	} catch {
+		return { allowed: true, remaining: maxRequests, retryAfter: 0 };
+	}
+}
+
+// Cache for COMPLETED block intervals — immutable once set, invalidated on block submit.
+export async function getCachedCompletedIntervals(): Promise<string | null> {
+	try {
+		const client = await connectRedis();
+		return await client.get('cache:completed-intervals');
+	} catch {
+		return null;
+	}
+}
+
+export async function setCachedCompletedIntervals(data: string, ttlSec = 300): Promise<void> {
+	try {
+		const client = await connectRedis();
+		await client.setEx('cache:completed-intervals', ttlSec, data);
+	} catch { }
+}
+
+export async function invalidateCompletedIntervals(): Promise<void> {
+	try {
+		const client = await connectRedis();
+		await client.del('cache:completed-intervals');
+	} catch { }
+}
+
+// Idempotency lock for block submissions — prevents double-credit from concurrent retries.
+// Returns true if the caller should proceed, false if another submit for this block is already in flight.
+export async function acquireSubmitLock(blockId: string, ttlSec = 300): Promise<boolean> {
+	try {
+		const client = await connectRedis();
+		const res = await client.set(`submit:lock:${blockId}`, '1', { NX: true, EX: ttlSec });
+		return res !== null;
+	} catch {
+		return true; // fail open: allow submission if Redis is down
+	}
+}
+
+// Debounce the expensive expired-block sweep — runs at most once every 30 s globally.
+export async function shouldRunExpiredSweep(): Promise<boolean> {
+	try {
+		const client = await connectRedis();
+		const res = await client.set('sweep:expired-blocks', '1', { NX: true, EX: 30 });
+		return res !== null;
+	} catch {
+		return true;
+	}
+}

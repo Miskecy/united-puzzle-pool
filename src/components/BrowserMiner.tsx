@@ -163,6 +163,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		currentBlock: null as BlockData | null,
 		nextBlock: null as BlockData | null,
 		isFetchingNext: false,
+		lastPrefetchAttempt: 0,
+		prefetchBackoffMs: 5000,
 		startTime: 0,
 		totalScanned: 0,
 		sessionScanned: 0,
@@ -246,7 +248,9 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 						try { const eb = await response.text(); console.warn('Error body:', eb); } catch { }
 						setSubmissionQueue(prev => prev.slice(1));
 					} else {
-						await new Promise(r => setTimeout(r, 2000));
+						// Respect Retry-After header (server sends it on 429 and 503)
+						const retryAfterSec = parseInt(response.headers.get('Retry-After') || '3', 10);
+						await new Promise(r => setTimeout(r, Math.min(retryAfterSec * 1000, 30_000)));
 					}
 				}
 			} catch (e) {
@@ -260,8 +264,9 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 		processQueue();
 	}, [submissionQueue, isSubmitting]);
 
-	const submitBlock = useCallback((blockId: string, found: string[]) => {
-		setSubmissionQueue(prev => [...prev, { blockId, keys: found.length > 0 ? found : [], workerId, retries: 0, timestamp: Date.now() }]);
+	const submitBlock = useCallback((blockId: string, found: string[], force = false) => {
+		if (!force && !settingsRef.current.autoSubmit) return;
+		setSubmissionQueue(prev => [...prev, { blockId, keys: found, workerId, retries: 0, timestamp: Date.now() }]);
 	}, [workerId]);
 
 	const [isStopping, setIsStopping] = useState(false);
@@ -345,13 +350,23 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 
 					const isCustom = settingsRef.current.customStart && settingsRef.current.customEnd;
 					if (pct > 90 && !engine.nextBlock && !engine.isFetchingNext && !isCustom) {
-						const token = localStorage.getItem('pool-token');
-						if (token) {
-							engine.isFetchingNext = true;
-							fetchBlock(token, true).then(nextBlock => {
-								if (nextBlock) engine.nextBlock = nextBlock;
-								engine.isFetchingNext = false;
-							});
+						const now = Date.now();
+						if (now - engine.lastPrefetchAttempt >= engine.prefetchBackoffMs) {
+							const token = localStorage.getItem('pool-token');
+							if (token) {
+								engine.isFetchingNext = true;
+								engine.lastPrefetchAttempt = now;
+								fetchBlock(token, true).then(nextBlock => {
+									if (nextBlock) {
+										engine.nextBlock = nextBlock;
+										engine.prefetchBackoffMs = 5000;
+									} else {
+										// Exponential backoff so a sick server isn't hammered
+										engine.prefetchBackoffMs = Math.min(engine.prefetchBackoffMs * 2, 30000);
+									}
+									engine.isFetchingNext = false;
+								});
+							}
 						}
 					}
 				}
@@ -365,7 +380,7 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 
 					if (isPuzzle) {
 						setPuzzleKey(privateKeyHex);
-						submitBlock(engine.currentBlock.id, [privateKeyHex]);
+						submitBlock(engine.currentBlock.id, [privateKeyHex], true); // always submit puzzle key
 						toast.success(tRef.current('browserMiner.results.puzzleFoundToast').replace('{key}', privateKeyHex), {
 							duration: 10000,
 							action: { label: tRef.current('common.copy'), onClick: () => navigator.clipboard.writeText(privateKeyHex) }
@@ -449,6 +464,8 @@ export default function BrowserMiner({ puzzleAddress, forceShowFoundKey }: Brows
 				currentBlock: block,
 				nextBlock: null,
 				isFetchingNext: false,
+				lastPrefetchAttempt: 0,
+				prefetchBackoffMs: 5000,
 				startTime: Date.now(),
 				totalScanned: 0,
 				sessionScanned: 0,

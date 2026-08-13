@@ -1,5 +1,12 @@
 import { prisma } from '@/lib/prisma'
 
+let _configCache: { value: PuzzleConfig | null; expiresAt: number } | null = null;
+const CONFIG_CACHE_TTL_MS = 30_000;
+
+export function invalidatePuzzleConfigCache(): void {
+	_configCache = null;
+}
+
 export type PuzzleConfig = {
 	id?: string
 	name?: string | null
@@ -12,10 +19,14 @@ export type PuzzleConfig = {
 }
 
 export async function loadPuzzleConfig(): Promise<PuzzleConfig | null> {
+	if (_configCache && Date.now() < _configCache.expiresAt) {
+		return _configCache.value;
+	}
+	let result: PuzzleConfig | null = null;
 	try {
 		const cfg = await prisma.puzzleConfig.findFirst({ where: { active: true } })
 		if (cfg) {
-			return {
+			result = {
 				id: cfg.id,
 				name: cfg.name,
 				address: cfg.puzzleAddress,
@@ -28,16 +39,20 @@ export async function loadPuzzleConfig(): Promise<PuzzleConfig | null> {
 		}
 	} catch { }
 
-	const envAddr = process.env.BITCOIN_PUZZLE_ADDRESS || process.env.NEXT_PUBLIC_BITCOIN_PUZZLE_ADDRESS || ''
-	const envStart = process.env.PUZZLE_START_RANGE || ''
-	const envEnd = process.env.PUZZLE_END_RANGE || ''
-	if (envAddr && envStart && envEnd) {
-		return { address: envAddr, startHex: envStart, endHex: envEnd }
+	if (!result) {
+		const envAddr = process.env.BITCOIN_PUZZLE_ADDRESS || process.env.NEXT_PUBLIC_BITCOIN_PUZZLE_ADDRESS || ''
+		const envStart = process.env.PUZZLE_START_RANGE || ''
+		const envEnd = process.env.PUZZLE_END_RANGE || ''
+		if (envAddr && envStart && envEnd) {
+			result = { address: envAddr, startHex: envStart, endHex: envEnd }
+		}
 	}
-	return null
+	_configCache = { value: result, expiresAt: Date.now() + CONFIG_CACHE_TTL_MS };
+	return result;
 }
 
 export async function upsertPuzzleConfig(data: PuzzleConfig): Promise<PuzzleConfig> {
+	invalidatePuzzleConfigCache();
 	const saved = await prisma.puzzleConfig.create({
 		data: {
 			name: data.name || null,
@@ -57,12 +72,14 @@ export async function listPuzzleConfigs(): Promise<PuzzleConfig[]> {
 }
 
 export async function setActivePuzzle(id: string): Promise<PuzzleConfig | null> {
+	invalidatePuzzleConfigCache();
 	await prisma.puzzleConfig.updateMany({ data: { active: false } })
 	const updated = await prisma.puzzleConfig.update({ where: { id }, data: { active: true } })
 	return { id: updated.id, name: updated.name || null, address: updated.puzzleAddress, startHex: updated.puzzleStartRange, endHex: updated.puzzleEndRange, solved: (updated as unknown as { solved?: boolean }).solved ?? false, active: updated.active, privateKey: (updated as unknown as { puzzlePrivateKey?: string | null }).puzzlePrivateKey ?? null }
 }
 
 export async function updatePuzzleConfig(id: string, data: Partial<PuzzleConfig>): Promise<PuzzleConfig | null> {
+	invalidatePuzzleConfigCache();
 	const updated = await prisma.puzzleConfig.update({
 		where: { id },
 		data: {
@@ -78,6 +95,7 @@ export async function updatePuzzleConfig(id: string, data: Partial<PuzzleConfig>
 }
 
 export async function deletePuzzleConfig(id: string): Promise<boolean> {
+	invalidatePuzzleConfigCache();
 	await prisma.puzzleConfig.delete({ where: { id } })
 	return true
 }
